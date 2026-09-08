@@ -28,9 +28,10 @@ Keep the world-frame trajectory as the primary geometric output. The canonical f
 
 - Run the existing HaWoR pipeline on a small subset of a paper dataset, then on a small Ego4D subset containing one task.
 - Build reusable ingestion, execution, visualization, and logging scripts rather than recreating HaWoR.
+- Preserve and export HaWoR's existing world-frame result without adding canonicalization, alignment, or other coordinate transformations in this milestone.
 - Measure success rate, runtime per clip, peak compute/memory use, and visible failure modes.
 
-**Deliverable:** A reproducible baseline package that processes at least one clip from each source, exports world- and canonical-frame trajectories with validity metadata, produces an overlay visualization, and includes a one-page benchmark/failure report.
+**Deliverable:** A reproducible baseline package that processes at least one clip from each source, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a one-page benchmark/failure report.
 
 ### 2. Record and annotate a pilot dataset — 3 weeks
 
@@ -38,9 +39,10 @@ Keep the world-frame trajectory as the primary geometric output. The canonical f
 
 - Record at least 10 usable iPhone clips of one simple task under consistent conditions.
 - Run hand tracking first, then package the stable outputs in the chosen LeRobot-compatible schema.
+- Define and derive the hand-centered canonical representation after the HaWoR world-frame contract is stable.
 - Use `lerobot-annotate` for plan/subtask annotations; disable interjections and VQA unless later experiments need them.
 
-**Deliverable:** A versioned pilot dataset containing RGB video, synchronized hand trajectories, metadata, subtask annotations, confidence/provenance fields, and a short data card describing the task and capture setup.
+**Deliverable:** A versioned pilot dataset containing RGB video, synchronized world- and canonical-frame hand trajectories, metadata, subtask annotations, confidence/provenance fields, and a short data card describing the task and capture setup.
 
 ### 3. Retarget hands and trajectories in simulation — 4 weeks
 

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Project-Milestones-and-Timeline.md",
+                "file": "PLANNING_SPECS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Project-Milestones-and-Timeline"
+              "title": "PLANNING_SPECS"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Project-Milestones-and-Timeline.md",
+                "file": "plans/milestone-1-hawor-baseline.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Project-Milestones-and-Timeline.md",
+                "file": "plans/milestone-1-hawor-baseline.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Project-Milestones-and-Timeline.md",
+                "file": "plans/milestone-1-hawor-baseline.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,8 +190,13 @@
   },
   "active": "6049b23ce7567b93",
   "lastOpenFiles": [
-    "Sources/HaWoR-Review.md",
     "Project-Milestones-and-Timeline.md",
+    "PLANNING_SPECS.md",
+    "AGENTS.md",
+    "plans/milestone-1-hawor-baseline.md",
+    "PROJECT_STATUS.md",
+    "plans",
+    "Sources/HaWoR-Review.md",
     "Sources"
   ]
 }
