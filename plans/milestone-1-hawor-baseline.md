@@ -1,8 +1,8 @@
 # Milestone 1 Plan: Validate the HaWoR Baseline
 
-Status: Draft revision 2 — awaiting user review and approval
+Status: Draft revision 5 — single-clip Milestone 1 execution and per-run reporting revised; awaiting user review and approval
 
-## 1. Goal
+## 1. Goals
 
 Build a small, reusable pipeline around the unchanged HaWoR inference code and prove that it can:
 
@@ -12,11 +12,11 @@ Build a small, reusable pipeline around the unchanged HaWoR inference code and p
 4. preserve HaWoR's native world-frame result;
 5. export that result with frame timestamps and validity/provenance metadata;
 6. generate a reusable visualization; and
-7. produce a one-page benchmark and failure report.
+7. produce a one-page benchmark and failure report for every Milestone 1 run.
 
 Milestone 1 is a baseline and integration milestone. HaWoR remains the owner of hand reconstruction, camera tracking, metric scale estimation, motion infilling, and conversion into its world frame. Our code prepares inputs, invokes HaWoR, records what happened, validates the returned artifacts, and packages the existing world-frame output without changing its coordinate frame.
 
-## 2. Explicit non-goals
+## 2. Explicit Non-Goals
 
 - Do not derive or export a canonical frame.
 - Do not apply any coordinate-frame transform to the stored HaWoR trajectory.
@@ -31,7 +31,7 @@ Milestone 1 is a baseline and integration milestone. HaWoR remains the owner of 
 
 Visualization is the only place where projection is unavoidable: drawing a 3D result on an RGB image requires HaWoR's camera/view projection. That projection is for rendering only. It must not create or replace a stored trajectory.
 
-## 3. Setup requirements — complete before pipeline work
+## 3. Setup Requirements
 
 Setup is Phase 0 and is the first implementation gate. The reusable pipeline is not written until the upstream environment passes the checks below.
 
@@ -214,59 +214,50 @@ Configure rendering so it works inside WSL/Linux without requiring an interactiv
 
 The setup gate passes only when all required checks pass. Warnings such as low VRAM remain visible in the evidence and report.
 
-## 4. Dataset order and gates
+## 4. Input and Output Contracts / Data and Metadata Files
 
-### Gate A — bundled HaWoR example
+### 4.1 In-memory `ClipRequest`
 
-Run the official example end to end before downloading project datasets. This proves the environment, weights, MANO files, CUDA extensions, SLAM, infiller, and renderer can work together. Preserve the native result and log peak RAM/VRAM.
+A runnable clip no longer requires a human-authored `clip_config.json`. The reusable pipeline accepts a typed, in-memory `ClipRequest`. A request describes what the caller wants processed; it does not duplicate facts that must be measured from the source.
 
-### Gate B — HOT3D
+`ClipRequest` contains:
 
-After Gate A passes, acquire one narrowly scoped HOT3D source and process a short segment. Use an Aria RGB segment from an official HaWoR validation sequence. Initial candidate: `P0002_2ea9af5b`, which is in HaWoR's published validation list and is available as 30 FPS, 1408 × 1408 RGB video with ground-truth hand/object data.
+- `source` — required tagged source reference:
+  - `LocalVideoSource`: immutable local video path plus optional dataset name and dataset-native video ID; or
+  - `Hot3DClipSource`: HOT3D root/archive path, native clip ID, device, and selected image stream ID.
+- `interval` — optional `[start_s, end_s)` selection in source time; null means the complete source. Dataset-native frame/timestamp selectors are resolved by the relevant adapter before preparation and may not conflict with this interval.
+- `clip_id` — optional stable local identifier. When absent, preparation derives one deterministically from source identity/checksum and the resolved interval.
+- `task_label` — optional short human-readable action. It is not inferred from pixels.
+- `license_reference` — optional while running a private local test, but required before a clip is accepted into a dataset deliverable.
+- `camera_override` — optional object containing `focal_length_px`, the source/prepared resolution to which it applies, and provenance. Values must be finite and positive. An override is never silently assumed.
+- `intrinsics_policy` — `strict` or `allow_approximate`; defaults to `strict`. Strict preparation may finish with unresolved intrinsics, but HaWoR inference must not start until a compatible focal length is available.
 
-Select an 8–15 second interval after visual inspection using these criteria:
+`src/egocentric_pipeline/clip_request.py` normalizes only request syntax and intent: source tags and paths, seconds and half-open interval semantics, optional strings, camera-override units, allowed policy values, and defaults. It does not probe or transform video, infer source FPS, create timestamps, or resolve camera calibration.
 
-- at least one hand is visible through most of a purposeful manipulation;
-- the camera moves enough to exercise SLAM;
-- the background has static texture;
-- motion blur is not dominant; and
-- at least one brief hand disappearance is desirable but not required.
+`ClipRequest` does not contain a `use_frame_encoder`, `convert_to_mp4`, or similar execution flag. Its `source` field identifies the source and the adapter needed to open it. Opening that reference produces one of two internal source representations:
 
-The first HOT3D path uses the standard RGB-video HaWoR entry point. Full HOT3D ground-truth evaluation is optional and must not block the baseline package. If annotations can be obtained with little additional setup, they may support one quantitative spot-check without changing the exported trajectory.
+- `VideoFileSource` — an existing immutable video file with container timing; or
+- `FrameSequenceSource` — an ordered, read-only frame sequence with source timestamps, frame/native IDs, and any camera-calibration records.
 
-### Gate C — Ego4D access and run
+`video_preparation.py` dispatches on this resolved representation. A `VideoFileSource` follows the video-to-video path; only a `FrameSequenceSource` follows the frame-sequence encoding path. This keeps the request declarative and prevents callers from selecting an encoding path that contradicts the actual source.
 
-Do not request, download, configure, or build Ego4D-specific handling until the HOT3D run has completed and its output has passed structural and visual review.
+Requests are constructed without one file per clip:
 
-After Gate B passes:
+- `scripts/prepare_clip.py` and `scripts/run_hawor_pipeline.py` build a `LocalVideoSource` request directly from command-line arguments;
+- `src/egocentric_pipeline/hot3d_adapter.py` builds a `Hot3DClipSource` request from the selected HOT3D archive/clip and native metadata; and
+- `scripts/run_milestone1_baseline.py` selects exactly one clip input per invocation. It constructs one request for a bundled-example, direct-video/Ego4D, or HOT3D source, or passes one existing prepared-clip metadata path to the pipeline. HOT3D request construction routes through the adapter.
 
-1. accept or renew the Ego4D dataset terms;
-2. configure the required AWS credentials locally;
-3. inspect metadata/narrations to identify candidate UIDs;
-4. use the official CLI's UID filtering to download only the needed video; and
-5. select one 8–15 second, single-manipulation interval by visual inspection.
+The normalized request is snapshotted inside the generated `clip_metadata.json`. A separate request/config file is optional and is not part of the Milestone 1 architecture.
 
-Credentials stay outside this repository and are never written to manifests or logs.
+### 4.2 HOT3D source contract
 
-## 5. Input and output contracts
+Milestone 1 uses an Aria HOT3D clip with the RGB stream and its native per-frame camera metadata. The imported HOT3D source remains untracked and immutable under `data/source/hot3d/`. The adapter reads the native clip definition/archive, ordered image frames, timestamps, stream identity, device identity, calibration model and projection parameters, and license/source identifiers.
 
-### 5.1 Human-authored clip specification
+The HOT3D adapter does not encode or overwrite video. When `video_preparation.py` opens a `Hot3DClipSource`, it uses the adapter's ordered RGB frame handles, timestamps, native frame IDs, calibration, and provenance to construct a read-only `FrameSequenceSource`. Video preparation owns interval selection, timing policy, and any required fisheye-to-pinhole rectification, then calls `frame_sequence_encoding.py` to encode the selected prepared frames directly into the common final `rgb.mp4`. There is no intermediate MP4 or second encoding pass. The original HOT3D images and camera JSON/VRS data remain unchanged.
 
-Each runnable clip has a JSON specification such as `configs/clips/hot3d_baseline.json`:
+The supported Milestone 1 source is the smallest official HOT3D representation that supplies the selected RGB frames, timestamps, and camera calibration. Adding a second HOT3D representation, such as direct full-VRS ingestion when the selected clip archive is sufficient, is out of scope.
 
-- `clip_id` — stable local identifier.
-- `source_dataset` — `hawor_example`, `hot3d`, or `ego4d`.
-- `source_video_id` — dataset-native sequence/video UID where applicable.
-- `source_video_path` — local immutable source path.
-- `source_start_s` and `source_end_s` — selected interval; null for the bundled example if the whole file is used.
-- `task_label` — short human-readable action.
-- `focal_length_px` — value supplied explicitly to HaWoR.
-- `focal_length_source` — `calibration`, `metadata`, or `estimated`.
-- `license_reference` — reference to the applicable source terms.
-
-The specification contains intent and source identity. It does not contain generated facts such as checksums or measured frame counts.
-
-### 5.2 Prepared clip
+### 4.3 Prepared clip and metadata
 
 Input preparation writes:
 
@@ -275,21 +266,28 @@ data/prepared/<clip_id>/rgb.mp4
 data/prepared/<clip_id>/clip_metadata.json
 ```
 
-`rgb.mp4` is a derived, constant-rate 30 FPS clip because the released HaWoR demo extracts frames at 30 FPS. `clip_metadata.json` records:
+`video_preparation.prepare_clip(request) -> PreparedClip` opens the request source as a `VideoFileSource` or `FrameSequenceSource`, writes both artifacts, and returns a typed in-memory object containing the prepared video path, metadata path, and the same typed `ClipMetadata` value serialized to JSON. JSON is written successfully before `PreparedClip` is returned. `frame_sequence_encoding.py` is invoked only for the frame-sequence representation; its result is folded into the metadata by `video_preparation.py`.
 
-- source and prepared SHA-256 checksums;
-- source interval;
-- source and prepared codecs;
-- width, height, FPS, duration, and frame count;
-- per-frame clip-relative timestamp;
-- per-frame source timestamp;
-- focal length and its provenance;
-- preparation command/version; and
-- creation time.
+`rgb.mp4` is a derived, constant-rate 30 FPS, HaWoR-ready video. Preparation creates a 30 FPS timestamp grid over the selected source interval and selects source frames by presentation timestamp. It does not change playback speed. Higher-rate sources lose unselected frames; lower-rate sources reuse the nearest source frame when permitted by the preparation-quality policy. Exact rejection thresholds for source gaps and repeated-frame fraction remain a plan decision.
 
-Source files under `data/source/` are immutable. Preparation refuses to overwrite an existing prepared clip whose checksum or metadata differs.
+`clip_metadata.json` has a schema version and these owned sections:
 
-### 5.3 Native HaWoR artifacts
+- `request`: normalized snapshot of every `ClipRequest` field and the constructor used (`direct_video`, `hot3d_adapter`, or `milestone1_baseline`).
+- `source`: request source kind, resolved representation (`video_file` or `frame_sequence`), immutable path/native identifiers, SHA-256 or native artifact hashes, dataset/device/stream identity, license reference, codec/pixel format when applicable, width, height, display rotation, sample/display aspect ratio, time base, duration, nominal/average frame rates, frame count, and whether timing is constant or variable rate.
+- `selection`: requested and resolved `[start_s, end_s)` bounds, source frame/timestamp bounds, and any dataset-native selector resolution.
+- `source_camera`: imported or embedded camera model, `fx`, `fy`, `cx`, `cy`, distortion/projection model and coefficients, calibration resolution, whether calibration changes with time, and exact provenance; fields are null with `status: unresolved` when unavailable.
+- `preparation`: preparation implementation/version, source adapter and frame encoder used or explicitly not used, exact FFmpeg/adapter/encoding commands and relevant library versions, output codec and pixel format, audio disposition, timestamp origin, and an ordered spatial/temporal transform history. Spatial history records orientation correction, rectification, crop, pad, resize, and color/pixel-format conversion with all parameters; temporal history records interval selection and timestamp-based 30 FPS resampling. A step that was not applied is recorded explicitly as such rather than omitted ambiguously.
+- `prepared`: prepared path and SHA-256, width, height, constant `30/1` FPS, time base, duration, frame count, and codec/pixel format.
+- `prepared_camera`: camera model and intrinsics in prepared-image pixel coordinates, derivation from the source calibration/override/approximation, compatibility with HaWoR's equal-focal centered-principal-point interface, the scalar `hawor_focal_length_px` actually selected, provenance, and quality status (`calibrated`, `derived`, `approximate`, or `unresolved`).
+- `frames`: one entry per prepared frame containing prepared frame index/timestamp, selected source frame index/timestamp/native ID, timestamp-selection error, and whether that source frame is reused. Aggregate fields record source frames considered, unique frames selected, dropped frames, repeated-source-frame count/fraction, median/maximum timestamp error, and maximum source-frame gap.
+- `artifacts`: paths and hashes needed to connect the prepared clip to its immutable source and later run artifacts.
+- `created_at`: UTC creation timestamp.
+
+The metadata is sufficient to audit and reproduce every preparation decision when the immutable original is available. It does not claim that a lossy, frame-dropping prepared MP4 can be inverted to reconstruct the original by itself. Original source files are preserved; preparation refuses to overwrite an existing prepared clip whose source hash, request snapshot, or generated metadata differs.
+
+For a later run that starts from an existing prepared directory, `load_prepared_clip(clip_metadata_path)` parses and validates the JSON, verifies the prepared/source hashes that are locally available, and returns the same `PreparedClip`/`ClipMetadata` types used by a fresh preparation.
+
+### 4.4 Native HaWoR artifacts
 
 HaWoR runs against a staged copy or link of the prepared clip inside the new run directory. This matters because the stock demo creates its working folders next to the input video. All native products remain together under:
 
@@ -299,7 +297,7 @@ outputs/hawor/<run_id>/clips/<clip_id>/native/
 
 Expected native artifacts include extracted RGB frames, detection tracks, masks, camera-space chunk JSON files, scaled SLAM output, `world_space_res.pth`, visualization frames/video, and console logs. These files are preserved as evidence and are never treated as our stable cross-milestone interface.
 
-### 5.4 Stable world-frame export
+### 4.5 Stable world-frame export
 
 `trajectory_world.npz` repackages HaWoR's final `world_space_res.pth` without applying a coordinate transform. Arrays are frame-major; `T` is prepared-video frame count and `H = 2` is ordered `[left, right]`:
 
@@ -331,13 +329,41 @@ The pinned demo's bounding-box interpolation call is effectively a no-op because
 
 No canonical arrays, aligned coordinates, camera-frame copies, transformed joints, or robot-frame data are produced in this milestone.
 
-## 6. Full planned repository structure
+### 4.6 Per-run record and benchmark report
+
+Every valid `run_milestone1_baseline.py` invocation processes exactly one clip and receives a unique, non-overwriting `run_id`. It writes the following run-level artifacts together:
+
+```text
+outputs/hawor/<run_id>/run_manifest.json
+outputs/hawor/<run_id>/benchmark.json
+outputs/hawor/<run_id>/benchmark_report.md
+```
+
+`run_manifest.json` is generated and finalized by `pipeline.py` for the single clip attempt. Once request syntax has been validated and a run directory has been allocated, the manifest is finalized for both successful and failed pipeline outcomes. It records the schema version, `run_id`, clip/source identity, normalized request reference, start/end timestamps, overall status, ordered stage statuses, commands and environment, timing and resource samples, structural-validation results, artifact paths and hashes, warnings, and captured failure details. Missing downstream artifacts after a failed stage are recorded explicitly rather than fabricated.
+
+`benchmark.json` is generated by `benchmark.py` from that one finalized manifest and any artifacts that exist for the same run. It contains:
+
+- schema version, `run_id`, `clip_id`, source/dataset identity, and Milestone 1 run role (`setup_smoke`, `paper_dataset`, `ego4d`, or `other_test`);
+- overall and per-stage completion status, failure stage, and concise error summary;
+- source/preparation timing-quality and camera-provenance metrics when available;
+- wall-clock time, effective FPS, peak RAM, and peak GPU memory when available;
+- direct-detection, motion-infill, invalid-frame, longest-gap, and provenance-coverage metrics when export exists;
+- structural contract violations and generated artifact paths/hashes;
+- manual-review status (`pending`, `complete`, or `not_possible`) and supplied failure labels/notes; and
+- environment deviations, limitations, and claims that remain unverified.
+
+Unavailable values are `null` with a reason; failed runs remain reportable. `benchmark_report.md` is a human-readable, approximately one-page rendering of the same single-run evidence and must not imply cross-run aggregation or statistical generalization. Both benchmark files belong only to their containing `run_id` and are never shared or overwritten by a later invocation.
+
+`run_milestone1_baseline.py` always calls `benchmark.py` after `pipeline.py` has finalized a run manifest, including after a pipeline-stage failure. Users do not invoke `benchmark.py` separately. Invalid command-line/request syntax that is rejected before run allocation does not create a benchmark report. Milestone completion is demonstrated by the collection of accepted per-run evidence, including at least one qualifying HOT3D run and one later qualifying Ego4D run; there is no Milestone 1 multi-run controller or automatically discovered aggregate report.
+
+## 5. Planned Repo Structure
 
 Only files reached by the implementation sequence are created. The tree below is the complete intended Milestone 1 structure, including generated/untracked paths for clarity.
 
 ```text
 Egocentric/
 ├── AGENTS.md
+├── PLANNING_SPECS.md
 ├── PROJECT_STATUS.md
 ├── Project-Milestones-and-Timeline.md
 ├── .gitignore
@@ -351,15 +377,13 @@ Egocentric/
 │   └── hawor.yml
 ├── external/
 │   └── HaWoR/                         # pinned Git submodule; upstream code
-├── configs/
-│   └── clips/
-│       ├── hawor_example.json
-│       ├── hot3d_baseline.json
-│       └── ego4d_baseline.json         # created only after the HOT3D gate
 ├── src/
 │   └── egocentric_pipeline/
 │       ├── __init__.py
-│       ├── clip_config.py
+│       ├── clip_request.py
+│       ├── hot3d_adapter.py
+│       ├── frame_sequence_encoding.py
+│       ├── camera_intrinsics.py
 │       ├── video_preparation.py
 │       ├── hawor_runner.py
 │       ├── world_export.py
@@ -374,12 +398,15 @@ Egocentric/
 │   └── run_milestone1_baseline.py
 ├── tests/
 │   ├── test_clip_preparation.py
+│   ├── test_hot3d_adapter.py
+│   ├── test_frame_sequence_encoding.py
 │   ├── test_world_export.py
-│   └── test_run_metadata.py
+│   ├── test_run_metadata.py
+│   └── test_benchmark.py
 ├── data/                               # untracked local licensed/input data
 │   ├── source/
-│   │   ├── hot3d/<sequence_id>/...
-│   │   └── ego4d/<video_uid>/...       # absent until Gate C
+│   │   ├── hot3d/<clip_id>/...          # immutable frames + camera metadata
+│   │   └── ego4d/<video_uid>/...       # deferred
 │   └── prepared/
 │       └── <clip_id>/
 │           ├── rgb.mp4
@@ -398,265 +425,508 @@ Egocentric/
             └── trajectory_preview.png
 ```
 
-## 7. File-by-file responsibilities and dependencies
+## 6. File Breakdown
 
-### 7.1 Environment and external code
+### 6.1 Environments and external code
 
 #### `environment/README.md` — reusable documentation
 
-Human instructions for WSL/Linux setup, Conda creation, CUDA/PyTorch compatibility checks, model/MANO placement, installation order, headless rendering, and common recovery steps. It links to `hawor.yml` and `check_hawor_setup.py`; it does not duplicate the package list already expressed in the environment file.
+**Description:** Human instructions for WSL/Linux setup, Conda creation, CUDA/PyTorch compatibility checks, model/MANO placement, installation order, headless rendering, and common recovery steps. It links to `hawor.yml` and `check_hawor_setup.py`; it does not duplicate the package list already expressed in the environment file.
 
-Used by: developers setting up any milestone that runs HaWoR.
+**Input:** None.
+
+**Output:** Human-readable setup and recovery instructions.
+
+**Calls:** N/A — documentation file.
+
+**Called by:** Developers setting up any milestone that runs HaWoR.
+
+**Metadata written:** None.
 
 #### `environment/hawor.yml` — reusable environment specification
 
-Reviewed Conda/pip dependency declaration for the successfully validated HaWoR runtime and our lightweight wrapper/test tools.
+**Description:** Reviewed Conda/pip dependency declaration for the successfully validated HaWoR runtime and our lightweight wrapper/test tools.
 
-Used by: environment setup; checked by `scripts/check_hawor_setup.py`; version recorded by `run_metadata.py`.
+**Input:** None.
+
+**Output:** The reviewed environment specification.
+
+**Calls:** N/A — declarative file.
+
+**Called by:** Environment setup; checked by `scripts/check_hawor_setup.py`; version recorded by `run_metadata.py`.
+
+**Metadata written:** None.
 
 #### `.gitmodules` and `external/HaWoR/` — reusable external engine
 
-`.gitmodules` identifies the official HaWoR repository. `external/HaWoR/` is the pinned full source tree and nested submodules. Our modules invoke it but never import private copies of its code from elsewhere.
+**Description:** `.gitmodules` identifies the official HaWoR repository. `external/HaWoR/` is the pinned full source tree and nested submodules. Our modules invoke it but never import private copies of its code from elsewhere.
 
-Used by: `check_hawor_setup.py`, `hawor_runner.py`, and `visualization.py`.
+**Input:** The official HaWoR repository and its nested submodules.
+
+**Output:** The pinned external HaWoR engine at `external/HaWoR/`.
+
+**Calls:** N/A — submodule declaration and external code.
+
+**Called by:** `scripts/check_hawor_setup.py`, `src/egocentric_pipeline/hawor_runner.py`, and `src/egocentric_pipeline/visualization.py`.
+
+**Metadata written:** None.
 
 #### `.gitignore` — reusable repository protection
 
-Excludes weights, MANO files, licensed videos, prepared video data, native HaWoR work products, environment caches, and generated outputs while leaving reviewed source/configuration files trackable.
+**Description:** Excludes weights, MANO files, licensed videos, prepared video data, native HaWoR work products, environment caches, and generated outputs while leaving reviewed source/configuration files trackable.
 
-Used by: the repository as a whole.
+**Input:** None.
 
-### 7.2 Configuration
+**Output:** Repository ignore rules.
 
-#### `src/egocentric_pipeline/clip_config.py` — reusable
+**Calls:** N/A — declarative file.
 
-Defines the small typed clip configuration and validation rules. Loads a JSON clip file, checks required fields and time ranges, resolves paths, and returns a normalized in-memory configuration. It performs no video processing and contains no milestone-specific clip IDs.
+**Called by:** The repository as a whole.
 
-Called by: `prepare_clip.py`, `pipeline.py`, and `run_milestone1_baseline.py`.
+**Metadata written:** None.
 
-Reads: `configs/clips/*.json`.
+### 6.2 Configuration
 
-#### `configs/clips/hawor_example.json` — Milestone 1-specific data
+Milestone 1 has no persistent per-clip configuration files. Clip intent is supplied through command-line arguments or a dataset adapter and normalized into an in-memory `ClipRequest`. The request snapshot, resolved defaults, source identity, and all measured/generated facts are persisted in `clip_metadata.json` and the run manifest.
 
-Points to the upstream bundled example and supplies the focal length/configuration needed for the smoke run.
+### 6.3 `src/` modules
 
-Consumed by: `run_milestone1_baseline.py` through `pipeline.py`.
+#### `src/egocentric_pipeline/clip_request.py` — reusable
 
-#### `configs/clips/hot3d_baseline.json` — Milestone 1-specific data
+**Description:** Defines `ClipRequest`, its tagged source-reference types, interval and camera-override types, allowed policies, validation, and constructors from direct command arguments. It normalizes request syntax and intent only. It does not read video metadata, decode frames, estimate calibration, choose an encoding implementation, or write a per-clip configuration file.
 
-Records the chosen HOT3D sequence, interval, task, local source path, focal length, and license reference.
+**Input:** Source paths or dataset references plus optional interval, clip ID, task label, license reference, camera override, and intrinsics policy supplied by callers.
 
-Consumed by: `prepare_clip.py` and `run_milestone1_baseline.py`.
+**Output:** A normalized in-memory `ClipRequest`.
 
-#### `configs/clips/ego4d_baseline.json` — Milestone 1-specific data, deferred
+**Calls:** None.
 
-Created only after Gate B. Records the selected Ego4D UID and interval without containing credentials.
+**Called by:** `src/egocentric_pipeline/hot3d_adapter.py`, `src/egocentric_pipeline/pipeline.py`, `scripts/prepare_clip.py`, `scripts/run_hawor_pipeline.py`, `scripts/run_milestone1_baseline.py`, `tests/test_clip_preparation.py`, and `tests/test_hot3d_adapter.py`.
 
-Consumed by: the same reusable preparation and pipeline modules as HOT3D.
+**Metadata written:** None.
 
-### 7.3 Reusable pipeline modules
+#### `src/egocentric_pipeline/hot3d_adapter.py` — reusable dataset adapter
+
+**Description:** Owns the HOT3D-native boundary. It locates and validates the selected Aria HOT3D clip/archive and RGB stream, reads native ordered frames, timestamps, clip/device/stream identity, camera projection model and parameters, and license/source references. It constructs a normalized `Hot3DClipSource` `ClipRequest` and resolves that reference to a read-only `FrameSequenceSource` for video preparation. It does not modify native files, rectify images, encode MP4, or write project metadata.
+
+**Input:** HOT3D dataset root or clip archive, native clip ID, selected RGB stream ID, and optional task label or interval selection.
+
+**Output:** A normalized `ClipRequest` and, when opened by video preparation, ordered native RGB frame handles, timestamps, native IDs, calibration records, and source provenance from which `video_preparation.py` constructs a `FrameSequenceSource`.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py` and the supported official HOT3D reader/calibration utilities.
+
+**Called by:** `src/egocentric_pipeline/video_preparation.py`, `scripts/prepare_clip.py`, `scripts/run_hawor_pipeline.py`, `scripts/run_milestone1_baseline.py`, and `tests/test_hot3d_adapter.py`.
+
+**Metadata written:** None; it returns native values and provenance to `video_preparation.py`, which owns `clip_metadata.json`.
+
+#### `src/egocentric_pipeline/frame_sequence_encoding.py` — reusable
+
+**Description:** Encodes an ordered prepared-frame stream into the final constant-rate MP4. It is dataset-agnostic: it has no HOT3D paths, IDs, calibration logic, interval-selection policy, or request parsing. It receives frames after `video_preparation.py` has resolved source timing, selected the 30 FPS frame plan, and coordinated required spatial transforms. It performs one encoding pass, does not create an intermediate video, and returns a structured record of exactly what it encoded. It does not write `clip_metadata.json`.
+
+**Input:** An ordered prepared-frame iterator and target timestamps supplied by `video_preparation.py`, the final `rgb.mp4` path, and explicit codec, pixel-format, frame-rate, and color settings.
+
+**Output:** The final `data/prepared/<clip_id>/rgb.mp4` and a typed encoding result containing the command/settings, input and output frame counts, warnings, and relevant encoder version.
+
+**Calls:** FFmpeg or its approved process interface.
+
+**Called by:** `src/egocentric_pipeline/video_preparation.py` and `tests/test_frame_sequence_encoding.py`.
+
+**Metadata written:** None directly; it returns its structured encoding result to `video_preparation.py`, which records it under `preparation` and `prepared` in `clip_metadata.json`.
+
+#### `src/egocentric_pipeline/camera_intrinsics.py` — reusable
+
+**Description:** Resolves camera information from an explicit override, dataset-native calibration, supported embedded metadata, or the explicitly permitted approximate fallback. It applies the recorded spatial preparation transform to produce intrinsics in prepared-image coordinates, checks whether they can be represented by HaWoR's single equal-focal, centered-principal-point input, and returns the scalar focal value and provenance. It does not modify video or invoke HaWoR. A future focal estimator can be added behind this boundary without changing `ClipRequest`, `PreparedClip`, or `hawor_runner.py`.
+
+**Input:** Normalized `ClipRequest`, observed source geometry, optional source calibration, ordered spatial transform description, and prepared geometry.
+
+**Output:** Typed source/prepared camera metadata, HaWoR compatibility status, and `hawor_focal_length_px` or an unresolved result.
+
+**Calls:** None in the baseline; later estimator implementations may be added only through an approved plan revision.
+
+**Called by:** `src/egocentric_pipeline/video_preparation.py` and `tests/test_clip_preparation.py`.
+
+**Metadata written:** None directly; `video_preparation.py` serializes the returned values under `source_camera` and `prepared_camera` in `clip_metadata.json`.
 
 #### `src/egocentric_pipeline/video_preparation.py` — reusable
 
-Owns the boundary between arbitrary source video and HaWoR-ready input. It probes the source with ffprobe, selects the configured interval, writes a constant-rate 30 FPS MP4, calculates checksums, constructs the timestamp mapping, and writes `clip_metadata.json`. It refuses ambiguous or destructive overwrites.
+**Description:** Owns the boundary between a normalized `ClipRequest` and a HaWoR-ready `PreparedClip`, including the small internal `VideoFileSource` and `FrameSequenceSource` resolved-source contracts. It opens the tagged source reference as one of those representations and dispatches on the representation rather than on a dataset name or request flag. The video-file branch probes and converts the immutable source with FFmpeg/ffprobe. The frame-sequence branch reads frames/calibration through its source adapter and delegates the single final MP4 encode to `frame_sequence_encoding.py`. Across both branches, this module resolves the requested interval, applies and records required orientation/rectification/spatial changes, builds a source-time 30 FPS grid without changing playback speed, selects frames by presentation timestamp, resolves prepared-camera metadata, calculates hashes, and refuses ambiguous or destructive overwrites. It remains the sole owner of the typed `ClipMetadata` and `PreparedClip` contracts, `clip_metadata.json`, and the loader for an existing prepared directory.
 
-Called by: `scripts/prepare_clip.py` and `pipeline.py`.
+**Input:** A normalized `ClipRequest`, the immutable source it resolves to as a `VideoFileSource` or `FrameSequenceSource`, and the supported preparation-quality policy.
 
-Uses: a validated clip configuration from `clip_config.py`, FFmpeg/ffprobe, and `run_metadata.py` checksum helpers.
+**Output:** `data/prepared/<clip_id>/rgb.mp4`, `data/prepared/<clip_id>/clip_metadata.json`, and an in-memory `PreparedClip` containing the same typed `ClipMetadata` value that was serialized.
 
-Produces: `data/prepared/<clip_id>/rgb.mp4` and `clip_metadata.json`.
+**Calls:** FFmpeg/ffprobe for `VideoFileSource`; `src/egocentric_pipeline/hot3d_adapter.py` to resolve HOT3D references; `src/egocentric_pipeline/frame_sequence_encoding.py` only for `FrameSequenceSource`; `src/egocentric_pipeline/camera_intrinsics.py`; and checksum/serialization helpers from `src/egocentric_pipeline/run_metadata.py`.
 
-Reusable later for: iPhone clips, larger dataset ingestion, YouTube segments, and any model that expects normalized RGB video.
+**Called by:** `scripts/prepare_clip.py`, `src/egocentric_pipeline/pipeline.py`, and `tests/test_clip_preparation.py`.
+
+**Metadata written:** Owns all of `clip_metadata.json` as specified in Section 4.3: request snapshot; resolved source representation; source identity, hashes, media/timing facts, and calibration; interval resolution; adapter/encoder selection; every applied or explicitly skipped temporal, spatial, rectification, color, audio, and encoding step with parameters and versions; prepared artifact facts and hashes; source-to-prepared frame mapping and resampling metrics; prepared intrinsics and HaWoR focal value/provenance; and creation time. Shared hashing, timestamp, and JSON serialization use `run_metadata.py`.
 
 #### `src/egocentric_pipeline/hawor_runner.py` — reusable
 
-Treats HaWoR as an external inference engine. It verifies the submodule revision and required files, creates a new run workspace, stages the prepared video under `native/`, invokes the official HaWoR entry point with an explicit focal length, captures stdout/stderr and exit status, samples peak RAM/VRAM, and returns paths to native artifacts. It does not interpret or modify coordinates.
+**Description:** Treats HaWoR as an external inference engine. It verifies the submodule revision and required files, creates a new run workspace, stages the prepared video under `native/`, invokes the official HaWoR entry point with an explicit focal length, captures stdout/stderr and exit status, samples peak RAM/VRAM, and returns paths to native artifacts. It does not interpret or modify coordinates. It is reusable later for every milestone that needs unchanged HaWoR inference.
 
-Called by: `pipeline.py`.
+**Input:** `external/HaWoR/`, a validated in-memory `PreparedClip` containing typed `ClipMetadata`, and required model/MANO files. For a fresh preparation it consumes the object returned by `video_preparation.py`; for a resumed run, `video_preparation.load_prepared_clip()` first parses and validates `clip_metadata.json` into that same object. The runner does not maintain a second independent metadata parser.
 
-Uses: `external/HaWoR/`, `clip_metadata.json`, and `run_metadata.py`.
+**Output:** Native HaWoR outputs, logs, per-stage execution records, resource samples, and paths to the native artifacts.
 
-Produces: native HaWoR outputs, logs, and per-stage execution records.
+**Calls:** The official entry point in `external/HaWoR/` and shared helpers in `src/egocentric_pipeline/run_metadata.py`.
 
-Reusable later for: every milestone that needs unchanged HaWoR inference.
+**Called by:** `src/egocentric_pipeline/pipeline.py`.
+
+**Metadata written:** Per-stage execution records used by `run_manifest.json`, including the captured command/environment, stdout/stderr locations, exit status, stage timing, and peak RAM/VRAM, using `run_metadata.py`.
 
 #### `src/egocentric_pipeline/world_export.py` — reusable
 
-Defines the stable boundary leaving HaWoR. It loads `world_space_res.pth` and saved detection tracks, transposes HaWoR's hand-major arrays to the documented frame-major layout, calculates direct-detection and infilled masks, checks finite values and frame counts, and writes `trajectory_world.npz` plus `trajectory_metadata.json`.
+**Description:** Defines the stable boundary leaving HaWoR. It transposes HaWoR's hand-major arrays to the documented frame-major layout, calculates direct-detection and infilled masks, checks finite values and frame counts, and writes the stable world-frame trajectory interface used by later annotation, retargeting, evaluation, and visualization work. Copying/reordering array dimensions is allowed; altering coordinate values is not. The module contains an explicit assertion that no transform, scale, offset, smoothing, or alignment has been applied. It is reusable later for Milestones 2–5 and the optional research comparison track.
 
-Copying/reordering array dimensions is allowed; altering coordinate values is not. This module contains an explicit assertion that no transform, scale, offset, smoothing, or alignment has been applied.
+**Input:** Native `world_space_res.pth` and saved detection tracks from `hawor_runner.py`, plus the prepared/source timestamp mapping in the validated `PreparedClip` metadata.
 
-Called by: `pipeline.py`.
+**Output:** `trajectory_world.npz` and `trajectory_metadata.json`.
 
-Uses: native artifacts from `hawor_runner.py` and timestamp data from `video_preparation.py`.
+**Calls:** Shared hashing and serialization helpers in `src/egocentric_pipeline/run_metadata.py`.
 
-Produces: the stable world-frame trajectory interface used by later annotation, retargeting, evaluation, and visualization work.
+**Called by:** `src/egocentric_pipeline/pipeline.py` and `tests/test_world_export.py`.
 
-Reusable later for: Milestones 2–5 and the optional research comparison track.
+**Metadata written:** `trajectory_metadata.json`, containing the native-field mapping, hand ordering, dtype/shape contracts, HaWoR-claimed units, unchanged HaWoR metric world-frame definition, clip-local SLAM gauge limitation, native artifact paths and hashes, validity/provenance definitions, and validation results, using `run_metadata.py` where shared helpers apply.
 
 #### `src/egocentric_pipeline/visualization.py` — reusable
 
-Creates two review artifacts:
+**Description:** Creates an RGB overlay using HaWoR's own rendering/projection utilities and native camera information, plus a simple 3D root-trajectory preview that plots the unchanged exported world coordinates and clearly labels the axes as HaWoR world axes. It does not save a transformed trajectory. Any temporary display transform required by the renderer is isolated and documented as visualization-only. It is reusable later for pilot-dataset review, failure inspection, retargeting comparisons, and expanded-dataset QA.
 
-- an RGB overlay using HaWoR's own rendering/projection utilities and native camera information; and
-- a simple 3D root-trajectory preview that plots the unchanged exported world coordinates and clearly labels the axes as HaWoR world axes.
+**Input:** Prepared RGB video, native HaWoR camera/rendering artifacts, `trajectory_world.npz`, and the rendering helpers in `external/HaWoR/`.
 
-The module does not save a transformed trajectory. Any temporary display transform required by the renderer is isolated and documented as visualization-only.
+**Output:** `overlay.mp4` and `trajectory_preview.png`.
 
-Called by: `pipeline.py`.
+**Calls:** Rendering/projection helpers in `external/HaWoR/`.
 
-Uses: prepared RGB video, native HaWoR camera/rendering artifacts, `trajectory_world.npz`, and `external/HaWoR/` rendering helpers.
+**Called by:** `src/egocentric_pipeline/pipeline.py`.
 
-Produces: `overlay.mp4` and `trajectory_preview.png`.
-
-Reusable later for: pilot-dataset review, failure inspection, retargeting comparisons, and expanded-dataset QA.
+**Metadata written:** None.
 
 #### `src/egocentric_pipeline/run_metadata.py` — reusable
 
-Provides small shared helpers for SHA-256 hashing, timestamps, command/environment capture, software versions, hardware identity, non-overwriting run IDs, stage status, and JSON serialization. It owns no video or HaWoR logic.
+**Description:** Provides small shared helpers for SHA-256 hashing, timestamps, command/environment capture, software versions, hardware identity, non-overwriting run IDs, stage status, and JSON serialization. It owns no video or HaWoR logic and is reusable later for provenance across all milestones.
 
-Called by: `video_preparation.py`, `hawor_runner.py`, `world_export.py`, `pipeline.py`, and `benchmark.py`.
+**Input:** Files to hash, runtime environment and hardware state, commands, timestamps, stage results, run identifiers, and metadata values supplied by its callers.
 
-Produces: consistent portions of `clip_metadata.json`, `run_manifest.json`, and `benchmark.json`.
+**Output:** Hashes, captured environment/software/hardware values, non-overwriting run IDs, stage-status records, and serialized JSON portions.
 
-Reusable later for: provenance across all milestones.
+**Calls:** None.
+
+**Called by:** `scripts/check_hawor_setup.py`, `src/egocentric_pipeline/video_preparation.py`, `src/egocentric_pipeline/hawor_runner.py`, `src/egocentric_pipeline/world_export.py`, `src/egocentric_pipeline/pipeline.py`, `src/egocentric_pipeline/benchmark.py`, and `tests/test_run_metadata.py`.
+
+**Metadata written:** Consistent portions of `setup_check.json`, `clip_metadata.json`, `run_manifest.json`, `trajectory_metadata.json`, and `benchmark.json`, as assigned to each calling component; it owns the shared hashing, timestamp, command/environment, software/hardware, run-ID, stage-status, and JSON-serialization field groups.
 
 #### `src/egocentric_pipeline/pipeline.py` — reusable top-level API
 
-This is the central programmatic interface. Its conceptual call is:
+**Description:** The central programmatic interface, conceptually `run_clip(request: ClipRequest) -> RunResult`. It performs no model math. It validates request syntax, allocates a non-overwriting run record for the single clip attempt, prepares a new clip or loads and verifies an existing `PreparedClip`, enforces the requested intrinsics policy before inference, calls HaWoR, exports the unchanged world result, renders review artifacts, runs structural validation, and finalizes the run manifest for success or failure. It is reusable later for direct local videos, dataset-adapter requests, or larger dataset jobs.
 
-```text
-run_clip(clip_config) -> RunResult
-```
+**Input:** A normalized in-memory `ClipRequest` or explicitly requested existing `clip_metadata.json`, its source/prepared state, and the configured HaWoR runtime.
 
-It performs no model math. It coordinates the modules in order:
+**Output:** `RunResult`, the finalized per-clip run directory and available artifacts, structural validation results, and a success-or-failure `run_manifest.json`.
 
-1. load/validate configuration;
-2. prepare or verify the normalized clip;
-3. create a non-overwriting run record;
-4. call HaWoR;
-5. export the unchanged world result;
-6. render review artifacts;
-7. run structural validation; and
-8. finalize the run manifest.
+**Calls:** `src/egocentric_pipeline/clip_request.py`, `src/egocentric_pipeline/video_preparation.py`, `src/egocentric_pipeline/hawor_runner.py`, `src/egocentric_pipeline/world_export.py`, `src/egocentric_pipeline/visualization.py`, and `src/egocentric_pipeline/run_metadata.py`.
 
-Called by: `scripts/run_hawor_pipeline.py` and `scripts/run_milestone1_baseline.py`.
+**Called by:** `scripts/run_hawor_pipeline.py` and `scripts/run_milestone1_baseline.py`.
 
-Reusable later for: processing arbitrary clips one at a time or as part of a larger dataset job.
+**Metadata written:** Creates and finalizes `run_manifest.json`, including run identity, stage status, validation results, artifact locations, and shared environment/provenance fields supplied by `run_metadata.py`.
 
 #### `src/egocentric_pipeline/benchmark.py` — mostly reusable
 
-Aggregates existing run manifests into machine-readable tables and Markdown. The aggregation logic is reusable; the exact one-page Milestone 1 report wording and two-clip pass gate are milestone-specific parameters.
+**Description:** Builds machine-readable benchmark evidence and a concise Markdown failure report for one finalized run. It reports available metrics for successful or failed attempts and never scans output directories or combines unrelated runs. The metric-extraction logic is reusable; the one-page Milestone 1 wording and run-role vocabulary are milestone-specific parameters.
 
-Called by: `run_milestone1_baseline.py`.
+**Input:** One finalized `run_manifest.json`; the same run's `trajectory_metadata.json`, resource samples, and generated artifacts when present; its Milestone 1 run role; and optional human review status, labels, and notes.
 
-Uses: `run_manifest.json`, `trajectory_metadata.json`, resource samples, and human review labels.
+**Output:** `benchmark.json` and `benchmark_report.md` inside that run's unique directory.
 
-Produces: `benchmark.json` and `benchmark_report.md`.
+**Calls:** Shared serialization and metadata helpers in `src/egocentric_pipeline/run_metadata.py`.
 
-Reusable later for: larger-scale success/failure summaries with different report templates.
+**Called by:** `scripts/run_milestone1_baseline.py` and `tests/test_benchmark.py`.
 
-### 7.4 User-facing scripts
+**Metadata written:** `benchmark.json`, containing the single-run identity, role, status, metrics, artifact evidence, review state, failures, environment deviations, limitations, and unavailable-value reasons defined in Section 4.6, using consistent shared portions from `run_metadata.py`.
+
+### 6.4 `scripts/` entry points
 
 #### `scripts/check_hawor_setup.py` — reusable
 
-Read-only preflight command described in Section 3.11. It is the first command run on a new machine.
+**Description:** Read-only preflight command described in Section 3.11. It is the first command run on a new machine.
 
-Calls/uses: environment inspection, `run_metadata.py`, and the external checkout.
+**Input:** The environment and external-checkout state listed in Section 3.11.
+
+**Output:** A human-readable summary and `setup_check.json` evidence.
+
+**Calls:** Environment inspection, shared helpers in `src/egocentric_pipeline/run_metadata.py`, and checks against `external/HaWoR/`.
+
+**Called by:** Developers setting up a machine.
+
+**Metadata written:** `setup_check.json`, recording operating system, Python and package versions, tool availability, PyTorch CUDA/GPU identity, `nvcc`, HaWoR and nested-submodule revisions, required weight/MANO presence and hashes, example-video decodability, output-directory writability, and visible warnings, using `run_metadata.py`.
 
 #### `scripts/prepare_clip.py` — reusable
 
-Thin command-line entry point for running `video_preparation.py` independently. Useful when selecting or inspecting a clip before paying the cost of inference.
+**Description:** Thin command-line entry point for constructing a `ClipRequest` and running `video_preparation.py` independently. A local video path works without a sidecar file; HOT3D-specific arguments route request construction through the adapter. It is useful when selecting or inspecting a clip before paying the cost of inference.
 
-Calls: `clip_config.py` and `video_preparation.py`.
+**Input:** A local video path or HOT3D root/archive plus clip/stream selection, and optional interval, clip ID, task label, license reference, camera override, and intrinsics policy arguments.
+
+**Output:** The prepared `rgb.mp4` and `clip_metadata.json` produced by `video_preparation.py`.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py`, optionally `src/egocentric_pipeline/hot3d_adapter.py`, and `src/egocentric_pipeline/video_preparation.py`.
+
+**Called by:** Users preparing a clip independently.
+
+**Metadata written:** None directly; `video_preparation.py` writes `clip_metadata.json`.
 
 #### `scripts/run_hawor_pipeline.py` — reusable
 
-Thin general-purpose command-line front end to `pipeline.run_clip`. It accepts any valid clip JSON and prints the run directory and final status. This is the command expected to survive into later milestones.
+**Description:** Thin general-purpose command-line front end to `pipeline.run_clip`. It constructs a `ClipRequest` from a direct local video or supported dataset arguments, or accepts an existing prepared `clip_metadata.json`, and prints the run directory and final status. No per-clip configuration file is required. This is the command expected to survive into later milestones.
 
-Calls: `clip_config.py` and `pipeline.py`.
+**Input:** Direct-video or HOT3D request arguments, or an existing prepared `clip_metadata.json`, plus the configured HaWoR runtime.
+
+**Output:** The run directory and final status printed for the user, plus the run artifacts produced by `pipeline.py`.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py`, optionally `src/egocentric_pipeline/hot3d_adapter.py`, and `src/egocentric_pipeline/pipeline.py`.
+
+**Called by:** Users running an arbitrary clip.
+
+**Metadata written:** None directly; `pipeline.py` writes and finalizes the run metadata.
 
 #### `scripts/run_milestone1_baseline.py` — Milestone 1-specific
 
-Encodes only milestone ordering and gates. It runs the bundled example, requires its success before HOT3D, requires HOT3D structural/visual approval before enabling Ego4D, and finally calls `benchmark.py` across the accepted runs. It contains no reusable video, HaWoR, export, or visualization logic.
+**Description:** Runs exactly one Milestone 1 clip attempt per invocation. It constructs one bundled-example, direct-video/Ego4D, or HOT3D request from runtime arguments, or selects one existing prepared clip, calls the reusable pipeline once, and then calls `benchmark.py` for that same run. It contains no reusable video, HaWoR, export, visualization, or multi-run aggregation logic, and it never requires the other milestone clips to be supplied or run in the same invocation.
 
-Calls: `pipeline.py` and `benchmark.py` with the three Milestone 1 config files.
+**Input:** Exactly one source selection: the bundled HaWoR example; a direct local video with optional dataset name/native ID; a HOT3D root/archive plus selected clip/stream ID; or an existing prepared `clip_metadata.json`. Also accepts the selected interval, optional approved camera override or policy, one Milestone 1 run role (`setup_smoke`, `paper_dataset`, `ego4d`, or `other_test`), and optional review state. The bundled-example path is resolved from the pinned upstream checkout.
 
-### 7.5 Tests
+**Output:** One unique Milestone 1 run directory containing the available pipeline artifacts, finalized `run_manifest.json`, and that run's `benchmark.json` and `benchmark_report.md`; prints the run directory and final status.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py`, optionally `src/egocentric_pipeline/hot3d_adapter.py`, `src/egocentric_pipeline/pipeline.py` exactly once, and then `src/egocentric_pipeline/benchmark.py` for the finalized run.
+
+**Called by:** Users running one Milestone 1 clip attempt. The user invokes it separately for the bundled smoke test and for each HOT3D, Ego4D, or additional test clip as needed.
+
+**Metadata written:** None directly; `pipeline.py` owns `run_manifest.json`, and `benchmark.py` owns the same run's `benchmark.json` and `benchmark_report.md`.
+
+### 6.5 Tests
 
 #### `tests/test_clip_preparation.py` — reusable contracts
 
-Uses a tiny synthetic video to test interval boundaries, constant 30 FPS output, monotonic timestamps, source timestamp mapping, checksum recording, and overwrite refusal.
+**Description:** Uses tiny synthetic constant- and variable-rate videos plus a synthetic frame-sequence source to test `ClipRequest` defaults and validation, source-representation dispatch, the invariant that only a frame sequence invokes `frame_sequence_encoding.py`, half-open interval boundaries, presentation-timestamp-driven 30 FPS conversion without speed change, frame dropping/reuse and exact source mapping, timing-quality metrics, complete transform-history recording, camera propagation, checksum recording, prepared-clip reload, in-memory/JSON equivalence, and overwrite refusal without downloading datasets.
 
-Tests: `clip_config.py` and `video_preparation.py` without downloading datasets.
+**Input:** Tiny synthetic videos, a synthetic frame sequence, frame timestamps, calibration/override fixtures, and `ClipRequest` values.
+
+**Output:** Automated pass/fail results for the clip-request, camera, preparation, metadata, and reload contracts.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py`, `src/egocentric_pipeline/camera_intrinsics.py`, and `src/egocentric_pipeline/video_preparation.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
+
+#### `tests/test_hot3d_adapter.py` — reusable dataset-adapter contracts
+
+**Description:** Uses a tiny synthetic HOT3D-like frame bundle to test native frame/timestamp ordering, RGB-stream selection, calibration/projection parsing, source identity and license provenance, request construction, missing/mismatched metadata errors, and the invariant that the adapter never modifies or encodes native data.
+
+**Input:** Synthetic HOT3D clip-definition, frame, timestamp, and camera-metadata fixtures.
+
+**Output:** Automated pass/fail results for the HOT3D adapter boundary.
+
+**Calls:** `src/egocentric_pipeline/clip_request.py` and `src/egocentric_pipeline/hot3d_adapter.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
+
+#### `tests/test_frame_sequence_encoding.py` — reusable encoding contracts
+
+**Description:** Uses a tiny sequence of distinguishable synthetic frames to verify ordered single-pass encoding into the final MP4, constant `30/1` output timing, expected frame count and pixel format, structured encoding-result fields, failure cleanup, and the absence of HOT3D-specific assumptions or an intermediate MP4.
+
+**Input:** Synthetic prepared frames, target timestamps, explicit encoding settings, and a temporary final output path.
+
+**Output:** Automated pass/fail results for the frame-sequence encoder boundary.
+
+**Calls:** `src/egocentric_pipeline/frame_sequence_encoding.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
 
 #### `tests/test_world_export.py` — reusable contracts
 
-Uses a tiny synthetic HaWoR-like result to test hand-major to frame-major reordering, exact numeric preservation, shapes/dtypes, detection/infill provenance, invalid-value handling, and frame-count mismatch errors. The main invariant is that coordinate values are bitwise unchanged apart from dtype conversion explicitly declared by the exporter.
+**Description:** Uses a tiny synthetic HaWoR-like result to test hand-major to frame-major reordering, exact numeric preservation, shapes/dtypes, detection/infill provenance, invalid-value handling, and frame-count mismatch errors without loading neural networks. The main invariant is that coordinate values are bitwise unchanged apart from dtype conversion explicitly declared by the exporter.
 
-Tests: `world_export.py` without loading neural networks.
+**Input:** A tiny synthetic HaWoR-like result and associated timestamp/provenance fixtures.
+
+**Output:** Automated pass/fail results for the world-export contracts.
+
+**Calls:** `src/egocentric_pipeline/world_export.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
 
 #### `tests/test_run_metadata.py` — reusable contracts
 
-Tests deterministic hashing, required run-manifest fields, unique/non-overwriting run IDs, stage failure recording, and secret redaction.
+**Description:** Tests deterministic hashing, required run-manifest fields, unique/non-overwriting run IDs, stage failure recording, and secret redaction.
 
-Tests: `run_metadata.py`.
+**Input:** Synthetic files, commands, environment values, run identifiers, and stage outcomes.
 
-## 8. End-to-end file and control flow
+**Output:** Automated pass/fail results for shared run-metadata contracts.
+
+**Calls:** `src/egocentric_pipeline/run_metadata.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
+
+#### `tests/test_benchmark.py` — per-run reporting contracts
+
+**Description:** Uses synthetic successful and failed run manifests to verify that one invocation produces one run-scoped `benchmark.json` and `benchmark_report.md`, preserves run/clip identity and role, reports unavailable metrics with reasons, includes supplied manual-review state, never aggregates or discovers other runs, and does not overwrite another run's report.
+
+**Input:** Synthetic finalized run manifests, optional trajectory/resource artifacts, Milestone 1 run roles, and optional review labels/notes.
+
+**Output:** Automated pass/fail results for the single-run benchmark and failure-report contracts.
+
+**Calls:** `src/egocentric_pipeline/benchmark.py`.
+
+**Called by:** The test runner.
+
+**Metadata written:** None.
+
+## 7. End-to-End File/Script Flow
+
+The primary Milestone 1 call tree is:
 
 ```text
-Human chooses source + interval + focal length
-                      │
-                      ▼
-          configs/clips/<clip>.json
-                      │
-          clip_config.py validates it
-                      │
-                      ▼
-          video_preparation.py
-                      │
-          ┌───────────┴────────────────┐
-          ▼                            ▼
-data/prepared/<clip>/rgb.mp4   clip_metadata.json
-          │                            │
-          └───────────┬────────────────┘
-                      ▼
-                pipeline.py
-                      │
-             hawor_runner.py
-                      │ invokes as external engine
-                      ▼
-              external/HaWoR/
-                      │
-                      ▼
-        outputs/.../<clip>/native/...
-              │                  │
-              │                  └──────────────┐
-              ▼                                 ▼
-       world_export.py                  visualization.py
-              │                                 │
-              ▼                                 ▼
- trajectory_world.npz                  overlay.mp4
- trajectory_metadata.json             trajectory_preview.png
-              │                                 │
-              └────────────────┬────────────────┘
-                               ▼
-                     run_manifest.json
-                               │
-                     benchmark.py
-                               │
-                ┌──────────────┴──────────────┐
-                ▼                             ▼
-        benchmark.json              benchmark_report.md
+scripts/run_milestone1_baseline.py
+├── reads: exactly one source selection + Milestone 1 run role
+├── selects: exactly one run input
+│   ├── src/egocentric_pipeline/clip_request.py
+│   │   └── constructs: bundled-example or direct local/Ego4D ClipRequest
+│   ├── src/egocentric_pipeline/hot3d_adapter.py [HOT3D only]
+│   │   ├── reads: selected immutable HOT3D clip/archive and native metadata
+│   │   └── constructs: HOT3D ClipRequest with RGB stream/calibration identity
+│   └── existing-prepared branch
+│       └── passes: existing clip_metadata.json
+├── calls exactly once: src/egocentric_pipeline/pipeline.py :: run_clip(request) -> RunResult
+│   ├── src/egocentric_pipeline/clip_request.py
+│   │   └── validates: normalized request, interval, override, and policies
+│   ├── creates: non-overwriting outputs/hawor/<run_id>/ run record
+│   ├── src/egocentric_pipeline/video_preparation.py
+│   │   ├── reads: normalized ClipRequest + immutable source
+│   │   ├── opens source reference as one internal representation
+│   │   │   ├── local video → VideoFileSource
+│   │   │   └── HOT3D reference → hot3d_adapter.py → FrameSequenceSource
+│   │   ├── creates: 30 FPS source-time grid; selects by PTS without speed change
+│   │   ├── coordinates/records: orientation, rectification, crop/pad/resize,
+│   │   │                        color/pixel conversion, frame drop/reuse
+│   │   ├── calls: camera_intrinsics.py
+│   │   │   └── returns: source/prepared camera metadata + HaWoR focal/status
+│   │   ├── dispatches by resolved representation, never a request flag
+│   │   │   ├── VideoFileSource
+│   │   │   │   └── calls: FFmpeg/ffprobe for final video-to-video conversion
+│   │   │   └── FrameSequenceSource
+│   │   │       └── calls: frame_sequence_encoding.py for one final MP4 encode
+│   │   └── writes: data/prepared/<clip_id>/rgb.mp4
+│   │               data/prepared/<clip_id>/clip_metadata.json
+│   │       returns: PreparedClip(video path, metadata path, typed ClipMetadata)
+│   ├── enforces: intrinsics policy and preparation-quality gate
+│   ├── src/egocentric_pipeline/hawor_runner.py
+│   │   ├── reads: validated in-memory PreparedClip/ClipMetadata
+│   │   ├── verifies: persisted metadata/artifact identity
+│   │   ├── calls as external engine: external/HaWoR/
+│   │   └── writes: outputs/.../clips/<clip_id>/native/...
+│   │               console logs + per-stage execution/resource records
+│   ├── src/egocentric_pipeline/world_export.py
+│   │   ├── reads: native world_space_res.pth + detection tracks
+│   │   │           PreparedClip source/prepared timestamp mapping
+│   │   └── writes: trajectory_world.npz
+│   │               trajectory_metadata.json
+│   ├── src/egocentric_pipeline/visualization.py
+│   │   ├── reads: prepared RGB + native camera/rendering artifacts
+│   │   │           trajectory_world.npz
+│   │   ├── calls: external/HaWoR/ rendering/projection helpers
+│   │   └── writes: overlay.mp4 + trajectory_preview.png
+│   ├── runs: structural validation
+│   └── writes/finalizes: success-or-failure run_manifest.json
+└── src/egocentric_pipeline/benchmark.py
+    ├── always called for that finalized run manifest
+    ├── reads: this run's available trajectory metadata, resource samples,
+    │           artifacts, role, and optional human review labels
+    └── writes: this run's benchmark.json + benchmark_report.md
 ```
 
-The reusable path is `clip configuration → preparation → pipeline → HaWoR runner → world export → visualization → run metadata`. Milestone 1 contributes only one thin controller that decides which three clips run and in what gated order.
+Shared metadata calls across that tree are:
 
-## 9. Metrics and failure review
+```text
+src/egocentric_pipeline/run_metadata.py
+├── called by: scripts/check_hawor_setup.py
+│   └── contributes: setup_check.json
+├── called by: video_preparation.py
+│   └── contributes: clip_metadata.json
+├── called by: hawor_runner.py
+│   └── contributes: per-stage execution records in run_manifest.json
+├── called by: world_export.py
+│   └── contributes: trajectory_metadata.json
+├── called by: pipeline.py
+│   └── contributes: run_manifest.json
+└── called by: benchmark.py
+    └── contributes: benchmark.json
+```
+
+The standalone command and test call trees use the same modules:
+
+```text
+scripts/check_hawor_setup.py
+├── inspects: environment/hawor.yml + runtime/system state
+├── checks: .gitmodules + external/HaWoR/ + weights/MANO files
+├── calls: src/egocentric_pipeline/run_metadata.py
+└── writes: human-readable summary + setup_check.json
+
+scripts/prepare_clip.py
+├── reads: direct local-video or HOT3D command arguments
+├── calls: src/egocentric_pipeline/clip_request.py
+├── optionally calls: src/egocentric_pipeline/hot3d_adapter.py
+└── calls: src/egocentric_pipeline/video_preparation.py
+    └── writes/returns: rgb.mp4 + clip_metadata.json + PreparedClip
+
+scripts/run_hawor_pipeline.py
+├── new-source branch
+│   ├── reads: direct local-video or HOT3D command arguments
+│   ├── calls: src/egocentric_pipeline/clip_request.py
+│   └── optionally calls: src/egocentric_pipeline/hot3d_adapter.py
+├── existing-prepared branch
+│   └── calls: video_preparation.load_prepared_clip(clip_metadata.json)
+└── calls: src/egocentric_pipeline/pipeline.py
+    └── follows: the reusable pipeline branch shown above
+
+tests/test_clip_preparation.py
+├── calls: src/egocentric_pipeline/clip_request.py
+├── calls: src/egocentric_pipeline/camera_intrinsics.py
+└── calls: src/egocentric_pipeline/video_preparation.py
+
+tests/test_hot3d_adapter.py
+├── calls: src/egocentric_pipeline/clip_request.py
+└── calls: src/egocentric_pipeline/hot3d_adapter.py
+
+tests/test_frame_sequence_encoding.py
+└── calls: src/egocentric_pipeline/frame_sequence_encoding.py
+
+tests/test_world_export.py
+└── calls: src/egocentric_pipeline/world_export.py
+
+tests/test_run_metadata.py
+└── calls: src/egocentric_pipeline/run_metadata.py
+
+tests/test_benchmark.py
+└── calls: src/egocentric_pipeline/benchmark.py
+```
+
+The reusable path is `request constructor or dataset adapter → ClipRequest → source resolution (VideoFileSource or FrameSequenceSource) → preparation → PreparedClip/ClipMetadata → HaWoR runner → world export → visualization → run metadata`. The Milestone 1 entry point adds only single-clip orchestration and automatic per-run benchmark reporting: each invocation constructs one request, calls the reusable pipeline once, and generates benchmark files for only that finalized run. `clip_metadata.json` is the durable prepared-clip boundary; within a fresh process the corresponding typed object is passed directly, while resumed processing loads the JSON into the same type before any downstream call. Frame-sequence encoding is an internal preparation capability selected from the resolved source representation, not a user-authored request option.
+
+## 8. Metrics and Failure Review
 
 Measure for every attempt:
 
 - setup/preflight result;
+- source timing mode, median source frame interval, maximum source-frame gap, source/prepared duration difference, unique source frames selected, dropped-frame count, repeated-source-frame count/fraction, and median/maximum timestamp-selection error;
+- camera source, prepared-camera quality status, HaWoR focal provenance, and any rectification or approximation used;
 - stage and total wall-clock time;
 - effective frames per second;
 - peak process RAM and GPU memory;
@@ -665,42 +935,49 @@ Measure for every attempt:
 - completion status for preparation, detection/tracking, hand estimation, SLAM/metric scale, infilling, export, and visualization; and
 - output contract violations.
 
-Manually review beginning, middle, end, every transition into/out of infilling, and every suspicious jump. Use these labels: missed/false hand detection, left/right identity error, implausible hand depth or scale, temporal jitter, infiller discontinuity, SLAM drift/failure, world-trajectory jump, mesh/image misalignment, rendering failure, and other.
+Manually review beginning, middle, end, every transition into/out of infilling, and every suspicious jump. Use these labels: missed/false hand detection, left/right identity error, implausible hand depth or scale, temporal jitter, infiller discontinuity, SLAM drift/failure, world-trajectory jump, mesh/image misalignment, rendering failure, and other. A report generated before review records `manual_review.status: pending`; a run is not accepted as Milestone 1 evidence until the required review is complete and its labels/notes are associated with that run.
 
-With two dataset clips, success rate is descriptive only: successful clips divided by attempted clips.
+Each report describes one attempt and records its completion status; it does not calculate a multi-run success rate. Any later summary across the small collection of Milestone 1 runs is descriptive only and is not generated implicitly by `benchmark.py`.
 
-## 10. Implementation sequence
+## 9. Implementation Sequence
 
 1. Create only the environment documentation/specification, submodule declaration, ignore rules, and setup checker.
 2. Establish WSL2/native Linux, Python 3.10, CUDA compiler, PyTorch, system packages, and HaWoR dependencies.
 3. Place all weights and user-supplied MANO files; run the setup checker until required checks pass.
 4. Run the untouched bundled HaWoR example and verify inference plus visualization. Decide whether local 8 GB execution is viable.
-5. Implement the reusable config, run-record, preparation, HaWoR adapter, unchanged world export, and visualization modules with synthetic tests.
-6. Acquire/select the HOT3D source, create its clip JSON, prepare it, and run it through the reusable command.
-7. Validate the HOT3D export and review its visualization. Record failures and resource use.
-8. Only after HOT3D passes, begin Ego4D access and UID selection. Create the Ego4D JSON only when the source and interval are known.
-9. Process and validate the Ego4D clip using the same reusable command without dataset-specific code changes.
-10. Run the Milestone 1 controller to aggregate accepted runs into the one-page benchmark/failure report.
-11. Repeat from a clean output directory, record exact verification evidence, and update `PROJECT_STATUS.md`.
+5. Implement `ClipRequest`, the `VideoFileSource`/`FrameSequenceSource` source-resolution boundary, dataset-agnostic frame-sequence encoding, camera resolution, success-or-failure run records, timestamp-driven preparation, prepared-clip loading, the HaWoR adapter, unchanged world export, visualization, and single-run benchmark reporting with synthetic tests.
+6. Invoke `run_milestone1_baseline.py` once for the bundled example to verify that one request produces one pipeline attempt and its own benchmark/failure report.
+7. Implement and test the HOT3D adapter against a minimal synthetic frame/calibration bundle, then acquire/select the real Aria HOT3D RGB clip. Construct its request through the adapter, resolve it to a read-only `FrameSequenceSource`, and have video preparation rectify/select its frames and call `frame_sequence_encoding.py` for the single final `rgb.mp4` encode. Invoke `run_milestone1_baseline.py` separately for this clip without a per-clip config file; do not rerun the bundled example automatically.
+8. Validate the HOT3D export and review its visualization. Its unique run directory retains its own benchmark/failure report, resource evidence, and review state.
+9. Only after HOT3D passes, begin Ego4D access and UID selection. Construct the Ego4D `ClipRequest` from its local video path, UID, and selected interval at runtime.
+10. Invoke `run_milestone1_baseline.py` separately for the Ego4D clip without an Ego4D condition inside the HaWoR runner, exporter, visualizer, or benchmark module. Validate its export and report without rerunning HOT3D automatically.
+11. Repeat the required single-clip invocations from a clean output directory, confirm that every run has a unique manifest and benchmark/failure report, record exact verification evidence, and update `PROJECT_STATUS.md`.
 
-## 11. Acceptance criteria
+## 10. Acceptance Criteria
 
 - The setup checker passes on the execution machine and records exact software, CUDA, GPU, upstream revision, weights, and MANO presence.
 - The unmodified bundled HaWoR example completes inference and produces a viewable visualization.
-- One selected HOT3D clip and, after that gate, one selected Ego4D clip complete through the same reusable `run_hawor_pipeline.py` entry point.
+- One selected HOT3D clip and then one selected Ego4D clip complete through separate invocations of `run_milestone1_baseline.py`; each invocation calls the reusable pipeline exactly once and never requires or reruns the other clips.
+- A direct local video can be prepared and run without a per-clip JSON/config file; the normalized request is instead recorded in `clip_metadata.json`.
+- The HOT3D adapter reads the selected immutable Aria RGB frames, timestamps, and calibration and supplies the read-only records from which `video_preparation.py` constructs a `FrameSequenceSource`; it never encodes or modifies the source.
+- `video_preparation.py` dispatches on `VideoFileSource` versus `FrameSequenceSource`, never a dataset name or caller-supplied encoding flag. It owns and records the rectification/timing decisions and calls the dataset-agnostic `frame_sequence_encoding.py` only for frame sequences.
+- `frame_sequence_encoding.py` performs one direct encode to the final `rgb.mp4`, creates no intermediate video, contains no HOT3D-specific logic, and returns its encoding record to `video_preparation.py` for inclusion in `clip_metadata.json`.
 - No dataset-specific condition exists inside the reusable HaWoR runner, world exporter, or visualizer.
 - Every run uses an explicit focal length with recorded provenance.
-- Prepared video frame counts equal exported trajectory frame counts; indices are contiguous; timestamps are strictly increasing and agree with 30 FPS within tolerance.
+- `video_preparation.py` writes JSON before returning a `PreparedClip`; the in-memory `ClipMetadata` and a reload of that JSON are equivalent and identify the same hashed prepared video.
+- `hawor_runner.py` accepts a validated `PreparedClip` and does not implement a competing parser or source-metadata resolver.
+- `clip_metadata.json` records the immutable source identity/hash, exact selected interval, every applied or explicitly skipped spatial/temporal/color/audio/encoding step, camera derivation, and per-frame source mapping. The original source remains independently preserved because dropped frames and lossy encoding are not reversible.
+- Prepared video frame counts equal exported trajectory frame counts; indices are contiguous; timestamps are strictly increasing and agree with 30 FPS within tolerance; preparation does not change playback speed; and source/prepared duration error, frame reuse/drop counts, and timestamp-selection errors pass the approved preparation-quality limits.
 - The world export numerically preserves HaWoR's root translation, root orientation, hand pose, and shape arrays except for documented hand/frame axis reordering and an explicitly tested dtype conversion if needed.
 - Hand order is `[left, right]` throughout and is visually checked.
 - Direct detection, motion infill, upstream `hawor_valid`, and stricter `export_valid` are represented separately; detector confidence is present only for direct detections.
 - Every valid exported value is finite; failures are reported rather than silently filled by our code.
 - No canonical, aligned, rescaled, smoothed, or robot-frame trajectory is written.
 - One overlay and one unchanged-world-coordinate trajectory preview exist and are manually reviewed for each accepted clip.
-- `benchmark.json` and a one-page `benchmark_report.md` report runtime, peak resources, success, provenance coverage, visible failures, environment deviations, and remaining unverified claims.
+- Every allocated Milestone 1 run directory contains its own `benchmark.json` and approximately one-page `benchmark_report.md`, generated automatically by `run_milestone1_baseline.py` after the run manifest is finalized. They report that run's runtime, peak resources, completion or failure, provenance coverage, review state and visible failures when supplied, environment deviations, unavailable-value reasons, and remaining unverified claims; they do not aggregate or discover other runs.
 - Original source, prepared input, native HaWoR artifacts, and stable export remain separate and are never silently overwritten.
 
-## 12. Risks and mitigations
+## 11. Risks and Mitigations
 
 - **8 GB VRAM may be insufficient:** test the bundled example before building the surrounding pipeline; move to a >=16 GB Linux GPU if needed.
 - **Native Windows uncertainty:** support WSL2/native Linux only for this baseline and avoid spending the milestone on a Windows port.
@@ -708,24 +985,31 @@ With two dataset clips, success rate is descriptive only: successful clips divid
 - **Compiled extension failures:** require `nvcc`, build tools, initialized Eigen/`lietorch` submodules, and import checks in preflight.
 - **Headless rendering failures:** validate rendering during the bundled example, not at the end of the milestone.
 - **Incorrect focal fallback:** always supply an explicit focal length; the current upstream demo can otherwise silently fall back to 600 px.
+- **HOT3D camera model mismatch:** native HOT3D images may use a fisheye model that HaWoR's scalar pinhole focal cannot represent; rectify through the official calibration path to a fixed pinhole prepared image, record the full transform and target intrinsics, and stop if the mapping cannot be verified.
+- **Low or irregular source frame rate:** timestamp-based conversion preserves duration but repeated frames add no motion information; measure repeat fraction, maximum source gap, and timing error, then reject at the preparation-quality gate when the approved limits are exceeded.
+- **Prepared video is not an archival copy:** frame dropping, rectification, and lossy encoding cannot be inverted; preserve the immutable original and its hash, and treat the transform history/frame map as reproducibility evidence rather than a substitute for the source.
 - **Licensed assets:** keep MANO, HOT3D, Ego4D, and weights untracked and store no credentials.
 - **HaWoR final validity loses origin information:** reconstruct direct-detection versus infilled provenance from preserved tracks without changing predictions.
 - **Hand identity errors propagate:** keep fixed `[left, right]` order and inspect the overlay around gaps and crossings.
 - **World frames differ between clips:** make no cross-clip geometric comparison in Milestone 1.
 - **Two clips do not establish accuracy:** report reproducibility, structural correctness, cost, and observed failures only.
 
-## 13. Remaining decisions before approval
+## 12. Remaining Decisions
 
 1. Confirm WSL2 as the first execution environment, with a >=16 GB native Linux GPU as the fallback if the bundled example exceeds local VRAM.
 2. Confirm the user can supply the two licensed MANO model files before the bundled example run.
 3. Confirm that `external/HaWoR/` should be a pinned Git submodule rather than a manually cloned, ignored directory.
-4. Approve choosing the exact HOT3D and later Ego4D intervals by the selection criteria above, unless the user wants to provide specific clips.
+4. Choose the exact HOT3D clip and later Ego4D interval. The recommended default is one short purposeful manipulation with a hand visible through most of the action, enough camera motion and static scene texture to exercise SLAM, and no dominant motion blur. Exact identities are required before their respective runs but need not block approval of the reusable architecture unless the user wants them fixed in the plan.
+5. Choose the strict preparation-quality thresholds for maximum repeated-source-frame fraction, maximum source-frame gap, and maximum source-to-prepared timestamp-selection error. This blocks final plan approval because it determines which lower-rate or irregular videos may reach HaWoR.
+6. Decide whether the Milestone 1 Ego4D run must resolve calibrated/derived intrinsics or may explicitly use the approximate HaWoR-style image-dimension fallback when no trustworthy calibration exists. This blocks final plan approval for the Ego4D input contract.
 
-## 14. Primary references consulted
+## 13. References
 
 - HaWoR project and paper: <https://hawor-project.github.io/> and <https://arxiv.org/abs/2501.02973>
 - Official HaWoR implementation and installation: <https://github.com/ThunderVVV/HaWoR>
 - HaWoR CUDA extension build: <https://github.com/ThunderVVV/HaWoR/blob/main/thirdparty/DROID-SLAM/setup.py>
 - Current HaWoR focal-length issue: <https://github.com/ThunderVVV/HaWoR/issues/34>
 - HOT3D dataset explorer: <https://explorer.projectaria.com/hot3d-aria>
-- Ego4D access and downloader, deferred until Gate C: <https://ego4d-data.org/docs/start-here/> and <https://github.com/facebookresearch/Ego4d/tree/main/ego4d/cli>
+- HOT3D-Clips frame and per-frame camera format: <https://github.com/facebookresearch/hot3d/blob/main/hot3d/clips/README.md>
+- Ego4D access and downloader: <https://ego4d-data.org/docs/start-here/> and <https://github.com/facebookresearch/Ego4d/tree/main/ego4d/cli>
+- FFmpeg timestamp-based FPS filter: <https://ffmpeg.org/ffmpeg-filters.html#fps>

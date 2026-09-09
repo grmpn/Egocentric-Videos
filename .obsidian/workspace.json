@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "0266ba8f10884a26",
+        "id": "80d84cd6eb3c8464",
         "type": "tabs",
         "children": [
           {
-            "id": "6049b23ce7567b93",
+            "id": "181ef7abfd079557",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "PLANNING_SPECS.md",
+                "file": "plans/milestone-1-hawor-baseline.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "PLANNING_SPECS"
+              "title": "milestone-1-hawor-baseline"
             }
           }
         ]
@@ -188,13 +188,14 @@
       "bases:Create new base": false
     }
   },
-  "active": "6049b23ce7567b93",
+  "active": "181ef7abfd079557",
   "lastOpenFiles": [
-    "Project-Milestones-and-Timeline.md",
-    "PLANNING_SPECS.md",
-    "AGENTS.md",
-    "plans/milestone-1-hawor-baseline.md",
     "PROJECT_STATUS.md",
+    "plans/milestone-1-hawor-baseline.md",
+    "Untitled.canvas",
+    "PLANNING_SPECS.md",
+    "Project-Milestones-and-Timeline.md",
+    "AGENTS.md",
     "plans",
     "Sources/HaWoR-Review.md",
     "Sources"
