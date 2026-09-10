@@ -1,0 +1,3 @@
+[submodule "external/HaWoR"]
+	path = external/HaWoR
+	url = https://github.com/ThunderVVV/HaWoR.git
