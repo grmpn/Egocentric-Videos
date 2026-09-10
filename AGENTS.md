@@ -138,6 +138,18 @@ Do not create:
 
 Before adding a file, dependency, or abstraction, confirm that it is required for the current milestone deliverable and cannot be handled clearly by an existing component.
 
+## Dependency and implementation discipline
+
+Before implementing functionality, check whether an existing project dependency,
+standard-library feature, or established external package already provides it. Use
+that implementation when it satisfies the approved requirements; do not recreate
+the same capability locally. Add a new dependency only when the approved plan
+justifies it and existing dependencies cannot meet the need.
+
+Implement the smallest amount of project code needed for the current deliverable.
+Avoid convenience wrappers, helper layers, abstractions, and scripts that do not
+remove necessary complexity from the supported workflow.
+
 ## Legibility standards
 
 Optimize for a human reader who needs to understand and modify the project later.
@@ -169,6 +181,11 @@ Validation should cover the contracts most likely to cause silent errors, includ
 - robot workspace and kinematic limits when applicable
 
 For visual outputs, inspect representative overlays or trajectory visualizations in addition to automated checks.
+
+Write focused tests that exercise reusable modules and user-facing scripts or
+entry points. Tests should evaluate the production workflow directly. Do not add
+scripts whose only purpose is to invoke the test suite when the test framework's
+standard command or configuration already does so.
 
 Report exactly what was tested, what passed, and what remains unverified.
 
