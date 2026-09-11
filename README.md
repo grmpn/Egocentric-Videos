@@ -6,7 +6,7 @@ workflows will be added after implementation begins.
 
 ## HaWoR installation
 
-The confirmed setup uses WSL2 with Ubuntu 24.04:
+The confirmed setup uses Ubuntu 24.04:
 
 | Component | Version |
 | --- | --- |
@@ -16,19 +16,16 @@ The confirmed setup uses WSL2 with Ubuntu 24.04:
 | CUDA toolkit | 11.7 |
 | CUDA host compiler | GCC/G++ 11 |
 
-Keep the HaWoR clone and build files in the WSL Linux filesystem, such as
-`~/dev/HaWoR`, rather than under `/mnt/c`.
+### 1. Prepare Ubuntu
 
-### 1. Prepare WSL2
-
-Install the NVIDIA driver on Windows. Do not install a separate Linux NVIDIA
-kernel driver inside WSL. Confirm that the GPU is visible:
+Install a compatible NVIDIA driver using Ubuntu's recommended driver packages.
+Reboot if required, then confirm that the GPU is visible:
 
 ```bash
 nvidia-smi
 ```
 
-After adding NVIDIA's CUDA repository for WSL, install only the CUDA 11.7
+After adding NVIDIA's CUDA repository for Ubuntu, install only the CUDA 11.7
 toolkit and the compatible compiler:
 
 ```bash
@@ -39,19 +36,27 @@ sudo apt install cuda-toolkit-11-7 gcc-11 g++-11
 Do not install the generic `cuda` metapackage on Ubuntu 24.04; it can pull an
 obsolete Nsight dependency that requires unavailable `libtinfo5`.
 
-### 2. Create the environment and clone HaWoR
+### 2. Initialize HaWoR and create the environment
 
-Install Miniconda inside WSL, then run:
+[HaWoR](https://github.com/ThunderVVV/HaWoR) is tracked by this repository as a
+pinned Git submodule at `external/HaWoR`. After cloning this repository,
+initialize HaWoR and all of its nested submodules from the repository root:
+
+```bash
+git submodule update --init --recursive
+```
+
+Do not clone HaWoR separately. Install Miniconda, then create the environment:
 
 ```bash
 conda create -n hawor python=3.10 -y
 conda activate hawor
 
-mkdir -p ~/dev
-cd ~/dev
-git clone --recursive https://github.com/ThunderVVV/HaWoR.git
-cd HaWoR
+cd external/HaWoR
 ```
+
+The remaining installation commands assume the current directory is
+`external/HaWoR` unless stated otherwise.
 
 ### 3. Install the pinned Python stack
 
@@ -78,16 +83,16 @@ Use this constraints file for every later pip installation. Do not allow another
 package to upgrade PyTorch. Install the upstream requirements with the constraint:
 
 ```bash
-python -m pip install -c ~/dev/HaWoR/torch-constraints.txt -r requirements.txt
+python -m pip install -c torch-constraints.txt -r requirements.txt
 ```
 
 If PyTorch3D fails because its isolated build cannot import Torch, install it
 separately without build isolation, then rerun the requirements command. Limit
-parallel compilation if WSL is short on memory:
+parallel compilation if the system is short on memory:
 
 ```bash
 export MAX_JOBS=1
-python -m pip install -c ~/dev/HaWoR/torch-constraints.txt \
+python -m pip install -c torch-constraints.txt \
     --no-build-isolation --no-cache-dir \
     "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 ```
@@ -101,8 +106,10 @@ export CC=/usr/bin/gcc-11
 export CXX=/usr/bin/g++-11
 export CUDAHOSTCXX=/usr/bin/g++-11
 
-cd ~/dev/HaWoR/thirdparty/DROID-SLAM
-python setup.py install
+(
+    cd thirdparty/DROID-SLAM
+    python setup.py install
+)
 ```
 
 If the installed PyTorch version ever changes, restore the pinned version and
@@ -114,7 +121,7 @@ Download the HaWoR, detector, DROID-SLAM, Metric3D, and infiller checkpoints.
 Download MANO separately after accepting its license. Place the files here:
 
 ```text
-HaWoR/
+external/HaWoR/
 ├── weights/
 │   ├── external/
 │   │   ├── droid.pth
@@ -133,9 +140,9 @@ HaWoR/
 
 MANO files and model weights are external assets and must not be committed.
 
-### 5. Configure the WSL runtime
+### 5. Configure the Ubuntu runtime
 
-Add the following to the active shell or WSL shell configuration:
+Add the following to the active shell or shell configuration:
 
 ```bash
 export CUDA_HOME=/usr/local/cuda-11.7
@@ -143,11 +150,11 @@ export PATH=$CUDA_HOME/bin:$PATH
 export CC=/usr/bin/gcc-11
 export CXX=/usr/bin/g++-11
 export CUDAHOSTCXX=/usr/bin/g++-11
-export LD_LIBRARY_PATH=/usr/lib/wsl/lib:/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}
+export LD_LIBRARY_PATH=/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}
 export QT_QPA_PLATFORM=xcb
 ```
 
-If visualization fails with a Qt `xcb` error, install the WSLg/XCB libraries:
+If visualization fails with a Qt `xcb` error, install the XCB runtime libraries:
 
 ```bash
 sudo apt install \
@@ -178,7 +185,6 @@ Expected core versions are PyTorch `1.13.0+cu117` and CUDA `11.7`. Finally,
 run the bundled example:
 
 ```bash
-cd ~/dev/HaWoR
 python demo.py --video_path ./example/video_0.mp4 --vis_mode world
 ```
 
