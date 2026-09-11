@@ -2,9 +2,9 @@
 
 - Current milestone: 1 — Validate HaWoR baseline
 - Stage: Planning
-- Active plan: Draft revision 5 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (single-clip Milestone 1 execution and per-run reporting revised; awaiting review; not approved)
+- Active plan: Draft revision 6 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (awaiting review; not approved)
 - Milestone deliverable: A reproducible baseline package that processes at least one clip from a HaWoR paper dataset and one Ego4D clip, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a run-scoped one-page benchmark and failure report for each attempt.
-- Last verified: 2026-09-08 — Draft revision 5 changes `run_milestone1_baseline.py` from a three-request controller to a one-clip-per-invocation entry point. Each invocation calls the reusable pipeline once and automatically generates a unique run-scoped `benchmark.json` and `benchmark_report.md`; `benchmark.py` is not run separately and performs no implicit cross-run aggregation. The plan remains unapproved with no implementation started.
+- Last verified: 2026-09-11 — Draft revision 6 was checked for consistency with the roadmap, planning specification, and unchanged core pipeline architecture. The plan remains unapproved with no implementation started.
 
 ## Completed
 
@@ -18,10 +18,11 @@
 - Revised the draft clip-ingestion architecture so direct videos require no per-clip config file, HOT3D native frames/calibration are adapted into the common prepared MP4 boundary, and persisted prepared metadata can be reloaded into the same typed runtime contract.
 - Revised preparation dispatch so `ClipRequest` contains no encoding-control flag: source resolution produces a `VideoFileSource` or `FrameSequenceSource`, and the latter alone invokes the reusable single-pass frame-sequence encoder under `video_preparation.py` coordination.
 - Revised Milestone 1 execution so `run_milestone1_baseline.py` processes one clip per invocation and automatically calls `benchmark.py` for a unique report belonging only to that run, including reportable pipeline-stage failures.
+- Revised the Milestone 1 draft at the user's direction without starting implementation.
 
 ## In progress
 
-- Review and refine Draft revision 5, especially the remaining timing-quality and Ego4D intrinsics policies, before completing plan approval.
+- Review and refine Draft revision 6, especially the remaining timing-quality and Ego4D intrinsics policies, before completing plan approval.
 
 ## Blockers and decisions
 
@@ -36,4 +37,4 @@
 
 ## Next action
 
-- User reviews Draft revision 5 and resolves or revises its remaining architecture decisions. Do not begin implementation before the completed plan is explicitly approved.
+- User reviews Draft revision 6 and resolves or revises its remaining architecture decisions. Do not begin implementation before the completed plan is explicitly approved.

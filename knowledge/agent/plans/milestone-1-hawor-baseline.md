@@ -1,6 +1,6 @@
 # Milestone 1 Plan: Validate the HaWoR Baseline
 
-Status: Draft revision 5 — single-clip Milestone 1 execution and per-run reporting revised; awaiting user review and approval
+Status: Draft revision 6 — repository documentation, packaging, and CI targets added without changing the core pipeline; awaiting user review and approval
 
 ## 1. Goals
 
@@ -12,9 +12,13 @@ Build a small, reusable pipeline around the unchanged HaWoR inference code and p
 4. preserve HaWoR's native world-frame result;
 5. export that result with frame timestamps and validity/provenance metadata;
 6. generate a reusable visualization; and
-7. produce a one-page benchmark and failure report for every Milestone 1 run.
+7. produce a one-page benchmark and failure report for every Milestone 1 run;
+8. maintain the root README as the user-facing project entry point, beginning with an About section when implementation starts; and
+9. establish only the packaging metadata and CPU-safe continuous integration needed to install and validate the project-owned code.
 
 Milestone 1 is a baseline and integration milestone. HaWoR remains the owner of hand reconstruction, camera tracking, metric scale estimation, motion infilling, and conversion into its world frame. Our code prepares inputs, invokes HaWoR, records what happened, validates the returned artifacts, and packages the existing world-frame output without changing its coordinate frame.
+
+The README, packaging, and CI goals support development and maintainability; they do not add pipeline stages or alter any pipeline contract, HaWoR behavior, trajectory value, dataset choice, or benchmark result.
 
 ## 2. Explicit Non-Goals
 
@@ -28,6 +32,9 @@ Milestone 1 is a baseline and integration milestone. HaWoR remains the owner of 
 - Do not choose a universal missing-hand rejection threshold.
 - Do not claim statistical generalization from two clips.
 - Do not begin robot simulation or control.
+- Do not publish a package to PyPI or another registry.
+- Do not make CI download licensed datasets, model weights, MANO files, or run GPU/HaWoR inference.
+- Do not add formatting, linting, type-checking, release automation, coverage gates, or documentation-generation systems unless a later approved plan revision makes one necessary.
 
 Visualization is the only place where projection is unavoidable: drawing a 3D result on an RGB image requires HaWoR's camera/view projection. That projection is for rendering only. It must not create or replace a stored trajectory.
 
@@ -85,7 +92,7 @@ The host NVIDIA driver and the Linux CUDA toolkit are separate concerns under WS
 - Use Python 3.10, matching HaWoR's documented environment.
 - Do not use the host's current Python 3.14 installation for HaWoR.
 
-`environment/hawor.yml` will record the environment we successfully validated. It will include our small tooling dependencies in addition to upstream packages so a later machine can recreate one environment.
+`environment/hawor.yml` will record the validated HaWoR/CUDA base environment so a later machine can recreate it. Once project-owned code exists, its lightweight direct and test dependencies are authoritative in `pyproject.toml` and are installed into that environment with the project; they are not maintained as a second independent list in the environment file.
 
 ### 3.5 CUDA and PyTorch
 
@@ -151,7 +158,7 @@ Install the upstream HaWoR requirements, including its documented special cases:
 
 Install HaWoR's masked DROID-SLAM package from `external/HaWoR/thirdparty/DROID-SLAM`. This compiles both `droid_backends` and `lietorch_backends` CUDA extensions.
 
-Project-side additions:
+Project-side additions, declared through `pyproject.toml` once project-owned code exists:
 
 - `pytest` for focused automated checks;
 - `psutil` for process RAM sampling; and
@@ -209,10 +216,25 @@ Configure rendering so it works inside WSL/Linux without requiring an interactiv
 - DROID-SLAM and `lietorch` extensions import successfully;
 - all required weight and MANO paths exist;
 - weight hashes can be calculated;
-- example video can be decoded; and
-- output directories are writable without overwriting prior runs.
+- example video can be decoded;
+- output directories are writable without overwriting prior runs; and
+- after project-owned code exists, `pyproject.toml` is present, the installed `egocentric_pipeline` resolves to this checkout, and `python -m pip check` passes in the combined environment.
 
 The setup gate passes only when all required checks pass. Warnings such as low VRAM remain visible in the evidence and report.
+
+### 3.12 Project packaging and CI setup
+
+The project-owned Python package and synthetic tests use Python 3.10, matching the supported HaWoR environment. When the first `src/egocentric_pipeline/` module or test is implemented, create a root `pyproject.toml` rather than relying on ad hoc `PYTHONPATH` changes. It will:
+
+- define the internal, unpublished `egocentric-videos` distribution at initial version `0.1.0` and `src/` package discovery for the `egocentric_pipeline` import package;
+- declare the supported Python range as `>=3.10,<3.11`;
+- list only direct, project-owned runtime dependencies that the implemented wrapper code actually imports;
+- provide a `dev` optional dependency group containing `pytest` and any other approved CPU-test dependency that is demonstrably required; and
+- hold the minimal pytest configuration needed for the planned test suite.
+
+The resolved HaWoR/CUDA base environment remains authoritative in `environment/hawor.yml`. The project file must not duplicate HaWoR's full upstream dependency stack, model assets, MANO files, or CUDA installation instructions; HaWoR and its specialized runtime remain an explicitly documented external prerequisite. If implementation shows that a proposed lightweight dependency is already supplied by Python or an existing approved package, omit it rather than adding it for convenience.
+
+Create `.github/workflows/ci.yml` when the first CPU-safe synthetic test is added. On pull requests and pushes to the repository's default branch, it will use Ubuntu and Python 3.10, install FFmpeg plus the project and its `dev` dependencies from `pyproject.toml`, run `python -m pip check`, and run the complete CPU-safe synthetic test suite with `python -m pytest`. CI will not initialize the HaWoR submodule or require CUDA, a GPU, weights, MANO files, HOT3D, Ego4D, or network access beyond fetching the source, declared test dependencies, and the runner's standard packages/actions. Tests requiring those excluded resources remain explicit local validation gates and are not silently skipped as if CI had verified them.
 
 ## 4. Input and Output Contracts / Data and Metadata Files
 
@@ -363,8 +385,13 @@ Only files reached by the implementation sequence are created. The tree below is
 ```text
 Egocentric/
 ├── AGENTS.md
+├── README.md                           # existing; maintained from implementation start
+├── pyproject.toml                      # new; project packaging + CPU test configuration
 ├── .gitignore
 ├── .gitmodules
+├── .github/
+│   └── workflows/
+│       └── ci.yml                      # new; CPU-safe project checks only
 ├── knowledge/
 │   ├── agent/
 │   │   ├── PLANNING_SPECS.md
@@ -448,7 +475,7 @@ Egocentric/
 
 #### `environment/hawor.yml` — reusable environment specification
 
-**Description:** Reviewed Conda/pip dependency declaration for the successfully validated HaWoR runtime and our lightweight wrapper/test tools.
+**Description:** Reviewed Conda/pip dependency declaration for the successfully validated HaWoR/CUDA base runtime. Project-owned lightweight runtime and test dependencies are declared once in `pyproject.toml` and installed on top of this environment rather than copied into a second list here.
 
 **Input:** None.
 
@@ -456,7 +483,7 @@ Egocentric/
 
 **Calls:** N/A — declarative file.
 
-**Called by:** Environment setup; checked by `scripts/check_hawor_setup.py`; version recorded by `run_metadata.py`.
+**Called by:** Environment setup; checked by `scripts/check_hawor_setup.py`; combined with the project install defined by `pyproject.toml`; version recorded by `run_metadata.py`.
 
 **Metadata written:** None.
 
@@ -488,9 +515,51 @@ Egocentric/
 
 **Metadata written:** None.
 
-### 6.2 Configuration
+### 6.2 Configuration and repository support
 
 Milestone 1 has no persistent per-clip configuration files. Clip intent is supplied through command-line arguments or a dataset adapter and normalized into an in-memory `ClipRequest`. The request snapshot, resolved defaults, source identity, and all measured/generated facts are persisted in `clip_metadata.json` and the run manifest.
+
+#### `README.md` — existing reusable documentation, modified throughout Milestone 1
+
+**Description:** The user-facing entry point for the repository. At the first implementation change, add an About section that explains the project purpose, the RGB-to-world-frame-hand-trajectory direction, and Milestone 1's unchanged-HaWoR baseline boundary. Preserve the already verified HaWoR installation guidance, then add setup, development install, test, and user-facing command guidance only as those workflows are implemented and verified. Keep it current in the same change whenever a public command, prerequisite, supported workflow, or output location changes. Link to the roadmap, current status, active plan, and detailed environment documentation instead of duplicating progress records or long setup material.
+
+**Input:** Verified repository purpose, supported workflows, commands, setup requirements, and authoritative links from `knowledge/` and `environment/`.
+
+**Output:** A concise root README with an About section and accurate setup, development, test, and usage guidance for the functionality that exists at that point in Milestone 1.
+
+**Calls:** N/A — documentation file.
+
+**Called by:** Developers and users entering the repository.
+
+**Metadata written:** None.
+
+#### `pyproject.toml` — new reusable project packaging and test configuration
+
+**Description:** Created when the first project-owned source module or test is added. It uses PEP 621 metadata and a standard `src/`-layout build configuration to make `egocentric_pipeline` installable without path manipulation, records the supported Python range, declares only direct dependencies actually required by project-owned code, provides the minimal `dev` dependency set, and configures pytest. It does not duplicate the complete HaWoR/CUDA environment, package external code, or define publishing/release automation.
+
+**Input:** The implemented `src/egocentric_pipeline/` package, its verified direct imports, and the planned CPU-safe test requirements.
+
+**Output:** Installable project metadata, `src/` package discovery, runtime and `dev` dependency declarations, and pytest configuration.
+
+**Calls:** N/A — declarative file.
+
+**Called by:** Developers performing a local editable install and `.github/workflows/ci.yml`.
+
+**Metadata written:** None.
+
+#### `.github/workflows/ci.yml` — new reusable CPU-safe validation workflow
+
+**Description:** Runs the project-owned synthetic validation suite on Ubuntu with Python 3.10 for pull requests and pushes to the default branch. It installs FFmpeg and the project with its `dev` dependencies from `pyproject.toml`, checks the installed dependency set, and runs pytest. It does not initialize or execute HaWoR, use a GPU, fetch licensed/model/data assets, or represent local end-to-end validation as passing CI coverage.
+
+**Input:** The checked-out project-owned source and tests, `pyproject.toml`, the GitHub-hosted Ubuntu/Python 3.10 environment, and FFmpeg from the runner's package manager.
+
+**Output:** GitHub Actions job status and logs for installation, `python -m pip check`, and the complete CPU-safe synthetic test suite.
+
+**Calls:** Official GitHub checkout/setup-Python actions pinned to reviewed full commit SHAs, the runner package manager for FFmpeg, Python/pip using `pyproject.toml`, and `python -m pytest` over the six planned test files in Section 6.5.
+
+**Called by:** Pull-request and default-branch push events in GitHub Actions; developers may rerun an existing workflow run through GitHub.
+
+**Metadata written:** None in the repository; GitHub retains workflow status and logs according to repository settings.
 
 ### 6.3 `src/` modules
 
@@ -654,15 +723,15 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Description:** Read-only preflight command described in Section 3.11. It is the first command run on a new machine.
 
-**Input:** The environment and external-checkout state listed in Section 3.11.
+**Input:** The environment, project-install state, and external-checkout state listed in Section 3.11, including `pyproject.toml` after project-owned code exists.
 
 **Output:** A human-readable summary and `setup_check.json` evidence.
 
-**Calls:** Environment inspection, shared helpers in `src/egocentric_pipeline/run_metadata.py`, and checks against `external/HaWoR/`.
+**Calls:** Environment and installed-project inspection, `python -m pip check` after project-owned code exists, shared helpers in `src/egocentric_pipeline/run_metadata.py`, and checks against `external/HaWoR/`.
 
 **Called by:** Developers setting up a machine.
 
-**Metadata written:** `setup_check.json`, recording operating system, Python and package versions, tool availability, PyTorch CUDA/GPU identity, `nvcc`, HaWoR and nested-submodule revisions, required weight/MANO presence and hashes, example-video decodability, output-directory writability, and visible warnings, using `run_metadata.py`.
+**Metadata written:** `setup_check.json`, recording operating system, Python and package versions, project-install origin and dependency consistency when applicable, tool availability, PyTorch CUDA/GPU identity, `nvcc`, HaWoR and nested-submodule revisions, required weight/MANO presence and hashes, example-video decodability, output-directory writability, and visible warnings, using `run_metadata.py`.
 
 #### `scripts/prepare_clip.py` — reusable
 
@@ -718,7 +787,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/clip_request.py`, `src/egocentric_pipeline/camera_intrinsics.py`, and `src/egocentric_pipeline/video_preparation.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -732,7 +801,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/clip_request.py` and `src/egocentric_pipeline/hot3d_adapter.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -746,7 +815,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/frame_sequence_encoding.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -760,7 +829,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/world_export.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -774,7 +843,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/run_metadata.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -788,7 +857,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Calls:** `src/egocentric_pipeline/benchmark.py`.
 
-**Called by:** The test runner.
+**Called by:** Developers through the test runner and `.github/workflows/ci.yml`.
 
 **Metadata written:** None.
 
@@ -854,6 +923,33 @@ scripts/run_milestone1_baseline.py
     │           artifacts, role, and optional human review labels
     └── writes: this run's benchmark.json + benchmark_report.md
 ```
+
+Repository documentation, packaging, and CI remain outside the runtime pipeline. Their validation flow is:
+
+```text
+.github/workflows/ci.yml [pull request or default-branch push]
+├── calls: official checkout and Python-setup actions pinned to reviewed SHAs
+├── selects: Ubuntu runner + Python 3.10
+├── installs: FFmpeg
+├── reads: pyproject.toml
+├── calls: python -m pip install -e ".[dev]"
+├── calls: python -m pip check
+└── calls: python -m pytest
+    ├── tests/test_clip_preparation.py
+    ├── tests/test_hot3d_adapter.py
+    ├── tests/test_frame_sequence_encoding.py
+    ├── tests/test_world_export.py
+    ├── tests/test_run_metadata.py
+    └── tests/test_benchmark.py
+
+Explicitly excluded from CI
+├── external/HaWoR/ initialization or execution
+├── CUDA/GPU setup
+├── model weights or MANO files
+└── HOT3D, Ego4D, and end-to-end clip runs
+```
+
+`README.md` is updated at implementation start and alongside later user-visible changes; it reads the verified commands and requirements represented by this plan, `pyproject.toml`, `environment/`, and the implemented entry points. It is not a runtime dependency and does not participate in the core call tree.
 
 Shared metadata calls across that tree are:
 
@@ -942,22 +1038,30 @@ Manually review beginning, middle, end, every transition into/out of infilling, 
 
 Each report describes one attempt and records its completion status; it does not calculate a multi-run success rate. Any later summary across the small collection of Milestone 1 runs is descriptive only and is not generated implicitly by `benchmark.py`.
 
+Repository-support validation is tracked separately from clip benchmarks. CI records installation success, dependency consistency, and the pass/fail result for every collected CPU-safe synthetic test. The Milestone 1 handoff records a manual README review against the final verified setup, test, command, and output paths. Neither signal is a proxy for the local GPU, licensed-asset, real-data, or visual-review gates.
+
 ## 9. Implementation Sequence
 
-1. Create only the environment documentation/specification, submodule declaration, ignore rules, and setup checker.
-2. Establish WSL2/native Linux, Python 3.10, CUDA compiler, PyTorch, system packages, and HaWoR dependencies.
-3. Place all weights and user-supplied MANO files; run the setup checker until required checks pass.
-4. Run the untouched bundled HaWoR example and verify inference plus visualization. Decide whether local 8 GB execution is viable.
-5. Implement `ClipRequest`, the `VideoFileSource`/`FrameSequenceSource` source-resolution boundary, dataset-agnostic frame-sequence encoding, camera resolution, success-or-failure run records, timestamp-driven preparation, prepared-clip loading, the HaWoR adapter, unchanged world export, visualization, and single-run benchmark reporting with synthetic tests.
-6. Invoke `run_milestone1_baseline.py` once for the bundled example to verify that one request produces one pipeline attempt and its own benchmark/failure report.
-7. Implement and test the HOT3D adapter against a minimal synthetic frame/calibration bundle, then acquire/select the real Aria HOT3D RGB clip. Construct its request through the adapter, resolve it to a read-only `FrameSequenceSource`, and have video preparation rectify/select its frames and call `frame_sequence_encoding.py` for the single final `rgb.mp4` encode. Invoke `run_milestone1_baseline.py` separately for this clip without a per-clip config file; do not rerun the bundled example automatically.
-8. Validate the HOT3D export and review its visualization. Its unique run directory retains its own benchmark/failure report, resource evidence, and review state.
-9. Only after HOT3D passes, begin Ego4D access and UID selection. Construct the Ego4D `ClipRequest` from its local video path, UID, and selected interval at runtime.
-10. Invoke `run_milestone1_baseline.py` separately for the Ego4D clip without an Ego4D condition inside the HaWoR runner, exporter, visualizer, or benchmark module. Validate its export and report without rerunning HOT3D automatically.
-11. Repeat the required single-clip invocations from a clean output directory, confirm that every run has a unique manifest and benchmark/failure report, record exact verification evidence, and update `knowledge/agent/PROJECT_STATUS.md`.
+1. At the first Milestone 1 implementation change, add the root README's About section and link to the roadmap, current status, active plan, and detailed environment guidance. Retain the verified HaWoR installation material, but do not add commands or outputs that do not yet exist.
+2. Create only the environment documentation/specification, submodule declaration, ignore rules, and setup checker. Update the README in the same change if these user-facing setup instructions change.
+3. Establish WSL2/native Linux, Python 3.10, CUDA compiler, PyTorch, system packages, and HaWoR dependencies.
+4. Place all weights and user-supplied MANO files; run the setup checker until required checks pass.
+5. Run the untouched bundled HaWoR example and verify inference plus visualization. Decide whether local 8 GB execution is viable.
+6. Before adding the first project-owned module or test, create `pyproject.toml` with the package metadata, verified direct dependencies, `dev` test dependencies, `src/` discovery, and pytest configuration defined in Sections 3 and 6. Confirm a clean Python 3.10 environment can install the project without `PYTHONPATH` changes, and add the verified development-install/test command to the README.
+7. Implement `ClipRequest`, the `VideoFileSource`/`FrameSequenceSource` source-resolution boundary, dataset-agnostic frame-sequence encoding, camera resolution, success-or-failure run records, timestamp-driven preparation, prepared-clip loading, the HaWoR adapter, unchanged world export, visualization, and single-run benchmark reporting with synthetic tests. When the first CPU-safe test is added, create `.github/workflows/ci.yml`; expand its pytest run naturally as the remaining planned tests land. Every user-facing command or prerequisite change includes the matching README update.
+8. Require the Python 3.10 CI job to pass its install, dependency, and complete CPU-safe synthetic-test checks. Keep GPU inference, external assets, and real datasets in the explicit local gates below.
+9. Invoke `run_milestone1_baseline.py` once for the bundled example to verify that one request produces one pipeline attempt and its own benchmark/failure report.
+10. Implement and test the HOT3D adapter against a minimal synthetic frame/calibration bundle, then acquire/select the real Aria HOT3D RGB clip. Construct its request through the adapter, resolve it to a read-only `FrameSequenceSource`, and have video preparation rectify/select its frames and call `frame_sequence_encoding.py` for the single final `rgb.mp4` encode. Invoke `run_milestone1_baseline.py` separately for this clip without a per-clip config file; do not rerun the bundled example automatically.
+11. Validate the HOT3D export and review its visualization. Its unique run directory retains its own benchmark/failure report, resource evidence, and review state.
+12. Only after HOT3D passes, begin Ego4D access and UID selection. Construct the Ego4D `ClipRequest` from its local video path, UID, and selected interval at runtime.
+13. Invoke `run_milestone1_baseline.py` separately for the Ego4D clip without an Ego4D condition inside the HaWoR runner, exporter, visualizer, or benchmark module. Validate its export and report without rerunning HOT3D automatically.
+14. Repeat the required single-clip invocations from a clean output directory, confirm that every run has a unique manifest and benchmark/failure report, recheck the README against the final implemented setup/commands/outputs, record exact verification evidence, and update `knowledge/agent/PROJECT_STATUS.md`.
 
 ## 10. Acceptance Criteria
 
+- The root README gained an About section at implementation start, accurately describes the project purpose and unchanged-HaWoR Milestone 1 boundary, preserves or links to the verified setup guidance, and contains only commands and outputs verified against the final implementation. The final documentation review is recorded in the Milestone 1 handoff.
+- `pyproject.toml` exists once project-owned source/tests exist, configures the `src/` package layout and Python `>=3.10,<3.11`, contains only verified direct and `dev` dependencies, and supports a clean editable install plus test discovery without manual `PYTHONPATH` changes. A Python 3.10 install and `python -m pip check` provide the evidence.
+- `.github/workflows/ci.yml` runs on pull requests and default-branch pushes with Ubuntu/Python 3.10, installs FFmpeg and the project `dev` dependencies from `pyproject.toml`, and passes `python -m pip check` plus every planned CPU-safe synthetic test. The workflow definition and a successful run URL/status are the evidence; the workflow does not fetch or execute HaWoR, CUDA/GPU resources, weights, MANO files, HOT3D, or Ego4D.
 - The setup checker passes on the execution machine and records exact software, CUDA, GPU, upstream revision, weights, and MANO presence.
 - The unmodified bundled HaWoR example completes inference and produces a viewable visualization.
 - One selected HOT3D clip and then one selected Ego4D clip complete through separate invocations of `run_milestone1_baseline.py`; each invocation calls the reusable pipeline exactly once and never requires or reruns the other clips.
@@ -982,6 +1086,9 @@ Each report describes one attempt and records its completion status; it does not
 
 ## 11. Risks and Mitigations
 
+- **README drift:** commands or prerequisites can change while the prose remains stale; update the README in the same change as each user-visible workflow and perform a final command/link review before acceptance.
+- **Duplicated or divergent dependency declarations:** `pyproject.toml` and `environment/hawor.yml` serve different scopes; keep direct project/dev dependencies in the former, the resolved HaWoR/CUDA environment in the latter, verify the combined local environment with the setup checker and `pip check`, and stop to revise the plan if one reproducible environment cannot satisfy both.
+- **CI can create false confidence:** CPU-only synthetic checks cannot verify CUDA, HaWoR, model assets, real dataset adapters, or visual quality; name the job and README coverage accurately, keep excluded checks explicit, and require the separate local evidence in this section's acceptance criteria.
 - **8 GB VRAM may be insufficient:** test the bundled example before building the surrounding pipeline; move to a >=16 GB Linux GPU if needed.
 - **Native Windows uncertainty:** support WSL2/native Linux only for this baseline and avoid spending the milestone on a Windows port.
 - **Old PyTorch/CUDA dependency stack:** validate one explicit compatibility set and freeze it in `environment/hawor.yml`.
@@ -1016,3 +1123,6 @@ Each report describes one attempt and records its completion status; it does not
 - HOT3D-Clips frame and per-frame camera format: <https://github.com/facebookresearch/hot3d/blob/main/hot3d/clips/README.md>
 - Ego4D access and downloader: <https://ego4d-data.org/docs/start-here/> and <https://github.com/facebookresearch/Ego4d/tree/main/ego4d/cli>
 - FFmpeg timestamp-based FPS filter: <https://ffmpeg.org/ffmpeg-filters.html#fps>
+- Python Packaging User Guide for `pyproject.toml` project metadata and dependency declarations (accessed 2026-09-11): <https://packaging.python.org/en/latest/guides/writing-pyproject-toml/>
+- Setuptools package discovery and `src` layout (accessed 2026-09-11): <https://setuptools.pypa.io/en/latest/userguide/package_discovery.html>
+- GitHub Actions guide for building and testing Python (accessed 2026-09-11): <https://docs.github.com/en/actions/tutorials/build-and-test-code/python>
