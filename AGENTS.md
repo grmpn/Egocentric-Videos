@@ -12,13 +12,13 @@ The project must remain understandable to a human reader. Prefer a small, explic
 
 Before beginning work, read:
 
-1. `Project-Milestones-and-Timeline.md` for the project roadmap.
-2. `PROJECT_STATUS.md` for the active milestone and current progress.
-3. The active milestone plan linked from `PROJECT_STATUS.md`.
-4. Relevant material in `Sources/`.
+1. `knowledge/raw/Project-Milestones-and-Timeline.md` for the project roadmap.
+2. `knowledge/agent/PROJECT_STATUS.md` for the active milestone and current progress.
+3. The active milestone plan linked from `knowledge/agent/PROJECT_STATUS.md`.
+4. Relevant material in `knowledge/raw/Sources/`.
 
 When creating, restructuring, or materially revising a milestone plan, also read
-`PLANNING_SPECS.md` before editing the plan.
+`knowledge/agent/PLANNING_SPECS.md` before editing the plan.
 
 These files have distinct responsibilities:
 
@@ -33,7 +33,7 @@ Do not duplicate the same progress information across multiple documents.
 
 ## Determining the current milestone
 
-`PROJECT_STATUS.md` is the operational source of truth. It must identify:
+`knowledge/agent/PROJECT_STATUS.md` is the operational source of truth. It must identify:
 
 - current milestone
 - current stage
@@ -59,26 +59,26 @@ Do not infer that a milestone is complete from the presence of code or output fi
 
 If the status document conflicts with the repository, investigate and report the discrepancy before changing implementation.
 
-Update `PROJECT_STATUS.md` after material progress, validation, a newly discovered blocker, or a change to the next action. Keep updates factual and concise.
+Update `knowledge/agent/PROJECT_STATUS.md` after material progress, validation, a newly discovered blocker, or a change to the next action. Keep updates factual and concise.
 
 ## Planning gate before implementation
 
 Do not create or modify implementation code for a milestone until:
 
 1. The milestone has been examined in Plan mode.
-2. A written implementation plan exists under `plans/` and conforms to
-   `PLANNING_SPECS.md`.
+2. A written implementation plan exists under `knowledge/agent/plans/` and conforms to
+   `knowledge/agent/PLANNING_SPECS.md`.
 3. The user has explicitly approved the plan.
-4. `PROJECT_STATUS.md` identifies that plan and shows `Ready for implementation` or `Implementing`.
+4. `knowledge/agent/PROJECT_STATUS.md` identifies that plan and shows `Ready for implementation` or `Implementing`.
 
-Follow the staged planning conversation in `PLANNING_SPECS.md`. In particular,
+Follow the staged planning conversation in `knowledge/agent/PLANNING_SPECS.md`. In particular,
 start from roadmap-grounded goals and non-goals, then elicit and refine the
 user's desired contracts, repository structure, file breakdown, and nested
 end-to-end flow before filling in the remaining sections. Do not treat an
 agent-inferred architecture as approved user intent.
 
 Every milestone plan must use the 13 required top-level sections and the
-per-file and nested-flow formats defined in `PLANNING_SPECS.md`. A plan may
+per-file and nested-flow formats defined in `knowledge/agent/PLANNING_SPECS.md`. A plan may
 temporarily contain clearly marked placeholders while the planning conversation
 is in progress. The user may revise any section at any time.
 
@@ -116,8 +116,8 @@ Avoid premature abstraction. Create a shared interface only when it serves the c
 
 Use this structure as a destination, not as a request to create empty folders:
 
-- `Sources/` — papers and research notes
-- `plans/` — approved milestone plans
+- `knowledge/raw/Sources/` — papers and research notes
+- `knowledge/agent/plans/` — approved milestone plans
 - `src/` — reusable implementation
 - `scripts/` — thin user-facing entry points
 - `configs/` — necessary reproducible settings
@@ -194,7 +194,7 @@ Report exactly what was tested, what passed, and what remains unverified.
 At the end of a work session:
 
 1. Verify the relevant changes.
-2. Update `PROJECT_STATUS.md` when progress materially changed.
+2. Update `knowledge/agent/PROJECT_STATUS.md` when progress materially changed.
 3. Record the next concrete action.
 4. Summarize changed files and verification results.
 5. State any remaining uncertainty or decision needed from the user.

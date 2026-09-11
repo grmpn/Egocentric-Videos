@@ -4,7 +4,7 @@ This document defines how milestone implementation plans are developed and
 written. It standardizes the planning artifact; it does not prescribe the
 architecture of any milestone.
 
-Milestone plans live under `plans/`. Existing plans are not silently reformatted
+Milestone plans live under `knowledge/agent/plans/`. Existing plans are not silently reformatted
 or treated as approved merely because this specification changes.
 
 ## Planning conversation
@@ -13,8 +13,9 @@ Develop a milestone plan in the following stages.
 
 ### Stage 1 — establish scope
 
-1. Read `Project-Milestones-and-Timeline.md`, `PROJECT_STATUS.md`, the current
-   plan if one exists, and relevant material in `Sources/`.
+1. Read `knowledge/raw/Project-Milestones-and-Timeline.md`,
+   `knowledge/agent/PROJECT_STATUS.md`, the current plan if one exists, and
+   relevant material in `knowledge/raw/Sources/`.
 2. Draft **Goals** and **Explicit Non-Goals** from the milestone roadmap and the
    current project state.
 3. Present those drafts to the user as editable proposals. The roadmap is the
@@ -252,8 +253,8 @@ too small for a statistical claim.
 Give an ordered, dependency-aware sequence with explicit gates. Introduce each
 file, schema, dependency, and persistent path only when it is needed. Pair
 contract implementation with focused tests, identify points requiring visual or
-user review, and state when `PROJECT_STATUS.md` is updated. Do not begin work
-outside the milestone.
+user review, and state when `knowledge/agent/PROJECT_STATUS.md` is updated. Do
+not begin work outside the milestone.
 
 ### 10. Acceptance Criteria
 

@@ -2,7 +2,7 @@
 
 - Current milestone: 1 — Validate HaWoR baseline
 - Stage: Planning
-- Active plan: Draft revision 5 — `plans/milestone-1-hawor-baseline.md` (single-clip Milestone 1 execution and per-run reporting revised; awaiting review; not approved)
+- Active plan: Draft revision 5 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (single-clip Milestone 1 execution and per-run reporting revised; awaiting review; not approved)
 - Milestone deliverable: A reproducible baseline package that processes at least one clip from a HaWoR paper dataset and one Ego4D clip, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a run-scoped one-page benchmark and failure report for each attempt.
 - Last verified: 2026-09-08 — Draft revision 5 changes `run_milestone1_baseline.py` from a three-request controller to a one-clip-per-invocation entry point. Each invocation calls the reusable pipeline once and automatically generates a unique run-scoped `benchmark.json` and `benchmark_report.md`; `benchmark.py` is not run separately and performs no implicit cross-run aggregation. The plan remains unapproved with no implementation started.
 
@@ -12,7 +12,7 @@
 - Established the repository-wide workflow and planning requirements in `AGENTS.md`.
 - Created the first draft of the Milestone 1 implementation plan.
 - Refined Milestone 1 to begin with a complete setup gate, treat a pinned `external/HaWoR/` checkout as an external engine, defer Ego4D until HOT3D succeeds, and exclude canonical/other coordinate transformations.
-- Standardized the required 13-section milestone-plan format, staged planning conversation, per-file documentation fields, and nested call-flow representation in `PLANNING_SPECS.md`.
+- Standardized the required 13-section milestone-plan format, staged planning conversation, per-file documentation fields, and nested call-flow representation in `knowledge/agent/PLANNING_SPECS.md`.
 - Migrated the existing Milestone 1 plan into that format without changing its architecture, scope, requirements, contracts, or decisions.
 - Removed the separate dataset Gate A/B/C elaborations and simplified the end-to-end call tree while retaining dataset order in the Goals and Implementation Sequence.
 - Revised the draft clip-ingestion architecture so direct videos require no per-clip config file, HOT3D native frames/calibration are adapted into the common prepared MP4 boundary, and persisted prepared metadata can be reloaded into the same typed runtime contract.

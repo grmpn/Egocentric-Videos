@@ -1,0 +1,5 @@
+# Local Obsidian vault settings and workspace state
+/.obsidian/
+
+# External HaWoR checkout contents
+/external/HaWoR/

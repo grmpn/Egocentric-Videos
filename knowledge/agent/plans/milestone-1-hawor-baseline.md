@@ -363,15 +363,18 @@ Only files reached by the implementation sequence are created. The tree below is
 ```text
 Egocentric/
 ├── AGENTS.md
-├── PLANNING_SPECS.md
-├── PROJECT_STATUS.md
-├── Project-Milestones-and-Timeline.md
 ├── .gitignore
 ├── .gitmodules
-├── plans/
-│   └── milestone-1-hawor-baseline.md
-├── Sources/
-│   └── HaWoR-Review.md
+├── knowledge/
+│   ├── agent/
+│   │   ├── PLANNING_SPECS.md
+│   │   ├── PROJECT_STATUS.md
+│   │   └── plans/
+│   │       └── milestone-1-hawor-baseline.md
+│   └── raw/
+│       ├── Project-Milestones-and-Timeline.md
+│       └── Sources/
+│           └── HaWoR-Review.md
 ├── environment/
 │   ├── README.md
 │   └── hawor.yml
@@ -951,7 +954,7 @@ Each report describes one attempt and records its completion status; it does not
 8. Validate the HOT3D export and review its visualization. Its unique run directory retains its own benchmark/failure report, resource evidence, and review state.
 9. Only after HOT3D passes, begin Ego4D access and UID selection. Construct the Ego4D `ClipRequest` from its local video path, UID, and selected interval at runtime.
 10. Invoke `run_milestone1_baseline.py` separately for the Ego4D clip without an Ego4D condition inside the HaWoR runner, exporter, visualizer, or benchmark module. Validate its export and report without rerunning HOT3D automatically.
-11. Repeat the required single-clip invocations from a clean output directory, confirm that every run has a unique manifest and benchmark/failure report, record exact verification evidence, and update `PROJECT_STATUS.md`.
+11. Repeat the required single-clip invocations from a clean output directory, confirm that every run has a unique manifest and benchmark/failure report, record exact verification evidence, and update `knowledge/agent/PROJECT_STATUS.md`.
 
 ## 10. Acceptance Criteria
 
