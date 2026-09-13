@@ -26,12 +26,13 @@ Keep the world-frame trajectory as the primary geometric output. The canonical f
 
 **Scope**
 
-- Run the existing HaWoR pipeline on a small subset of a paper dataset, then on a small Ego4D subset containing one task.
+- Run the unmodified HaWoR pipeline on its bundled example, then on one short segment from an ordinary Ego4D MP4 containing one task.
 - Build reusable ingestion, execution, visualization, and logging scripts rather than recreating HaWoR.
+- Keep Milestone 1 ingestion MP4-only. Dataset-native archives, frame sequences, camera-calibration readers, fisheye correction, and rectification are deferred until a later milestone demonstrates a need for them.
 - Preserve and export HaWoR's existing world-frame result without adding canonicalization, alignment, or other coordinate transformations in this milestone.
-- Measure success rate, runtime per clip, peak compute/memory use, and visible failure modes.
+- Measure completion status, runtime per clip, peak compute/memory use, and visible failure modes.
 
-**Deliverable:** A reproducible baseline package that processes at least one clip from each source, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a one-page benchmark/failure report.
+**Deliverable:** A reproducible baseline package that processes the bundled HaWoR example and one short Ego4D MP4 segment, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a one-page benchmark/failure report for each attempt.
 
 ### 2. Record and annotate a pilot dataset — 3 weeks
 
