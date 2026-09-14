@@ -1,8 +1,19 @@
 # Egocentric Hand-Trajectory Pipeline
 
-This project is in its planning stage. For now, this README documents only the
-known-good HaWoR installation used for development. Pipeline usage and project
-workflows will be added after implementation begins.
+## About
+
+This project is building a reusable pipeline that turns egocentric RGB video
+into time-aligned 3D hand trajectories, language annotations, and eventually
+robot-compatible trajectories. World-frame hand motion is the primary geometric
+output; canonical and robot-frame representations are planned downstream.
+
+The project is currently planning Milestone 1: reproduce and measure the
+unmodified HaWoR baseline on its bundled example and one short Ego4D MP4 segment.
+See the [roadmap](knowledge/raw/Project-Milestones-and-Timeline.md),
+[current status](knowledge/agent/PROJECT_STATUS.md), and
+[draft Milestone 1 plan](knowledge/agent/plans/milestone-1-hawor-baseline.md).
+For now, the remainder of this README documents only the known-good HaWoR
+installation; pipeline usage will be added as it is implemented and verified.
 
 ## HaWoR installation
 
