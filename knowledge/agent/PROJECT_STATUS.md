@@ -4,7 +4,7 @@
 - Stage: Planning
 - Active plan: Draft revision 8 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (scope correction recorded; full plan not approved)
 - Milestone deliverable: A reproducible baseline package that processes the bundled HaWoR example and one short Ego4D MP4 segment, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a run-scoped one-page benchmark and failure report for each attempt.
-- Last verified: 2026-09-13 — The user approved an MP4-only Milestone 1 scope correction. Draft revision 8 removes HOT3D, archive/frame-sequence ingestion, calibration readers, fisheye correction, and rectification; it uses the bundled example plus one Ego4D MP4 segment and records HaWoR's 600 px fallback as approximate when no focal length is supplied. The plan remains unapproved with no implementation started.
+- Last verified: 2026-09-14 — The user explicitly waived the planning gate for Milestone 1 directory scaffolding and planning-stage CI only. The planned static directories are tracked with temporary `.gitkeep` files, and `.github/workflows/ci.yml` validates the tracked repository foundation. The full plan remains unapproved; no pipeline code, environment specification, or tests have been created.
 
 ## Completed
 
@@ -21,6 +21,8 @@
 - Corrected Milestone 1 to use only the bundled HaWoR example and one short Ego4D MP4 segment. HOT3D, TAR/VRS/frame-sequence ingestion, calibration toolkits, fisheye correction, and rectification are deferred.
 - Verified that the pinned HaWoR submodule and nested submodules are present and that both required MANO files are readable.
 - Revised the Milestone 1 draft at the user's direction without starting implementation.
+- Created the planned static directory skeleton with temporary `.gitkeep` files under the user's milestone-only pre-approval waiver; no Python files were added.
+- Added a planning-stage GitHub Actions workflow that checks the tracked project documents, HaWoR submodule declaration, and current commit for whitespace errors; Python, Conda, import, and pytest checks remain deferred until their implementation inputs exist.
 
 ## In progress
 
@@ -36,4 +38,4 @@
 
 ## Next action
 
-- User reviews Draft revision 8, resolves or accepts its remaining decisions, and explicitly approves the completed plan. Do not begin implementation before approval.
+- User reviews Draft revision 8, resolves or accepts its remaining decisions, and explicitly approves the completed plan. Do not begin further implementation beyond the completed directory/CI waiver before approval.

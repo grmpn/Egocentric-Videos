@@ -1,0 +1,53 @@
+name: CI (planning stage)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-foundation:
+    name: Validate repository foundation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+          submodules: false
+
+      - name: Check tracked planning-stage files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            AGENTS.md
+            README.md
+            knowledge/raw/Project-Milestones-and-Timeline.md
+            knowledge/raw/Sources/HaWoR-Review.md
+            knowledge/agent/PLANNING_SPECS.md
+            knowledge/agent/PROJECT_STATUS.md
+            knowledge/agent/plans/milestone-1-hawor-baseline.md
+          )
+
+          for required_file in "${required_files[@]}"; do
+            test -f "${required_file}"
+          done
+
+          test "$(git config -f .gitmodules --get submodule.external/HaWoR.path)" = "external/HaWoR"
+          test "$(git config -f .gitmodules --get submodule.external/HaWoR.url)" = "https://github.com/ThunderVVV/HaWoR.git"
+
+      - name: Check patches for whitespace errors
+        run: git diff --check HEAD^ HEAD
+
+      # Add the Python 3.10 Conda environment, source-tree import check, and
+      # pytest invocation with the first CPU-safe project test.
