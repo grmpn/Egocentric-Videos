@@ -4,7 +4,7 @@
 - Stage: Implementing
 - Active plan: Approved revision 8 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (user approval on 2026-09-15)
 - Milestone deliverable: A reproducible baseline package that processes the bundled HaWoR example and one short Ego4D MP4 segment, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a run-scoped one-page benchmark and failure report for each attempt.
-- Last verified: 2026-09-15 — Phase 0 passes on the existing WSL2/8 GB RTX 3070: setup evidence is `outputs/hawor/setup-20260915-03/setup_check.json`; fresh unchanged inference completed in 684.54 seconds with 7,093,936 KiB peak process RAM in `outputs/hawor/setup-smoke-20260915-02/`. The stock headless helper rendered a decodable 1920×1080, 60 FPS, 242-frame video covering the 121-frame source duration; beginning/middle/end were visually inspected. The native result SHA-256 remained `d761e5fe5e7e0d6d3a6fb642980aaadd5e418912a4f2742385ed740880864c7f` after rendering. Full environment-pin verification was added afterward and passed its targeted checks; clean recreation is still running separately.
+- Last verified: 2026-09-15 — Final preflight passes at `outputs/hawor/setup-20260915-04/setup_check.json`. The single-clip command completed all stages in `outputs/hawor/20260915T195819543653Z-eb1014a4fba5/`; all 121 RGB-overlay frames and the world preview were inspected. Its report records qualitative misses/misalignment/jitter, unchanged native world arrays, and the final invalid right-hand frame. Reported monotonic elapsed time is 651.986 seconds; UTC stamps span 694.541 seconds, a timing discrepancy under investigation. Peak sampled process-tree RAM is 8.005 GiB and device GPU memory 7.806 GiB. Full runtime recreation and repeat-run verification remain pending.
 
 ## Completed
 
@@ -32,16 +32,16 @@
 
 ## In progress
 
-- Validate the complete single-clip bundled command in fresh output directories. Final setup preflight passed at `outputs/hawor/setup-20260915-04/setup_check.json`; the first end-to-end run is active at `outputs/hawor/20260915T195819543653Z-eb1014a4fba5/`.
+- Repeat the successful, visually reviewed single-clip command from a fresh output directory. The timing discrepancy is explained by 20 observed forward UTC-clock steps totaling 42.468 seconds; independent MONOTONIC/BOOTTIME probes remain aligned. Manifests now explicitly distinguish elapsed duration from UTC audit span; the first report records this evidence without altering its finalized manifest.
 - Recreate the full environment independently in `/tmp/hawor-recreation-20260915-WaiTKt/hawor`; logs are in `outputs/hawor/environment-recreation-20260915-01/`. The working `hawor` environment is preserved.
 
 ## Blockers and decisions
 
 - GPU checks require execution outside the sandbox. CUDA allocation passed with approximately 7 GB free; the earlier NVML occupancy did not reflect Torch's usable-memory result.
-- The stock world view proves rendering functionality; required RGB overlay alignment and full provenance-transition review still need the pipeline visualizer.
+- The first pipeline overlay/world preview and all infill transitions have been inspected. Baseline failure labels are recorded in that run's benchmark; no reconstruction-accuracy claim is made.
 - No Ego4D MP4 is available. Development and bundled-example validation proceed; final Ego4D acceptance requires the licensed source and selected interval.
-- CPU-only Conda creation, source-tree import, and the full 80-test suite pass locally; hosted workflow success remains unverified. The user approved creation and push of `validation/milestone-1-hawor`; the local branch exists and `main` is unchanged. The validated source/test/docs changes are ready for the approved push; run artifacts and licensed assets remain excluded.
+- CPU-only Conda creation, source-tree import, and the full 80-test suite pass locally. Commit `1a0c5d5` is on local `validation/milestone-1-hawor`; `main` is unchanged. Despite explicit user approval, the environment refuses agent pushes because they are exclusively user-controlled. The user must push this branch before hosted CI can be verified. No remote writes occurred; run artifacts and licensed assets are excluded from the commit.
 
 ## Next action
 
-- Finish the bundled single-clip run, inspect all required provenance transitions, and repeat from a fresh output directory while clean environment recreation completes. After local validation, commit/push the approved validation branch and inspect hosted CI.
+- Complete and visually inspect the fresh bundled repeat, finish full runtime recreation, and commit final verification notes. After the user-controlled validation-branch push, inspect hosted CPU CI. Ego4D acceptance remains deferred until its licensed MP4/interval is available.

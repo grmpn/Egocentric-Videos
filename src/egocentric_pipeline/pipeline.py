@@ -1,6 +1,7 @@
 """One clip attempt with a finalized manifest on success or stage failure."""
 
 from dataclasses import dataclass
+from datetime import datetime
 import math
 from pathlib import Path
 import time
@@ -151,5 +152,14 @@ def run_clip(request=None, *, prepared_metadata=None, output_root=None, prepared
                         manifest["warnings"].append(f"Could not record partial {name}: {error}")
         manifest["finished_at"] = utc_now()
         manifest["wall_time_s"] = time.monotonic() - start
+        utc_span = (datetime.fromisoformat(manifest["finished_at"].replace("Z", "+00:00"))
+                    - datetime.fromisoformat(manifest["started_at"].replace("Z", "+00:00"))).total_seconds()
+        manifest["timing"] = {
+            "elapsed_clock": "time.monotonic (CLOCK_MONOTONIC)",
+            "timestamp_clock": "UTC system realtime; subject to clock corrections",
+            "utc_span_s": utc_span,
+            "utc_minus_elapsed_s": utc_span - manifest["wall_time_s"],
+            "scope_note": "UTC start precedes environment capture; elapsed timing starts afterward. UTC clock corrections do not alter measured elapsed durations.",
+        }
         write_json(manifest_path, redact(manifest), overwrite=True)
     return RunResult(run_directory, manifest_path, manifest["status"])

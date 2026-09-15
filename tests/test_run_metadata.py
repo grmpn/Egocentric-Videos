@@ -1,5 +1,6 @@
 """Exercise provenance publication and redaction used by real pipeline runs."""
 
+from datetime import datetime
 import hashlib
 import math
 from pathlib import Path
@@ -368,6 +369,12 @@ def test_pipeline_prepares_runs_real_export_and_finalizes_manifest(tmp_path, mon
         result = pipeline.run_clip(request, **arguments)
 
     manifest = read_json(result.manifest_path)
+    utc_span = (datetime.fromisoformat(manifest["finished_at"].replace("Z", "+00:00"))
+                - datetime.fromisoformat(manifest["started_at"].replace("Z", "+00:00"))).total_seconds()
+    assert manifest["timing"]["elapsed_clock"] == "time.monotonic (CLOCK_MONOTONIC)"
+    assert manifest["timing"]["timestamp_clock"] == "UTC system realtime; subject to clock corrections"
+    assert manifest["timing"]["utc_span_s"] == pytest.approx(utc_span, abs=1e-6)
+    assert manifest["timing"]["utc_minus_elapsed_s"] == pytest.approx(utc_span - manifest["wall_time_s"], abs=1e-6)
     assert manifest["resources"]["started_at"] and manifest["resources"]["finished_at"]
     assert manifest["resources"]["samples"]
     assert "Whole pipeline" in manifest["resources"]["scope"]

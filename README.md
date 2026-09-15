@@ -112,6 +112,9 @@ Detection/confidence follows HaWoR's final majority track assignment (ties
 right); metadata records raw detector-label disagreements. World origins and
 orientations are clip-local, not aligned across clips. Resource peaks are
 sampled; device-wide GPU measurements can include other applications.
+Elapsed durations use the monotonic clock. UTC timestamps are audit
+labels and can step when the host clock is corrected; manifests record both
+the UTC span and its difference from elapsed time.
 
 ## CPU-only checks
 

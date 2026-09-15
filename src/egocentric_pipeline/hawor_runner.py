@@ -165,4 +165,4 @@ def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resou
             "upstream_stages_completed": completed, "failure": failure,
             "artifacts": {name: artifact_record(path) for name, path in required.items() if path.is_file()},
             "resources": resources,
-            "timing_method": "Wall time between received upstream stdout stage markers; initialization overhead may be charged to the preceding stage"}
+            "timing_method": "time.monotonic elapsed time between received upstream stdout stage markers; initialization overhead may be charged to the preceding stage"}
