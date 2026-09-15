@@ -1,10 +1,10 @@
 # Project Status
 
 - Current milestone: 1 — Validate HaWoR baseline
-- Stage: Implementing
+- Stage: Validating
 - Active plan: Approved revision 8 — `knowledge/agent/plans/milestone-1-hawor-baseline.md` (user approval on 2026-09-15)
 - Milestone deliverable: A reproducible baseline package that processes the bundled HaWoR example and one short Ego4D MP4 segment, exports HaWoR's unchanged world-frame trajectory with validity/provenance metadata, produces an overlay visualization, and includes a run-scoped one-page benchmark and failure report for each attempt.
-- Last verified: 2026-09-15 — Final preflight passes at `outputs/hawor/setup-20260915-04/setup_check.json`. The single-clip command completed all stages in `outputs/hawor/20260915T195819543653Z-eb1014a4fba5/`; all 121 RGB-overlay frames and the world preview were inspected. Its report records qualitative misses/misalignment/jitter, unchanged native world arrays, and the final invalid right-hand frame. Reported monotonic elapsed time is 651.986 seconds; UTC stamps span 694.541 seconds, a timing discrepancy under investigation. Peak sampled process-tree RAM is 8.005 GiB and device GPU memory 7.806 GiB. Full runtime recreation and repeat-run verification remain pending.
+- Last verified: 2026-09-15 — Committed preflight passes at `outputs/hawor/setup-20260915-05/setup_check.json`. Fresh bundled runs `outputs/hawor/20260915T195819543653Z-eb1014a4fba5/` and `outputs/hawor/20260915T201758566130Z-802f2facfb7f/` completed all stages with separate manifests/reports and full 121-frame overlay/world-preview inspection. Preparation bytes and mappings match; prior artifacts remain unchanged. Reports record qualitative misses/misalignment/jitter, bitwise preservation of native world arrays, and the final invalid right-hand frame. Elapsed runtimes are 651.986 and 707.688 monotonic seconds, qualified by concurrent environment compilation. UTC clock steps are measured and distinguished from elapsed time. Full runtime recreation remains pending its final DROID/LieTorch build and GPU execution checks.
 
 ## Completed
 
@@ -32,7 +32,7 @@
 
 ## In progress
 
-- Repeat the successful, visually reviewed single-clip command from a fresh output directory. The timing discrepancy is explained by 20 observed forward UTC-clock steps totaling 42.468 seconds; independent MONOTONIC/BOOTTIME probes remain aligned. Manifests now explicitly distinguish elapsed duration from UTC audit span; the first report records this evidence without altering its finalized manifest.
+- Complete DROID/LieTorch in the recreated environment, verify its compiled GPU operations, then run the existing prepared RGB through that runtime to validate real prepared-clip reload and full environment reproducibility.
 - Recreate the full environment independently in `/tmp/hawor-recreation-20260915-WaiTKt/hawor`; logs are in `outputs/hawor/environment-recreation-20260915-01/`. The working `hawor` environment is preserved.
 
 ## Blockers and decisions
@@ -40,8 +40,8 @@
 - GPU checks require execution outside the sandbox. CUDA allocation passed with approximately 7 GB free; the earlier NVML occupancy did not reflect Torch's usable-memory result.
 - The first pipeline overlay/world preview and all infill transitions have been inspected. Baseline failure labels are recorded in that run's benchmark; no reconstruction-accuracy claim is made.
 - No Ego4D MP4 is available. Development and bundled-example validation proceed; final Ego4D acceptance requires the licensed source and selected interval.
-- CPU-only Conda creation, source-tree import, and the full 80-test suite pass locally. Commit `1a0c5d5` is on local `validation/milestone-1-hawor`; `main` is unchanged. Despite explicit user approval, the environment refuses agent pushes because they are exclusively user-controlled. The user must push this branch before hosted CI can be verified. No remote writes occurred; run artifacts and licensed assets are excluded from the commit.
+- CPU-only Conda creation, source-tree import, and all 80 tests pass locally, including the final timing clarification (`outputs/hawor/cpu-tests-20260915-01/test-suite-04.log`, 19.64 seconds). All 80 also pass in the recreated full environment before its final DROID build (33.31 seconds). Commits `1a0c5d5` and `e57b5fb` are on local `validation/milestone-1-hawor`; `main` is unchanged. Despite explicit user approval, the environment refuses agent pushes because they are exclusively user-controlled. The user must push this branch before hosted CI can be verified. No remote writes occurred; run artifacts and licensed assets are excluded from commits.
 
 ## Next action
 
-- Complete and visually inspect the fresh bundled repeat, finish full runtime recreation, and commit final verification notes. After the user-controlled validation-branch push, inspect hosted CPU CI. Ego4D acceptance remains deferred until its licensed MP4/interval is available.
+- Finish and validate the recreated full runtime, complete its bundled prepared-clip run/review, and commit final verification notes. After the user-controlled validation-branch push, inspect hosted CPU CI. Ego4D acceptance remains deferred until its licensed MP4/interval is available.

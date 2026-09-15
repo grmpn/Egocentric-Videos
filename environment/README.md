@@ -22,18 +22,25 @@ runtime. WSL2 uses the Windows host driver; its Linux installation needs the
 CUDA toolkit, not a second display driver.
 
 The CUDA toolkit and graphics libraries are system prerequisites, outside the
-Conda specification. Use NVIDIA's toolkit-only package on Ubuntu; the generic
-`cuda` metapackage can pull incompatible driver/Nsight dependencies. Keep
-`nvcc`, the Torch CUDA runtime, and the host compiler compatible.
+Conda specification. Select CUDA 11.7 from NVIDIA's
+[versioned download archive](https://developer.nvidia.com/cuda-11-7-0-download-archive),
+using the WSL-Ubuntu installer on WSL. Follow its repository/keyring setup;
+do not assume a repository for a newer Ubuntu release carries CUDA 11.7.
+NVIDIA's [version-specific WSL guide](https://docs.nvidia.com/cuda/archive/11.7.0/wsl-user-guide/index.html#cuda-support-for-wsl-2)
+explains the driver/toolkit separation. Keep `nvcc`, the Torch CUDA runtime,
+and the host compiler compatible.
 
-On Ubuntu, install the ordinary system prerequisites with APT. After configuring
-NVIDIA's CUDA package repository for the Ubuntu release, install its toolkit-only
-package and the compatible host compiler:
+On Ubuntu, install the ordinary system prerequisites with APT. The inspected WSL
+host uses `cuda-repo-wsl-ubuntu-11-7-local` version `11.7.0-1`, with individual
+build/development components instead of the full CUDA/Nsight metapackage. After
+configuring that version-specific repository, the relevant components are:
 
 ```bash
 sudo apt update
 sudo apt install git ffmpeg build-essential cmake ninja-build libgl1 libglib2.0-0
-sudo apt install cuda-toolkit-11-7 gcc-11 g++-11
+sudo apt install \
+    cuda-nvcc-11-7 cuda-cudart-dev-11-7 cuda-libraries-dev-11-7 \
+    cuda-cccl-11-7 gcc-11 g++-11
 ```
 
 On native Ubuntu, use the operating system's recommended NVIDIA driver and reboot
