@@ -1,6 +1,6 @@
 # Milestone 1 Plan: Validate the HaWoR Baseline
 
-Status: Draft revision 8 — MP4-only input scope; scope correction approved, full plan awaiting user review and approval
+Status: Approved revision 8 — user approved Milestone 1 implementation on 2026-09-15; timing limits confirmed the same day
 
 ## 1. Goals
 
@@ -54,6 +54,10 @@ Supported baseline environment:
 - WSL2 running Ubuntu, or a native Linux machine.
 - Bash inside Linux/WSL for upstream installation commands.
 - NVIDIA GPU exposed inside Linux/WSL.
+
+The first execution environment is the existing WSL2 installation with the local
+8 GB RTX 3070, following the approved local-first setup path. A >=16 GB native
+Linux GPU remains the fallback if the bundled example exceeds local VRAM.
 
 Linux is not a theoretical requirement of every PyTorch operation in HaWoR. It is a practical requirement for this project's supported baseline because:
 
@@ -237,14 +241,14 @@ The setup gate passes only when all required checks pass. Warnings such as low V
 The project-owned modules and synthetic tests use Python 3.10 from the active `hawor` Conda environment. Milestone 1 does not create project-packaging metadata or install `egocentric_pipeline` into `site-packages`. User-facing and test commands run from the repository root with `PYTHONPATH=src`, for example:
 
 ```bash
-PYTHONPATH=src python -m pytest
+PYTHONPATH=src python -m pytest tests
 ```
 
 This explicit source-path contract preserves the planned `src/` layout while keeping Conda as the only project environment manager. Commands issued from another working directory are unsupported unless they set `PYTHONPATH` to the absolute checkout's `src/` path. The README records this constraint with every project command rather than depending on an implicit shell customization.
 
 `environment/hawor.yml` declares the complete local GPU runtime plus direct and test dependencies actually imported by project-owned code. If an anticipated lightweight dependency is already supplied by Python or an existing approved package, omit it. The environment file may use a pip subsection for upstream packages that are not installable through Conda; this does not introduce a second project dependency specification.
 
-Create `environment/cpu-tests.yml` and `.github/workflows/ci.yml` when the first CPU-safe synthetic test is added. The smaller Conda specification contains only Python 3.10, FFmpeg, and the direct/test libraries required by the synthetic project tests; it deliberately excludes HaWoR, CUDA, licensed assets, and real datasets. On pull requests and pushes to the repository's default branch, CI creates that Conda environment, verifies that `PYTHONPATH=src` imports `egocentric_pipeline` from the checkout, and runs the complete CPU-safe suite with `PYTHONPATH=src python -m pytest`. Tests requiring the excluded resources remain explicit local validation gates and are not silently skipped as if CI had verified them.
+Create `environment/cpu-tests.yml` and `.github/workflows/ci.yml` when the first CPU-safe synthetic test is added. The smaller Conda specification contains only Python 3.10, FFmpeg, and the direct/test libraries required by the synthetic project tests; it deliberately excludes HaWoR, CUDA, licensed assets, and real datasets. On pull requests and pushes to the repository's default branch, CI creates that Conda environment, verifies that `PYTHONPATH=src` imports `egocentric_pipeline` from the checkout, and runs the complete CPU-safe suite with `PYTHONPATH=src python -m pytest tests`. Tests requiring the excluded resources remain explicit local validation gates and are not silently skipped as if CI had verified them.
 
 ## 4. Input and Output Contracts / Data and Metadata Files
 
@@ -289,7 +293,7 @@ data/prepared/<clip_id>/clip_metadata.json
 
 `video_preparation.prepare_clip(request) -> PreparedClip` validates and probes the local MP4, writes both artifacts, and returns a typed in-memory object containing the prepared video path, metadata path, and the same typed `ClipMetadata` value serialized to JSON. JSON is written successfully before `PreparedClip` is returned.
 
-`rgb.mp4` is a derived, constant-rate 30 FPS, HaWoR-ready video. Preparation creates a 30 FPS timestamp grid over the selected source interval and selects source frames by presentation timestamp. It does not change playback speed. Higher-rate sources lose unselected frames; lower-rate sources reuse the nearest source frame when permitted by the preparation-quality policy. Exact rejection thresholds for source gaps and repeated-frame fraction remain a plan decision.
+`rgb.mp4` is a derived, constant-rate 30 FPS, HaWoR-ready video. Preparation creates a 30 FPS timestamp grid over the selected source interval and selects source frames by presentation timestamp. It does not change playback speed. Higher-rate sources lose unselected frames; lower-rate sources reuse the nearest source frame when permitted by the preparation-quality policy. The user-approved initial limits are a maximum repeated-source-frame fraction of 0.05, maximum source-frame gap of 0.10 seconds, and maximum absolute source-to-prepared timestamp-selection error of 1/60 second. Inputs exceeding any limit are rejected before inference; these limits must remain explicitly named and configurable.
 
 `clip_metadata.json` has a schema version and these owned sections:
 
@@ -333,6 +337,15 @@ Expected native artifacts include extracted RGB frames, detection tracks, masks,
 - `hawor_valid`: `bool [T, H]`, copied/reordered from HaWoR's final `pred_valid` so the upstream meaning is preserved.
 - `export_valid`: `bool [T, H]`, true only when `hawor_valid` is true, every exported value for that frame/hand is finite, and the required upstream stages completed.
 - `detector_confidence`: `float32 [T, H]`, `NaN` when no direct detector output exists.
+
+Detection and confidence provenance follow HaWoR's final track-to-hand
+assignment: majority vote over the track, with ties assigned right, as in the
+pinned engine. The user confirmed this choice on 2026-09-15. Record raw
+per-frame handedness disagreements in trajectory validation metadata so they
+remain visible without disconnecting provenance from the native trajectory.
+Derive direct-estimation coverage from the preserved frame chunks and camera
+results when determining infill; a detector record alone does not prove that
+HaWoR estimated that frame (for example, an entire singleton track is skipped).
 
 The pinned demo's bounding-box interpolation call is effectively a no-op because its track arrays contain only detected frames; gaps are split before hand estimation and later handled by the motion infiller. We will test and document that observed behavior rather than invent a `bbox_interpolated` provenance class for this revision.
 
@@ -547,7 +560,7 @@ Milestone 1 has no persistent per-clip configuration files. Clip intent is suppl
 
 **Output:** GitHub Actions job status and logs for Conda environment creation, source-tree import verification, and the complete CPU-safe synthetic test suite.
 
-**Calls:** Official GitHub checkout and reviewed Conda-environment setup actions pinned to full commit SHAs, Conda using `environment/cpu-tests.yml`, `PYTHONPATH=src python -c "import egocentric_pipeline"`, and `PYTHONPATH=src python -m pytest` over the four planned test files in Section 6.5.
+**Calls:** Official GitHub checkout and reviewed Conda-environment setup actions pinned to full commit SHAs, Conda using `environment/cpu-tests.yml`, `PYTHONPATH=src python -c "import egocentric_pipeline"`, and `PYTHONPATH=src python -m pytest tests` over the four planned test files in Section 6.5.
 
 **Called by:** Pull-request and default-branch push events in GitHub Actions; developers may rerun an existing workflow run through GitHub.
 
@@ -844,7 +857,7 @@ Repository documentation, Conda environment management, and CI remain outside th
 ├── reads: environment/cpu-tests.yml
 ├── creates: minimal Python 3.10 + FFmpeg CPU-test Conda environment
 ├── calls: PYTHONPATH=src python -c "import egocentric_pipeline"
-└── calls: PYTHONPATH=src python -m pytest
+└── calls: PYTHONPATH=src python -m pytest tests
     ├── tests/test_clip_preparation.py
     ├── tests/test_world_export.py
     ├── tests/test_run_metadata.py
@@ -1003,9 +1016,7 @@ Repository-support validation is tracked separately from clip benchmarks. CI rec
 
 ## 12. Remaining Decisions
 
-1. Confirm WSL2 as the first execution environment, with a >=16 GB native Linux GPU as the fallback if the bundled example exceeds local VRAM.
-2. Choose the exact Ego4D MP4 and interval. The recommended default is one short purposeful manipulation with a hand visible through most of the action, enough camera motion and static scene texture to exercise SLAM, and no dominant motion blur. Exact identity is required before the Ego4D run but does not block plan approval or implementation against synthetic inputs and the bundled example.
-3. Choose the strict preparation-quality thresholds for maximum repeated-source-frame fraction, maximum source-frame gap, and maximum source-to-prepared timestamp-selection error. This blocks final plan approval because it determines which lower-rate or irregular videos may reach HaWoR.
+1. Choose the exact Ego4D MP4 and interval. The recommended default is one short purposeful manipulation with a hand visible through most of the action, enough camera motion and static scene texture to exercise SLAM, and no dominant motion blur. Exact identity is required before the Ego4D run but does not block plan approval or implementation against synthetic inputs and the bundled example.
 
 ## 13. References
 

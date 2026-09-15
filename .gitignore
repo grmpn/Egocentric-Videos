@@ -3,3 +3,18 @@
 
 # External HaWoR checkout contents
 /external/HaWoR/
+
+# Immutable local inputs, derived clips, and run evidence (never committed)
+/data/**
+!/data/**/
+!/data/**/.gitkeep
+/outputs/**
+!/outputs/**/
+!/outputs/**/.gitkeep
+
+# Python/Conda build and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.conda/
+/environment/condaenv.*.requirements.txt

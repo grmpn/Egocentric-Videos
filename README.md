@@ -2,202 +2,123 @@
 
 ## About
 
-This project is building a reusable pipeline that turns egocentric RGB video
-into time-aligned 3D hand trajectories, language annotations, and eventually
-robot-compatible trajectories. World-frame hand motion is the primary geometric
-output; canonical and robot-frame representations are planned downstream.
+This project turns egocentric RGB video into time-aligned 3D hand trajectories,
+with language annotations and robot-compatible trajectories planned downstream.
+Milestone 1 reproduces the unchanged HaWoR baseline on its bundled example and
+one short Ego4D MP4 segment. It preserves HaWoR's world coordinates: no
+canonicalization, alignment, smoothing, or robot conversion is performed.
 
-The project is currently planning Milestone 1: reproduce and measure the
-unmodified HaWoR baseline on its bundled example and one short Ego4D MP4 segment.
 See the [roadmap](knowledge/raw/Project-Milestones-and-Timeline.md),
-[current status](knowledge/agent/PROJECT_STATUS.md), and
-[draft Milestone 1 plan](knowledge/agent/plans/milestone-1-hawor-baseline.md).
-For now, the remainder of this README documents only the known-good HaWoR
-installation; pipeline usage will be added as it is implemented and verified.
+[current status and verification evidence](knowledge/agent/PROJECT_STATUS.md),
+and [approved plan](knowledge/agent/plans/milestone-1-hawor-baseline.md).
+Ego4D input is not yet available; bundled-video development does not establish
+Ego4D acceptance or milestone completion.
 
-## HaWoR installation
+## Setup
 
-The confirmed setup uses Ubuntu 24.04:
+Follow [environment/README.md](environment/README.md) for installation
+prerequisites, exact asset locations, runtime library paths, and ordered
+recreation of [environment/hawor.yml](environment/hawor.yml).
+The supported setup is Linux/WSL2, Python 3.10 in Conda, Torch 1.13.0+cu117,
+CUDA toolkit 11.7, and GCC/G++ 11. The clean recreation gate is tracked in the
+status document. Model weights, licensed MANO files, inputs, and outputs remain
+local and untracked; do not commit them or access credentials.
 
-| Component | Version |
-| --- | --- |
-| Python | 3.10 in Conda environment `hawor` |
-| PyTorch | `1.13.0+cu117` |
-| torchvision | `0.14.0+cu117` |
-| CUDA toolkit | 11.7 |
-| CUDA host compiler | GCC/G++ 11 |
-
-### 1. Prepare Ubuntu
-
-Install a compatible NVIDIA driver using Ubuntu's recommended driver packages.
-Reboot if required, then confirm that the GPU is visible:
+Run commands from this repository's root with the `hawor` environment active
+and the documented CUDA library paths set. Project code is imported directly
+using `PYTHONPATH=src`; it is not installed as a Python distribution.
 
 ```bash
-nvidia-smi
+PYTHONPATH=src python -c 'import egocentric_pipeline; print(egocentric_pipeline.__file__)'
+PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/setup-new/setup_check.json
+PYTHONPATH=src python -m pytest tests
 ```
 
-After adding NVIDIA's CUDA repository for Ubuntu, install only the CUDA 11.7
-toolkit and the compatible compiler:
+Choose a new setup evidence path each time. The checker refuses overwrites and
+returns nonzero for failed checks. GPU execution must have real device access;
+WSL cuDNN needs `/usr/lib/wsl/lib` on `LD_LIBRARY_PATH`, even when a basic Torch
+allocation succeeds without it.
+
+## Process one clip
+
+The Milestone 1 command calls the reusable pipeline exactly once and
+automatically writes that attempt's benchmark, including reportable failures:
 
 ```bash
-sudo apt update
-sudo apt install cuda-toolkit-11-7 gcc-11 g++-11
+PYTHONPATH=src python scripts/run_milestone1_baseline.py --example
 ```
 
-Do not install the generic `cuda` metapackage on Ubuntu 24.04; it can pull an
-obsolete Nsight dependency that requires unavailable `libtinfo5`.
+For your own MP4, supply `--video PATH` directly; no per-clip config is needed.
+Use `--start-s` and `--end-s` together for a half-open interval in seconds from
+the video's first presentation timestamp. Omit both to use the entire video.
+The same command accepts `--dataset`, `--video-id`, `--task-label`,
+`--license-reference`, and `--focal-length-px` to record source intent. See
+`--help` for the complete options.
 
-### 2. Initialize HaWoR and create the environment
-
-[HaWoR](https://github.com/ThunderVVV/HaWoR) is tracked by this repository as a
-pinned Git submodule at `external/HaWoR`. After cloning this repository,
-initialize HaWoR and all of its nested submodules from the repository root:
+Preparation can also run independently:
 
 ```bash
-git submodule update --init --recursive
+PYTHONPATH=src python scripts/prepare_clip.py --video external/HaWoR/example/video_0.mp4
 ```
 
-Do not clone HaWoR separately. Install Miniconda, then create the environment:
+It prints the resulting `clip_metadata.json` path. Supply that path with
+`run_milestone1_baseline.py --prepared PATH` to validate and reuse prepared RGB
+in a new run; it does not resume native inference. Existing prepared metadata
+owns the interval, camera value, and source identity, so new request options
+are rejected alongside `--prepared`.
 
-```bash
-conda create -n hawor python=3.10 -y
-conda activate hawor
+The reusable `scripts/run_hawor_pipeline.py` accepts `--video` or `--prepared`
+and writes a manifest without the milestone-specific benchmark. Programmatic
+callers use `ClipRequest`, `prepare_clip`/`load_prepared_clip`, and
+`pipeline.run_clip`; adjustable timing limits live in `PreparationQualityPolicy`.
 
-cd external/HaWoR
-```
+Preparation is timestamp-driven 30 FPS, with no resize, crop, pad, rotation,
+calibration, or lens correction. The initial gates allow at most 5% repeated
+source frames, a 0.10-second maximum source gap, and 1/60-second maximum
+timestamp-selection error. Inputs exceeding any gate are rejected. An omitted
+focal length uses HaWoR's approximate 600 px default, never a calibration claim.
 
-The remaining installation commands assume the current directory is
-`external/HaWoR` unless stated otherwise.
+## Outputs and review
 
-### 3. Install the pinned Python stack
-
-Install PyTorch before any other Python dependencies:
-
-```bash
-python -m pip install \
-    torch==1.13.0+cu117 \
-    torchvision==0.14.0+cu117 \
-    --extra-index-url https://download.pytorch.org/whl/cu117
-
-python -m pip install "setuptools<81" wheel ninja
-```
-
-Create `torch-constraints.txt` in the HaWoR directory:
+Every attempt receives a unique run directory; source and prepared files are
+kept separate from native and exported results:
 
 ```text
-torch==1.13.0+cu117
-torchvision==0.14.0+cu117
-roma<1.6
+data/prepared/<clip_id>/
+  rgb.mp4
+  clip_metadata.json
+outputs/hawor/<run_id>/
+  run_manifest.json
+  benchmark.json
+  benchmark_report.md
+  clips/<clip_id>/
+    native/                  # staged RGB, console log, unchanged engine artifacts
+    trajectory_world.npz
+    trajectory_metadata.json
+    overlay.mp4
+    trajectory_preview.png
+    visualization.log
 ```
 
-Use this constraints file for every later pip installation. Do not allow another
-package to upgrade PyTorch. Install the upstream requirements with the constraint:
+Failed stages may leave partial artifacts; the manifest records their status
+and the benchmark explains unavailable metrics. Exit codes are zero for a
+completed pipeline and nonzero for failure. Completion is not a quality claim:
+review starts as `pending` and requires inspection of the beginning, middle,
+end, infill transitions, and suspicious jumps before acceptance.
 
-```bash
-python -m pip install -c torch-constraints.txt -r requirements.txt
-```
+Exports use hand order `[left, right]`, preserve native world values, and
+separate direct detection, motion infill, native validity, and export validity.
+Detection/confidence follows HaWoR's final majority track assignment (ties
+right); metadata records raw detector-label disagreements. World origins and
+orientations are clip-local, not aligned across clips. Resource peaks are
+sampled; device-wide GPU measurements can include other applications.
 
-If PyTorch3D fails because its isolated build cannot import Torch, install it
-separately without build isolation, then rerun the requirements command. Limit
-parallel compilation if the system is short on memory:
+## CPU-only checks
 
-```bash
-export MAX_JOBS=1
-python -m pip install -c torch-constraints.txt \
-    --no-build-isolation --no-cache-dir \
-    "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-```
-
-Build DROID-SLAM with CUDA 11.7 and GCC 11:
-
-```bash
-export CUDA_HOME=/usr/local/cuda-11.7
-export PATH=$CUDA_HOME/bin:$PATH
-export CC=/usr/bin/gcc-11
-export CXX=/usr/bin/g++-11
-export CUDAHOSTCXX=/usr/bin/g++-11
-
-(
-    cd thirdparty/DROID-SLAM
-    python setup.py install
-)
-```
-
-If the installed PyTorch version ever changes, restore the pinned version and
-rebuild PyTorch3D, DROID-SLAM, and LieTorch.
-
-### 4. Add model assets
-
-Download the HaWoR, detector, DROID-SLAM, Metric3D, and infiller checkpoints.
-Download MANO separately after accepting its license. Place the files here:
-
-```text
-external/HaWoR/
-├── weights/
-│   ├── external/
-│   │   ├── droid.pth
-│   │   └── detector.pt
-│   └── hawor/
-│       ├── model_config.yaml
-│       └── checkpoints/
-│           ├── hawor.ckpt
-│           └── infiller.pt
-├── thirdparty/Metric3D/weights/
-│   └── metric_depth_vit_large_800k.pth
-└── _DATA/
-    ├── data/mano/MANO_RIGHT.pkl
-    └── data_left/mano_left/MANO_LEFT.pkl
-```
-
-MANO files and model weights are external assets and must not be committed.
-
-### 5. Configure the Ubuntu runtime
-
-Add the following to the active shell or shell configuration:
-
-```bash
-export CUDA_HOME=/usr/local/cuda-11.7
-export PATH=$CUDA_HOME/bin:$PATH
-export CC=/usr/bin/gcc-11
-export CXX=/usr/bin/g++-11
-export CUDAHOSTCXX=/usr/bin/g++-11
-export LD_LIBRARY_PATH=/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}
-export QT_QPA_PLATFORM=xcb
-```
-
-If visualization fails with a Qt `xcb` error, install the XCB runtime libraries:
-
-```bash
-sudo apt install \
-    libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-image0 \
-    libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 \
-    libxkbcommon-x11-0 libxrender1 libxi6 libsm6 libice6
-```
-
-### 6. Validate the installation
-
-```bash
-python - <<'PY'
-import torch
-from pytorch3d import _C
-import droid_backends
-import lietorch
-
-print("Torch:", torch.__version__)
-print("CUDA:", torch.version.cuda)
-print("GPU:", torch.cuda.get_device_name(0))
-print("PyTorch3D, DROID-SLAM, and LieTorch: OK")
-PY
-
-python -m pip check
-```
-
-Expected core versions are PyTorch `1.13.0+cu117` and CUDA `11.7`. Finally,
-run the bundled example:
-
-```bash
-python demo.py --video_path ./example/video_0.mp4 --vis_mode world
-```
-
-The run should complete hand detection, HaWoR inference, DROID-SLAM, Metric3D
-scaling, trajectory infilling, and world-space visualization.
+[environment/cpu-tests.yml](environment/cpu-tests.yml) and
+[GitHub Actions](.github/workflows/ci.yml) create a separate CPU environment and
+run `PYTHONPATH=src python -m pytest tests`. The explicit `tests` path excludes
+upstream HaWoR tests. Synthetic checks exercise timestamps, MP4 preparation,
+unchanged export/provenance, orchestrator failures, and single-run reports.
+They do not download or validate HaWoR, CUDA, model/MANO assets, or real datasets;
+GPU execution and visual inspection remain separate local acceptance gates.

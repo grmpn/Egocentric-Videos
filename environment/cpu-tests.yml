@@ -1,0 +1,12 @@
+# Project contract tests only; no HaWoR, Torch, CUDA, model assets, or datasets.
+name: egocentric-cpu-tests
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.10.21
+  - ffmpeg>=6
+  - numpy=1.26.4
+  - joblib=1.6.0
+  - psutil=7.2.2
+  - pytest=8.4.2
