@@ -1,11 +1,9 @@
 # HaWoR environment
 
 [hawor.yml](hawor.yml) is the reviewed dependency declaration for the local
-Milestone 1 runtime. Its current pins come from inspecting the existing `hawor`
-Conda environment: package constraints, `pip check`, and the core dependency
-imports pass. Clean environment recreation is still being validated; it is not
-established by these instructions alone. Runtime and smoke-test evidence belongs
-in the project status linked below.
+Milestone 1 runtime. The project status linked below records recreation,
+dependency, compiled-kernel, inference, and rendering evidence; installation
+instructions alone do not establish that those checks passed.
 
 The [active plan](../knowledge/agent/plans/milestone-1-hawor-baseline.md) defines
 the setup and acceptance requirements; the [project status](../knowledge/agent/PROJECT_STATUS.md)
@@ -113,11 +111,9 @@ PIP_NO_BUILD_ISOLATION=0 MAX_JOBS=1 conda env update -n hawor -f environment/haw
 HaWoR documents Lightning as a separate `--no-deps` installation. The YAML pins
 its exact version and the required support packages alongside Torch, so the
 resolver cannot upgrade Torch while installing Lightning. The installed
-Lightning 2.2.4 metadata accepts Torch 1.13.0 and its import passes. A full
-recreation still needs verification. In particular, Lightning requests
-`fsspec[http]`, whose `aiohttp` extra is absent from the inspected environment;
-normal resolution during recreation will install it even though the existing
-environment's `pip check` passes.
+Lightning 2.2.4 metadata accepts Torch 1.13.0. Lightning also requests
+`fsspec[http]`; normal resolution installs its `aiohttp` extra, which was absent
+from the original environment despite its passing `pip check`.
 
 Finally, use DROID-SLAM's official installation command. Its `setup.py` installs
 both `droid_backends` and `lietorch`; their pinned source dependency is recorded

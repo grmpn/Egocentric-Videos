@@ -106,6 +106,11 @@ completed pipeline and nonzero for failure. Completion is not a quality claim:
 review starts as `pending` and requires inspection of the beginning, middle,
 end, infill transitions, and suspicious jumps before acceptance.
 
+An abrupt process or host termination can prevent manifest finalization and
+automatic reporting. A stale `running` manifest is not completion evidence.
+Retain its partial artifacts and logs, then use `--prepared` for a fresh attempt
+after confirming the old process has stopped.
+
 Exports use hand order `[left, right]`, preserve native world values, and
 separate direct detection, motion infill, native validity, and export validity.
 Detection/confidence follows HaWoR's final majority track assignment (ties
