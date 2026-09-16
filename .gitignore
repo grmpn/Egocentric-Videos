@@ -5,12 +5,9 @@
 /external/HaWoR/
 
 # Immutable local inputs, derived clips, and run evidence (never committed)
-/data/**
-!/data/**/
-!/data/**/.gitkeep
-/outputs/**
-!/outputs/**/
-!/outputs/**/.gitkeep
+# Ignore the directories themselves so dependency-local rules cannot unignore files.
+/data/
+/outputs/
 
 # Python/Conda build and test caches
 __pycache__/
