@@ -1,0 +1,89 @@
+# Phase 0 candidate: versions inspected in the existing hawor environment.
+# Dependency/import checks pass; clean recreation and the example smoke test
+# must pass before this is described as the validated runtime specification.
+# Follow README.md's bootstrap order before `conda env update -f`.
+name: hawor
+channels:
+  - defaults
+dependencies:
+  - python=3.10.21
+  - pip=26.2.1
+  - wheel=0.47.0
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu117
+
+      # Install these build prerequisites before the full pip batch.
+      - setuptools==80.10.2
+      - ninja==1.13.2
+      - Cython==3.3.0
+      - numpy==1.26.4
+      - torch==1.13.0+cu117
+      - torchvision==0.14.0+cu117
+
+      # Every dependency declared by the pinned HaWoR requirements.txt.
+      - opencv-python==4.11.0.86
+      - pyrender==0.1.45
+      - scikit-image==0.25.2
+      - smplx==0.1.28
+      - yacs==0.1.8
+      - mmcv==1.3.9
+      - timm==1.0.29
+      - einops==0.8.2
+      - xtcocotools==1.14.3
+      - pandas==2.3.3
+      - hydra-core==1.3.6
+      - hydra-submitit-launcher==1.2.0
+      - hydra-colorlog==1.2.0
+      - pyrootutils==1.0.4
+      - rich==15.0.0
+      - webdataset==1.0.2
+      - ultralytics==8.4.146
+      - PuLP==3.3.2
+      - supervision==0.30.2
+      - pycocotools==2.0.11
+      - joblib==1.6.0
+      - natsort==8.4.0
+      - pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@75ebeeaea0908c5527e7b1e305fbc7681382db47
+      - torch-scatter==2.1.2
+      - evo==1.37.1
+      - pytorch-minimize==0.1.0
+      - mmengine==0.10.4
+      - HTML4Vision==0.6.1
+      - plyfile==1.1.3
+      - aitviewer==1.13.0
+      - easydict==1.13
+      - loguru==0.7.3
+      - dill==0.4.1
+      - lapx==0.10.0
+      - chumpy @ git+https://github.com/mattloper/chumpy@580566eafc9ac68b2614b64d6f7aaa84eebb70da
+      - moderngl-window==2.4.6
+
+      # HaWoR README's separate Lightning installation and support packages.
+      - pytorch-lightning==2.2.4
+      - torchmetrics==1.4.0
+      - lightning-utilities==0.15.3
+
+      # Shared runtime dependencies pinned to the inspected compatibility set.
+      # roma <1.6 retains compatibility with this Torch version; both OpenCV
+      # distributions are required by upstream packages and share one version.
+      - roma==1.5.1
+      - opencv-contrib-python-headless==4.11.0.86
+      - scipy==1.15.3
+      - matplotlib==3.10.9
+      - trimesh==3.23.5
+      - moderngl==5.12.0
+      - glcontext==3.0.0
+      - imgui==2.0.0
+      - PyOpenGL==3.1.0
+      - PyQt5==5.15.11
+      - PyYAML==6.0.3
+      - fsspec[http]==2026.7.0
+      - psutil==7.2.2
+      - pytest==8.4.2
+
+# Additional source-built runtime dependencies, installed by the upstream
+# two-package setup.py command documented in README.md:
+#   droid_backends==0.0.0 and lietorch==0.2
+# Source: external/HaWoR/thirdparty/DROID-SLAM at HaWoR commit
+# 66c7d4108d58a716deccd192cb7645170cdc7bd7, with its pinned nested submodules.
+# CUDA compilation uses the system CUDA 11.7 toolkit and GCC/G++ 11.

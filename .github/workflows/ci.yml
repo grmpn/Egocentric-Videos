@@ -1,20 +1,24 @@
-name: CI (planning stage)
+name: CPU tests
 
 on:
   pull_request:
   push:
     branches:
       - main
+      - validation/**
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  repository-foundation:
-    name: Validate repository foundation
+  cpu-contract-tests:
+    name: Project contracts (CPU only)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -el {0}
 
     steps:
       - name: Check out the repository
@@ -24,30 +28,30 @@ jobs:
           persist-credentials: false
           submodules: false
 
-      - name: Check tracked planning-stage files
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          required_files=(
-            AGENTS.md
-            README.md
-            knowledge/raw/Project-Milestones-and-Timeline.md
-            knowledge/raw/Sources/HaWoR-Review.md
-            knowledge/agent/PLANNING_SPECS.md
-            knowledge/agent/PROJECT_STATUS.md
-            knowledge/agent/plans/milestone-1-hawor-baseline.md
-          )
-
-          for required_file in "${required_files[@]}"; do
-            test -f "${required_file}"
-          done
-
-          test "$(git config -f .gitmodules --get submodule.external/HaWoR.path)" = "external/HaWoR"
-          test "$(git config -f .gitmodules --get submodule.external/HaWoR.url)" = "https://github.com/ThunderVVV/HaWoR.git"
-
       - name: Check patches for whitespace errors
         run: git diff --check HEAD^ HEAD
 
-      # Add the Python 3.10 Conda environment, source-tree import check, and
-      # pytest invocation with the first CPU-safe project test.
+      - name: Create the CPU test environment
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
+        with:
+          miniforge-version: latest
+          activate-environment: egocentric-cpu-tests
+          environment-file: environment/cpu-tests.yml
+          auto-activate: false
+
+      - name: Verify checkout import and CPU environment
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          import egocentric_pipeline
+
+          expected = Path("src/egocentric_pipeline/__init__.py").resolve()
+          actual = Path(egocentric_pipeline.__file__).resolve()
+          assert actual == expected, (actual, expected)
+          assert importlib.util.find_spec("torch") is None, "CPU tests must not depend on Torch"
+          print(actual)
+          PY
+
+      - name: Run the complete project test suite
+        run: PYTHONPATH=src python -m pytest tests
