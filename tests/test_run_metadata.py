@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import hashlib
+import io
 import math
 from pathlib import Path
 import shutil
@@ -233,6 +234,50 @@ def _workflow_video(path, frame_count=6):
     return path
 
 
+def test_hawor_streams_redacted_stdout_and_stderr_before_process_exit(tmp_path, monkeypatch):
+    source = _workflow_video(tmp_path / "source.mp4")
+    prepared = prepare_clip(ClipRequest.from_video(source), tmp_path / "prepared")
+    engine_root = tmp_path / "engine"
+    engine_root.mkdir()
+    acknowledgement = engine_root / "console-flushed"
+    # The child cannot finish until its output has reached and flushed the
+    # parent's console. Capturing only after process exit would time out.
+    (engine_root / "demo.py").write_text(
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "print('Running detect_track on fixture', flush=True)\n"
+        "print('stderr --token=private-value', file=sys.stderr, flush=True)\n"
+        "print('Waiting for console', flush=True)\n"
+        "deadline = time.monotonic() + 5\n"
+        "while not Path('console-flushed').exists():\n"
+        "    if time.monotonic() > deadline: sys.exit(99)\n"
+        "    time.sleep(0.01)\n"
+        "print('Progress 1/2\\rProgress 2/2', flush=True)\n"
+        "print('Final diagnostic', file=sys.stderr, flush=True)\n"
+        "sys.exit(7)\n"
+    )
+
+    class Console(io.StringIO):
+        def flush(self):
+            if "Waiting for console" in self.getvalue():
+                acknowledgement.touch()
+
+    console = Console()
+    monkeypatch.setattr(hawor_runner.sys, "stdout", console)
+    monkeypatch.setattr(hawor_runner, "inspect_engine", lambda root: {})
+    result = hawor_runner.run_hawor(prepared, tmp_path / "native", engine_root, resource_monitor=object())
+    output = console.getvalue()
+    assert result["returncode"] == 7, output
+    assert result["status"] == "failed"
+    assert output == Path(result["log"]).read_text()
+    assert "private-value" not in output
+    assert "stderr --token=[REDACTED]" in output
+    assert "Progress 1/2" in output and "Progress 2/2" in output
+    assert "Final diagnostic" in output
+    assert result["stages"][1]["name"] == "detection_tracking"
+    assert result["stages"][1]["status"] == "failed"
+
+
 @pytest.mark.parametrize("failure_mode", ["changed-focal", "engine-inspection", "process-launch"])
 def test_hawor_prelaunch_failures_retain_evidence_without_inference(tmp_path, monkeypatch, failure_mode):
     source = _workflow_video(tmp_path / "source.mp4")
@@ -302,7 +347,7 @@ def test_hawor_prelaunch_failures_retain_evidence_without_inference(tmp_path, mo
 
 
 @pytest.mark.parametrize("run_mode", ["fresh-mp4", "reloaded-prepared", "renderer-failure"])
-def test_pipeline_prepares_runs_real_export_and_finalizes_manifest(tmp_path, monkeypatch, native_fixture, run_mode):
+def test_pipeline_prepares_runs_real_export_and_finalizes_manifest(tmp_path, monkeypatch, native_fixture, run_mode, capsys):
     """Only inference/rendering are substituted; preparation/export are production."""
     native_template, _, _, native_arrays = native_fixture
     source = _workflow_video(tmp_path / "source.mp4", native_arrays[0].shape[1])
@@ -369,6 +414,13 @@ def test_pipeline_prepares_runs_real_export_and_finalizes_manifest(tmp_path, mon
         result = pipeline.run_clip(request, **arguments)
 
     manifest = read_json(result.manifest_path)
+    console = capsys.readouterr().out
+    assert f"Total pipeline time: {manifest['wall_time_s']:.3f} s" in console
+    for stage in manifest["stages"]:
+        if stage["status"] in ("completed", "failed"):
+            outcome = "completed in" if stage["status"] == "completed" else "failed after"
+            assert f"{stage['name']}: {outcome} {stage['wall_time_s']:.3f} s" in console
+    assert sum(stage["wall_time_s"] or 0 for stage in manifest["stages"]) <= manifest["wall_time_s"]
     utc_span = (datetime.fromisoformat(manifest["finished_at"].replace("Z", "+00:00"))
                 - datetime.fromisoformat(manifest["started_at"].replace("Z", "+00:00"))).total_seconds()
     assert manifest["timing"]["elapsed_clock"] == "time.monotonic (CLOCK_MONOTONIC)"

@@ -180,7 +180,12 @@ def _render_report(benchmark):
     timing = metrics["preparation_timing"]["value"]
     if timing:
         lines.append(f"Preparation: {timing['repeated_source_frame_count']} reused frames, {timing['dropped_source_frame_count']} dropped frames; maximum selection error {timing['max_absolute_timestamp_error_s']:.6f} s, maximum source gap {timing['max_source_frame_gap_s']:.6f} s.")
-    lines.extend(["", "Stages: " + "; ".join(f"{s['name']}={s['status']}" for s in benchmark["stages"]) + "."])
+    lines.extend(["", "| Phase | Status | Elapsed time |", "| --- | --- | ---: |"])
+    for stage in benchmark["stages"]:
+        elapsed = stage.get("wall_time_s")
+        duration = f"{elapsed:.3f} s" if elapsed is not None else "Not run" if stage["status"] == "not_run" else "Unavailable"
+        lines.append(f"| {stage['name']} | {stage['status']} | {duration} |")
+    lines.extend(["", "Phase durations use the monotonic clock. Total pipeline time also includes validation and bookkeeping; report generation and any prior source trimming are excluded."])
     lines.append("Resource scope: " + benchmark["resource_measurement_scope"] + ".")
     if benchmark["failure"]:
         lines.extend(["", f"Failure at **{benchmark['failure']['stage']}**: {benchmark['failure']['message']}"])

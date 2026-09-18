@@ -109,8 +109,10 @@ def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resou
                     if line is None:
                         output_done = True
                     else:
-                        log.write(redact(line))
+                        output = redact(line)
+                        log.write(output)
                         log.flush()
+                        print(output, end="", flush=True)
                         marker = None
                         for phrase, index in (("Running detect_track on", 1), ("Running hawor on", 2),
                                               ("Running slam on", 3), ("run infiller on", 4)):
@@ -130,7 +132,10 @@ def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resou
             reader.join(timeout=2)
         except (Exception, KeyboardInterrupt) as error:
             failure = {"type": type(error).__name__, "message": redact(str(error))}
-            log.write(f"\nAdapter failure: {failure['type']}: {failure['message']}\n")
+            output = f"\nAdapter failure: {failure['type']}: {failure['message']}\n"
+            log.write(output)
+            log.flush()
+            print(output, end="", flush=True)
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
                 try:

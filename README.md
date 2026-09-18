@@ -11,8 +11,6 @@ canonicalization, alignment, smoothing, or robot conversion is performed.
 See the [roadmap](knowledge/raw/Project-Milestones-and-Timeline.md),
 [current status and verification evidence](knowledge/agent/PROJECT_STATUS.md),
 and [approved plan](knowledge/agent/plans/milestone-1-hawor-baseline.md).
-Ego4D input is not yet available; bundled-video development does not establish
-Ego4D acceptance or milestone completion.
 
 ## Setup
 
@@ -54,6 +52,22 @@ the video's first presentation timestamp. Omit both to use the entire video.
 The same command accepts `--dataset`, `--video-id`, `--task-label`,
 `--license-reference`, and `--focal-length-px` to record source intent. See
 `--help` for the complete options.
+
+For long recordings, first trim a separate short MP4 with FFmpeg. This avoids
+probing and hashing the entire recording during pipeline preparation and reload:
+
+```bash
+ffmpeg -n -ss 600 -i data/source/ego4d/Ego4D-cooking.mp4 -t 4 \
+    -map 0:v:0 -an -c:v libx264 -crf 18 -pix_fmt yuv420p \
+    data/source/ego4d/cooking-0600-0604.mp4
+PYTHONPATH=src python scripts/run_milestone1_baseline.py \
+    --video data/source/ego4d/cooking-0600-0604.mp4 --dataset ego4d
+```
+
+Keep the original recording and record its identity, hash, trim command, and
+interval alongside the evaluation evidence. Pipeline timestamps refer to the
+trimmed MP4; add its original start offset to locate a frame in the recording.
+Trimming preserves image dimensions and does not overwrite the original.
 
 Preparation can also run independently:
 
@@ -120,6 +134,11 @@ sampled; device-wide GPU measurements can include other applications.
 Elapsed durations use the monotonic clock. UTC timestamps are audit
 labels and can step when the host clock is corrected; manifests record both
 the UTC span and its difference from elapsed time.
+HaWoR stdout/stderr stream to the terminal and remain saved in `native/console.log`.
+The console prints elapsed seconds for preparation, inference, export,
+visualization, and validation; the benchmark report shows the same phase table.
+Inference includes engine verification and startup. Total pipeline time includes
+validation and bookkeeping, excluding prior source trimming and report generation.
 
 ## CPU-only checks
 

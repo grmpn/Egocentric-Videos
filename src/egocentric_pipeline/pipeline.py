@@ -59,8 +59,10 @@ def run_clip(request=None, *, prepared_metadata=None, output_root=None, prepared
         except (Exception, KeyboardInterrupt) as error:
             current_stage.update(status="failed", error=redact(str(error)), finished_at=utc_now(),
                                  wall_time_s=time.monotonic() - stage_start)
+            print(f"{name}: failed after {current_stage['wall_time_s']:.3f} s", flush=True)
             raise
         current_stage.update(status="completed", finished_at=utc_now(), wall_time_s=time.monotonic() - stage_start)
+        print(f"{name}: completed in {current_stage['wall_time_s']:.3f} s", flush=True)
         return result
 
     try:
@@ -162,4 +164,6 @@ def run_clip(request=None, *, prepared_metadata=None, output_root=None, prepared
             "scope_note": "UTC start precedes environment capture; elapsed timing starts afterward. UTC clock corrections do not alter measured elapsed durations.",
         }
         write_json(manifest_path, redact(manifest), overwrite=True)
+        print(f"Total pipeline time: {manifest['wall_time_s']:.3f} s ({manifest['status']}; "
+              "includes validation and bookkeeping)", flush=True)
     return RunResult(run_directory, manifest_path, manifest["status"])

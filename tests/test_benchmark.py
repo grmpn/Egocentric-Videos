@@ -81,6 +81,26 @@ def test_failed_attempt_and_no_cross_run_overwrite(tmp_path):
         build_benchmark(success, "setup_smoke")
 
 
+def test_report_shows_phase_durations_and_distinguishes_unrun_from_zero(tmp_path):
+    path = finalized_run(tmp_path, "failed")
+    manifest = read_json(path)
+    manifest["stages"] = [
+        {"name": "preparation", "status": "completed", "wall_time_s": 0.0},
+        {"name": "inference", "status": "failed", "wall_time_s": 1.25},
+        {"name": "export", "status": "not_run", "wall_time_s": None},
+        {"name": "visualization", "status": "not_run", "wall_time_s": None},
+    ]
+    write_json(path, manifest, overwrite=True)
+    files = build_benchmark(path, "other_test")
+    report = Path(files["report"]).read_text()
+    assert "| preparation | completed | 0.000 s |" in report
+    assert "| inference | failed | 1.250 s |" in report
+    assert "| export | not_run | Not run |" in report
+    assert "| visualization | not_run | Not run |" in report
+    assert "prior source trimming are excluded" in report
+    assert read_json(files["benchmark"])["stages"] == manifest["stages"]
+
+
 def test_review_update_is_explicit_and_retains_execution(tmp_path):
     manifest = finalized_run(tmp_path)
     build_benchmark(manifest, "other_test")
