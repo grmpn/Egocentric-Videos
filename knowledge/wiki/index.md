@@ -12,6 +12,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — draft scope and acceptance; approval pending.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
 
 ## Topics and evidence
@@ -23,6 +24,11 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 - [September 2026 events](logs/2026-09.jsonl) — imported historical actions and timestamped maintenance work.
 
-Original [HaWoR research notes](../raw/Sources/HaWoR-Review.md) remain source material.
+## Source notes
+
+- [HaWoR research notes](../raw/Sources/HaWoR-Review.md) — original source material, preserved.
+- [Eidon and LeRobot](../raw/Sources/Eidon-LeRobot-Review.md) — pilot selection, camera-evidence limits, and the v3.1 annotation choice.
+- [HuRo workflow reference](../raw/Sources/HuRo-Review.md) — related pipeline and pointers for later investigation; not an adopted implementation.
+
 Local-only reports and figures stay under `knowledge/agent/summaries/`; see the
 acceptance page for links. They and linked run outputs are unavailable in a fresh clone.

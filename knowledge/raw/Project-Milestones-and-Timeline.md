@@ -36,14 +36,21 @@ Keep the world-frame trajectory as the primary geometric output. The canonical f
 
 ### 2. Record and annotate a pilot dataset — 3 weeks
 
+Requirements revised with the user on 2026-09-22; implementation requires approval
+of the separate short milestone plan.
+
 **Scope**
 
-- Record at least 10 usable iPhone clips of one simple task under consistent conditions.
-- Run hand tracking first, then package the stable outputs in the chosen LeRobot-compatible schema.
+- Record 1–2 deliberate, high-quality iPhone demonstrations of one simple task for Milestone 3 retargeting.
+- Make LeRobotDataset integration the primary outcome: accept a video and a local dataset directory, create a dataset when needed, and append an episode to an existing compatible dataset.
+- Target LeRobotDataset **v3.1**, selected by the user for direct compatibility with the current `lerobot-annotate` workflow, superseding the initial v2 request.
+- Run the existing HaWoR pipeline and package its world-frame outputs with synchronized RGB, timestamps, hand identity, camera/source metadata, and validity/confidence/provenance.
 - Define and derive the hand-centered canonical representation after the HaWoR world-frame contract is stable.
+- Use a small selected set of [Eidon videos](https://huggingface.co/eidon-ai) for further HaWoR validation; use inputs suitable for pinhole processing without adding lens correction. Record outcomes and failure modes separately from the curated iPhone demonstrations.
 - Use `lerobot-annotate` for plan/subtask annotations; disable interjections and VQA unless later experiments need them.
+- Exclude fixes to HaWoR hand detection and the motion infiller, undistortion of fisheye or other distorted inputs, and synthetic robot embodiment. Retargeting remains Milestone 3 work. [HuRo](https://3587jjh.github.io/HuRo/) is a reference for later investigation, not an implementation blueprint.
 
-**Deliverable:** A versioned pilot dataset containing RGB video, synchronized world- and canonical-frame hand trajectories, metadata, subtask annotations, confidence/provenance fields, and a short data card describing the task and capture setup.
+**Deliverable:** A reusable video-to-LeRobotDataset v3.1 workflow supporting creation and append, a versioned annotated pilot containing the 1–2 iPhone demonstrations with synchronized world- and canonical-frame hand trajectories and confidence/provenance, selected Eidon validation evidence, and a short data card describing capture, sources, and limitations.
 
 ### 3. Retarget hands and trajectories in simulation — 4 weeks
 

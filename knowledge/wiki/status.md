@@ -1,12 +1,12 @@
 # Project status
 
-- Current milestone: **1 — Validate HaWoR baseline**.
-- Stage: **Complete**; Milestone 2 has not started.
-- Active plan: none awaiting implementation. The [completed Milestone 1 plan](plans/milestone-1-hawor-baseline.md) preserves approved revision 8 (2026-09-15).
-- Deliverable: a reproducible unchanged-HaWoR baseline for the bundled example and one Ego4D segment, with world trajectories, provenance, visualizations, and per-run reports.
-- Completed: Milestone 1 accepted on 2026-09-18 and merged into `main`; [acceptance, evidence, and limitations](experiments/milestone-1-baseline.md).
-- Current work: documentation changes complete. The planning/wiki/log workflow and [automatic local-commit policy](../../AGENTS.md#git-staging-and-commits) are documented; Git history records commit state.
-- Blockers or decisions: none for Milestone 1 acceptance. Longer-clip feasibility and reconstruction accuracy remain unverified; existing inference/quality limits are documented in the acceptance page.
-- Next action: review the local Milestone 1 summary when user feedback arrives. Milestone 2 requires a separate request.
-- Last milestone verification: **2026-09-18**; see the acceptance page for exact runs, hashes, and CI revision. This documentation refactor does not rerun those checks.
-- Last documentation verification: **2026-09-22**; links, event format, history preservation, Git visibility, and file hashes pass. Evidence: `20260922-git-policy-002` in the [action history](logs/2026-09.jsonl).
+- Current milestone: **2 — Record and annotate a pilot dataset**.
+- Stage: **Planning**.
+- Active plan: [Video-to-LeRobot pilot, draft revision 1](plans/milestone-2-lerobot-pilot.md); not approved.
+- Deliverable: reusable video-to-LeRobotDataset v3.1 creation/append, 1–2 annotated iPhone demonstrations for Milestone 3, selected Eidon validation, and a data card.
+- Completed outcome: Milestone 1 accepted on 2026-09-18 and merged into `main`; [acceptance, evidence, and limitations](experiments/milestone-1-baseline.md). No Milestone 2 execution evidence yet.
+- Current work: revised roadmap and short plan drafted; Eidon, annotation compatibility, and HuRo reference notes recorded. The user selected v3.1 for direct annotation.
+- Blockers or decisions: plan approval pending. Selected Eidon camera geometry/intrinsics, task-length inference feasibility, and annotation backend/resources remain unverified. Detector/infiller fixes and undistortion are excluded.
+- Next action: review and explicitly approve or revise draft 1, including its three-segment Eidon sample and acceptance criteria; then begin implementation. Capture task and annotation backend can be selected before their execution phases.
+- Last milestone verification: **2026-09-18** for Milestone 1 only; see acceptance evidence. Planning did not rerun tests or inference.
+- Last documentation verification: **2026-09-22**; see `20260922-m2-planning-004` in the [action history](logs/2026-09.jsonl) for checks and limits.
