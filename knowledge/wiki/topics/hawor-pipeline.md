@@ -13,6 +13,13 @@ returns the same typed metadata contract whether the clip was newly prepared or
 loaded from its saved metadata. HaWoR owns reconstruction, SLAM, metric scaling,
 and infilling; project code preserves and validates its result.
 
+The pinned upstream video demo uses WiLoR's YOLO detector. It saves observed
+track entries only, splits reconstruction at missing frame indices, and later
+invokes the learned world-motion infiller. Its bbox-interpolation call does not
+insert missing timeline entries in this path. See the
+[source comparison with HuRo](huro-source-review.md) for code references and the
+distinction between detection, gap grouping, and infilling.
+
 Original inputs stay under `data/source/`; prepared RGB and source/frame mappings
 live under `data/prepared/`. Each attempt receives its own directory under
 `outputs/hawor/`, containing native evidence, exported trajectories, a run manifest,

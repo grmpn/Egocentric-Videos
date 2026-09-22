@@ -9,4 +9,4 @@
 - Blockers or decisions: plan approval pending. Selected Eidon camera geometry/intrinsics, task-length inference feasibility, and annotation backend/resources remain unverified. Detector/infiller fixes and undistortion are excluded.
 - Next action: review and explicitly approve or revise draft 2, including its three-segment Eidon sample and acceptance criteria; then begin implementation. Capture task and annotation backend can be selected before their execution phases.
 - Last milestone verification: **2026-09-18** for Milestone 1 only; see acceptance evidence. Planning did not rerun tests or inference.
-- Last documentation verification: **2026-09-22**; see `20260922-huro-source-002` in the [action history](logs/2026-09.jsonl) for checks and limits.
+- Last documentation verification: **2026-09-22**; see `20260922-huro-comparison-002` in the [action history](logs/2026-09.jsonl) for checks and limits.
