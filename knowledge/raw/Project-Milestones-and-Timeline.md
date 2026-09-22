@@ -41,7 +41,7 @@ of the separate short milestone plan.
 
 **Scope**
 
-- Record 1–2 deliberate, high-quality iPhone demonstrations of one simple task for Milestone 3 retargeting.
+- Record 1–2 deliberate, high-quality iPhone demonstrations of one simple task for Milestone 3 retargeting. All input videos, including these recordings, must be provided as `.mp4`; other formats and conversion from them are outside project scope for now.
 - Make LeRobotDataset integration the primary outcome: accept a video and a local dataset directory, create a dataset when needed, and append an episode to an existing compatible dataset.
 - Target LeRobotDataset **v3.1**, selected by the user for direct compatibility with the current `lerobot-annotate` workflow, superseding the initial v2 request.
 - Run the existing HaWoR pipeline and package its world-frame outputs with synchronized RGB, timestamps, hand identity, camera/source metadata, and validity/confidence/provenance.

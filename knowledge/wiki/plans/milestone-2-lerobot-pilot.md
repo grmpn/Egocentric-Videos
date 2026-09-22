@@ -1,10 +1,10 @@
 # Milestone 2 — Video-to-LeRobot pilot dataset
 
-Draft revision 1 · 2026-09-22 · Not approved; approval event pending.
+Draft revision 2 · 2026-09-22 · Not approved; approval event pending.
 
 ## Objective and deliverable
 
-Deliver a workflow accepting a local video and dataset directory, producing a
+Deliver a workflow accepting a local `.mp4` video and dataset directory, producing a
 LeRobotDataset **v3.1** episode, and appending to an existing compatible dataset.
 Produce a versioned pilot with 1–2 deliberate, high-quality iPhone demonstrations
 for Milestone 3, reviewed plan/subtask
@@ -12,22 +12,22 @@ annotations, a data card, and a small Eidon validation report.
 
 ## Scope and boundaries
 
-- Reuse video preparation, unchanged HaWoR inference, world export, and
-  review/reporting. Support iPhone inputs through necessary
-  container/encoding preparation while preserving source files and frame mapping.
-  Each clip or selected interval becomes one episode.
+- All videos, including iPhone recordings, must be provided as `.mp4`. Other
+  formats and conversion from them are outside project scope for now. Reuse
+  preparation, unchanged HaWoR, world export, and review, preserving sources and
+  frame mapping. Each clip or selected interval becomes one episode.
 - Preserve synchronized RGB, timestamps in seconds, left/right identity,
   HaWoR's clip-local world coordinates and claimed metres, camera metadata,
   missing-frame validity, confidence, and detection/infill provenance. Retain
   unknown confidence. Derive a documented, reversible hand-centered
-  canonical representation while keeping world trajectories primary. Do not
-  imply that clip-local worlds share an origin or that confidence measures accuracy.
+  canonical representation while keeping world trajectories primary. Clip-local
+  worlds have independent origins; confidence does not measure geometric accuracy.
 - Create or append at the supplied local directory. Validate dataset version,
   features, and timing/image compatibility before mutation. Preserve existing
   episodes and annotations; failed additions must leave a readable dataset.
   Record source identity and handle repeated additions explicitly.
 - Use three short Eidon RGB segments, selected before inference across at
-  least two tasks and two contributors, for a bounded diagnostic sample.
+  least two tasks and two contributors.
   Download selected recordings only; record IDs, revisions, hashes, and intervals.
   Use pinhole-suitable footage; document camera information and
   approximations. [Source verification limits](../../raw/Sources/Eidon-LeRobot-Review.md)
@@ -53,14 +53,14 @@ annotations, a data card, and a small Eidon validation report.
 - The user-facing workflow creates a dataset, appends a second distinct episode
   after reopening it, and reloads both through the pinned LeRobot reader.
   Focused checks cover synchronization, indexing, units, transform inversion,
-  hand identity, missing data, incompatible inputs, failed append, and preservation
+  hand identity, missing data, unsupported formats, incompatible inputs, failed append, and preservation
   of prior episodes and annotations.
 - The 1–2 iPhone episodes cover the intended task with reviewed overlays and
   world/canonical previews, including grasp/release, gaps, and infill transitions.
   Preserve wrist pose and finger geometry needed by Milestone 3. Unsuitable
   reconstruction remains a blocker; do not remove task-essential motion to pass.
 - Report all three Eidon attempts, including failures and visible quality limits.
-  Load at least one successful Eidon episode through the same dataset workflow.
+  Load one successful Eidon episode through this workflow.
 - Run annotation on the pilot and verify saved plans/subtasks against video
   timestamps after reload. Record commands, versions, and review evidence.
   Passing establishes integration and reviewed examples, not metric accuracy,
