@@ -13,33 +13,40 @@ The project must remain understandable to a human reader. Prefer a small, explic
 Before beginning work, read:
 
 1. `knowledge/raw/Project-Milestones-and-Timeline.md` for the project roadmap.
-2. `knowledge/agent/PROJECT_STATUS.md` for the active milestone and current progress.
-3. The active milestone plan linked from `knowledge/agent/PROJECT_STATUS.md`.
-4. Relevant material in `knowledge/raw/Sources/`.
+2. `knowledge/wiki/status.md` for the active milestone and current progress.
+3. The active milestone plan linked from that status, when one is active.
+4. `knowledge/wiki/index.md`, then only the topics, decisions, evidence, and raw
+   sources relevant to the task.
 
 When creating, restructuring, or materially revising a milestone plan, also read
-`knowledge/agent/PLANNING_SPECS.md` before editing the plan.
+`knowledge/wiki/planning-specs.md` before editing the plan. For wiki or action-log
+work, read `knowledge/wiki/knowledge-maintenance.md`.
 
 These files have distinct responsibilities:
 
 - The milestone document defines long-term scope and deliverables.
 - The status document records current state.
-- The active plan defines the approved implementation.
-- The planning specification defines the required plan structure and planning
-  conversation; it does not define milestone architecture.
+- The active plan defines approved scope, constraints, and acceptance evidence.
+- The planning specification defines the short plan and approval conversation.
+- Wiki topics explain implemented behavior; decisions preserve significant rationale.
+- The append-only action log records dated actions and evidence, including failures.
 - Source notes provide technical context but do not override an approved plan.
 
-Do not duplicate the same progress information across multiple documents.
+Code and tests establish executable behavior; plans establish authorized scope.
+Label historical results, source claims, inference, and unverified claims clearly.
+Link to one authoritative explanation instead of duplicating it. Preserve raw
+source material unless the user explicitly requests a change to it.
 
 ## Determining the current milestone
 
-`knowledge/agent/PROJECT_STATUS.md` is the operational source of truth. It must identify:
+`knowledge/wiki/status.md` is the operational source of truth. Keep it about one
+screen long, identifying:
 
 - current milestone
 - current stage
 - active plan
 - milestone deliverable
-- completed work
+- a brief completed outcome with a link to acceptance evidence
 - current work
 - blockers or unresolved decisions
 - next concrete action
@@ -59,34 +66,39 @@ Do not infer that a milestone is complete from the presence of code or output fi
 
 If the status document conflicts with the repository, investigate and report the discrepancy before changing implementation.
 
-Update `knowledge/agent/PROJECT_STATUS.md` after material progress, validation, a newly discovered blocker, or a change to the next action. Keep updates factual and concise.
+Update `knowledge/wiki/status.md` after material progress, validation, a newly
+discovered blocker, or a change to the next action. Move history to the action log
+and durable explanations to the wiki; do not accumulate completed-work lists here.
 
 ## Planning gate before implementation
 
 Do not create or modify implementation code for a milestone until:
 
-1. The milestone has been examined in Plan mode.
-2. A written implementation plan exists under `knowledge/agent/plans/` and conforms to
-   `knowledge/agent/PLANNING_SPECS.md`.
+1. The milestone scope has been discussed with the user.
+2. A short written plan exists under `knowledge/wiki/plans/` and conforms to
+   `knowledge/wiki/planning-specs.md`.
 3. The user has explicitly approved the plan.
-4. `knowledge/agent/PROJECT_STATUS.md` identifies that plan and shows `Ready for implementation` or `Implementing`.
+4. `knowledge/wiki/status.md` identifies that plan and shows `Ready for implementation` or `Implementing`.
 
-Follow the staged planning conversation in `knowledge/agent/PLANNING_SPECS.md`. In particular,
-start from roadmap-grounded goals and non-goals, then elicit and refine the
-user's desired contracts, repository structure, file breakdown, and nested
-end-to-end flow before filling in the remaining sections. Do not treat an
-agent-inferred architecture as approved user intent.
+Agree on the objective, scope, essential constraints, optional outcome-based
+subphases, and acceptance evidence. Target 300–500 words; shorter is fine when
+the scope is clear. Do not require repository trees, file breakdowns, call trees,
+complete schemas, or a second detailed implementation plan.
 
-Every milestone plan must use the 13 required top-level sections and the
-per-file and nested-flow formats defined in `knowledge/agent/PLANNING_SPECS.md`. A plan may
-temporarily contain clearly marked placeholders while the planning conversation
-is in progress. The user may revise any section at any time.
+Approval authorizes the agent to choose files, module organization, internal
+interfaces, tests, and justified dependencies within that scope. Maintain actual
+contracts and significant rationale in the wiki alongside implementation.
+Routine implementation choices do not require another approval or a particular
+tool mode. The user may revise the scope at any time.
 
 Implementation includes source code, scripts, tests, configuration schemas, dependency changes, and persistent data-layout changes.
 
 Documentation-only corrections, source-note updates, and status reporting do not require a new implementation plan.
 
-If implementation would materially depart from the approved plan, stop coding and return to Plan mode. Update the plan and obtain approval before continuing.
+If a choice changes the deliverable, expands scope, weakens acceptance, breaks
+agreed compatibility, or exceeds an agreed resource constraint, stop the affected
+work, revise the short plan, and obtain approval before proceeding with that
+change. Continue independent work already authorized by the current scope.
 
 Only the user can authorize the transition from `Planning` to `Ready for implementation`.
 
@@ -117,7 +129,7 @@ Avoid premature abstraction. Create a shared interface only when it serves the c
 Use this structure as a destination, not as a request to create empty folders:
 
 - `knowledge/raw/Sources/` — papers and research notes
-- `knowledge/agent/plans/` — approved milestone plans
+- `knowledge/wiki/` — agent-maintained status, plans, topics, decisions, and action logs
 - `src/` — reusable implementation
 - `scripts/` — thin user-facing entry points
 - `configs/` — necessary reproducible settings
@@ -133,7 +145,7 @@ Do not create:
 - speculative utility modules
 - duplicate documentation
 - milestone-numbered copies of reusable code
-- new dependencies without justification in the approved plan
+- new dependencies without a concrete need within approved scope
 - generated artifacts that have no validation or review purpose
 
 Before adding a file, dependency, or abstraction, confirm that it is required for the current milestone deliverable and cannot be handled clearly by an existing component.
@@ -143,8 +155,10 @@ Before adding a file, dependency, or abstraction, confirm that it is required fo
 Before implementing functionality, check whether an existing project dependency,
 standard-library feature, or established external package already provides it. Use
 that implementation when it satisfies the approved requirements; do not recreate
-the same capability locally. Add a new dependency only when the approved plan
-justifies it and existing dependencies cannot meet the need.
+the same capability locally. Add a new dependency only when existing dependencies
+cannot meet a concrete need within the approved scope. Record the reason and
+reproducible version declaration; significant tradeoffs belong in a wiki decision.
+An ordinary dependency choice does not require editing the milestone plan.
 
 Implement the smallest amount of project code needed for the current deliverable.
 Avoid convenience wrappers, helper layers, abstractions, and scripts that do not
@@ -189,15 +203,60 @@ standard command or configuration already does so.
 
 Report exactly what was tested, what passed, and what remains unverified.
 
+## Git staging and commits
+
+Authorization to perform a task includes staging its changes and creating local
+commits. Commit completed, verified work automatically without asking for another
+confirmation, unless the user explicitly requests otherwise. This applies to
+documentation as well as implementation.
+
+- Inspect the current branch, working tree, and index before changing or staging
+  files. Identify existing user work and preserve it.
+- Commit at meaningful checkpoints: a coherent change or completed subphase. Do
+  not commit every edit or defer all commits until a large milestone is finished.
+- Stage explicit paths or relevant hunks, including intended additions and
+  deletions. Avoid unrestricted `git add .` or `git add -A`. Never include unrelated
+  user changes or pre-existing staged work in the agent's commit. If changes
+  overlap, isolate the task's hunks; if ownership cannot be established, leave the
+  affected changes intact and explain the blocker.
+- Run the checks appropriate to the change, inspect the complete staged diff,
+  and run `git diff --cached --check` before committing. Confirm that the commit
+  includes only intended work. Keep credentials, licensed assets, datasets,
+  generated outputs, and ignored local reports out of commits; do not force-add
+  them as part of routine staging.
+- Include related tests, documentation, wiki/status updates, and action-log
+  entries in the same logical commit. Use a descriptive commit message explaining
+  the concrete result. Do not bypass failing checks or hooks to make a commit.
+- After committing, verify the new commit and Git status. Leave no task-owned,
+  intended-to-be-tracked changes uncommitted at handoff unless work is incomplete,
+  validation is blocked, or the user requested otherwise. Report commit hashes,
+  verification results, and any remaining changes with their reason.
+
+Local commit authorization does not authorize pushing, merging, amending existing
+commits, or rewriting history. Perform those operations only when specifically
+authorized; earlier explicit authorization in the session still applies. Never
+discard unrelated work to produce a clean working tree.
+
 ## Completion and handoff
+
+During work, append meaningful implementation, validation, experiment, decision,
+documentation, and blocker events to `knowledge/wiki/logs/YYYY-MM.jsonl` using
+the format in `knowledge/wiki/knowledge-maintenance.md`. Record actual UTC times,
+outcomes, and evidence. Log long-running starts and finishes separately. Do not
+log routine reads or treat planned work as completed. Never rewrite old events;
+append a linked correction. Update affected canonical wiki pages as behavior or
+knowledge materially changes.
 
 At the end of a work session:
 
 1. Verify the relevant changes.
-2. Update `knowledge/agent/PROJECT_STATUS.md` when progress materially changed.
-3. Record the next concrete action.
-4. Summarize changed files and verification results.
-5. State any remaining uncertainty or decision needed from the user.
+2. Update `knowledge/wiki/status.md` when progress materially changed.
+3. Record the next concrete action, finish the action log, and update wiki navigation
+   when pages were added, moved, or removed.
+4. Stage, review, and commit completed work under the Git policy above; verify the
+   commit and remaining working-tree state.
+5. Summarize changed files, verification results, and commit hashes.
+6. State any remaining changes, uncertainty, or decision needed from the user.
 
 Do not broaden the milestone, begin the next milestone, or introduce an optional research change without explicit approval.
 

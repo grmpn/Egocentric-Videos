@@ -9,7 +9,8 @@
 /data/
 /outputs/
 
-# Local milestone summaries and supporting figures
+# Existing local milestone summaries and figures stay private at this legacy path.
+# knowledge/wiki/ (including action logs) is intentionally tracked.
 /knowledge/agent/summaries/
 
 # Python/Conda build and test caches

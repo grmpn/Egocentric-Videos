@@ -1,13 +1,15 @@
 # HaWoR environment
 
 [hawor.yml](hawor.yml) is the reviewed dependency declaration for the local
-Milestone 1 runtime. The project status linked below records recreation,
+Milestone 1 runtime. The acceptance evidence linked below records recreation,
 dependency, compiled-kernel, inference, and rendering evidence; installation
 instructions alone do not establish that those checks passed.
 
-The [active plan](../knowledge/agent/plans/milestone-1-hawor-baseline.md) defines
-the setup and acceptance requirements; the [project status](../knowledge/agent/PROJECT_STATUS.md)
-records the current evidence. Do not update an existing working environment
+The [completed plan](../knowledge/wiki/plans/milestone-1-hawor-baseline.md) preserves
+the original setup and acceptance requirements; the
+[acceptance record](../knowledge/wiki/experiments/milestone-1-baseline.md) links the
+historical evidence, and [project status](../knowledge/wiki/status.md) identifies
+current work. Do not update an existing working environment
 merely to repeat the installation instructions below.
 
 ## System prerequisites
@@ -138,7 +140,7 @@ set.
 ## Assets and rendering
 
 Use the exact weight and MANO locations in the
-[plan's setup requirements](../knowledge/agent/plans/milestone-1-hawor-baseline.md#38-required-model-files-and-exact-locations).
+[plan's setup requirements](../knowledge/wiki/plans/milestone-1-hawor-baseline.md#38-required-model-files-and-exact-locations).
 Weights, MANO, and source videos remain untracked. The setup checker records
 their presence and weight hashes. Model download links are in the
 [pinned upstream installation guide](https://github.com/ThunderVVV/HaWoR/blob/66c7d4108d58a716deccd192cb7645170cdc7bd7/README.md#installation);

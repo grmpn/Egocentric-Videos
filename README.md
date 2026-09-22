@@ -9,8 +9,10 @@ one short Ego4D MP4 segment. It preserves HaWoR's world coordinates: no
 canonicalization, alignment, smoothing, or robot conversion is performed.
 
 See the [roadmap](knowledge/raw/Project-Milestones-and-Timeline.md),
-[current status and verification evidence](knowledge/agent/PROJECT_STATUS.md),
-and [approved plan](knowledge/agent/plans/milestone-1-hawor-baseline.md).
+[current status](knowledge/wiki/status.md), and [knowledge index](knowledge/wiki/index.md).
+The [completed Milestone 1 plan](knowledge/wiki/plans/milestone-1-hawor-baseline.md)
+preserves historical approval; future work uses the
+[short planning format](knowledge/wiki/planning-specs.md).
 
 ## Setup
 
@@ -19,7 +21,8 @@ prerequisites, exact asset locations, runtime library paths, and ordered
 recreation of [environment/hawor.yml](environment/hawor.yml).
 The supported setup is Linux/WSL2, Python 3.10 in Conda, Torch 1.13.0+cu117,
 CUDA toolkit 11.7, and GCC/G++ 11. The clean recreation gate is tracked in the
-status document. Model weights, licensed MANO files, inputs, and outputs remain
+[baseline acceptance record](knowledge/wiki/experiments/milestone-1-baseline.md).
+Model weights, licensed MANO files, inputs, and outputs remain
 local and untracked; do not commit them or access credentials.
 
 Run commands from this repository's root with the `hawor` environment active
