@@ -9,6 +9,9 @@
 /data/
 /outputs/
 
+# Local milestone summaries and supporting figures
+/knowledge/agent/summaries/
+
 # Python/Conda build and test caches
 __pycache__/
 *.py[cod]

@@ -1,4 +1,4 @@
-# Project Status
+P# Project Status
 
 - Current milestone: 1 — Validate HaWoR baseline
 - Stage: Complete
@@ -23,6 +23,9 @@ Acceptance establishes a reproducible unchanged-HaWoR baseline with documented f
 
 ## Completed
 
+- Filled the local [Week 1 report](summaries/reports/Week-1.md) on 2026-09-18 with dated daily progress and user-confirmed next-week/month-end targets; checked formatting and Git exclusion.
+- Merged Milestone 1 into `main` through PR #1 on 2026-09-18; verified merge commit `a37fdbb3c8d4817ff351611498b2f06c1ca937c5` includes the validated implementation.
+- Drafted the local [Milestone 1 summary](summaries/MILESTONE_1_SUMMARY.md) on 2026-09-18, aggregating the ten Ego4D evaluations and illustrating infill discontinuity and false detection. Timings, frame provenance, figures, and local links were checked; the entire summaries directory is ignored by Git. The draft is ready for user feedback.
 - Completed five separately trimmed four-second bicycle-video evaluations for UID `01aed4ae-486e-41eb-91f8-4d2e8a46db7d`: 4–8, 28–32, 52–56, 76–80, and 100–104 seconds relative to the supplied `Ego4D-bike-trim.mp4`. FFprobe measured 120.8 seconds, and the user confirmed spreading the intervals across it. All 600 overlay frames, infill transitions, representative full-size frames, and world previews were reviewed; all 40 artifacts and export contracts pass independent checks. The 00:04 interval has the strongest two-hand overlay; other intervals retain substantial infill/alignment failures. Phase timings, per-run reviews, commands, and provenance: [bicycle evaluation summary](../../outputs/hawor/ego4d-bike-evaluation-20260918-01/SUMMARY.md). Prior cooking evidence remains unchanged.
 - Added live, flushed HaWoR stdout/stderr forwarding while retaining its redacted console log; exposed preparation/inference/export/visualization/validation durations in the console and benchmark report, including failed phases. Updated README trimming and timing guidance. All 82 tests pass in the recreated runtime (34.12 seconds); GPU preflight passes.
 - Completed five separate four-second Ego4D evaluations for UID `002c3b5c-ed86-4af3-99a1-4b497b7c8a86`, with original intervals 300–304, 600–604, 1200–1204, 1800–1804, and 2600–2604 seconds. All 600 overlay frames, infill transitions, representative detailed frames, and world previews were reviewed; each run has its own benchmark and failure notes. Independent checks pass for all 40 artifacts, native bitwise/validity preservation, timestamps, provenance, unchanged inputs, and console/timing parity. Results and exact commands: [cooking evaluation summary](../../outputs/hawor/ego4d-evaluation-20260918-01/SUMMARY.md). The 20:00 and 43:20 clips are qualitatively strongest; alignment errors/jitter remain, with severe infill failures and a brief identity reversal in other intervals.
@@ -66,4 +69,5 @@ Acceptance establishes a reproducible unchanged-HaWoR baseline with documented f
 
 ## Next action
 
-- Push the documentation closeout commit and merge `validation/milestone-1-hawor` into `main` after the required branch checks pass. Milestone 2 planning requires a separate user request.
+- Review and refine the Milestone 1 summary from user feedback.
+- Milestone 2 planning requires a separate user request.
