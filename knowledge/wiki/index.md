@@ -18,6 +18,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 ## Topics and evidence
 
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
+- [HuRo source review](topics/huro-source-review.md) — external detection-gap handling, infiller bypass, retargeting, and language annotation; static inspection only.
 - [Milestone 1 baseline acceptance](experiments/milestone-1-baseline.md) — accepted runs, provenance, validation, and unresolved quality limits.
 
 ## Action history
