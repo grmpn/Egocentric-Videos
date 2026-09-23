@@ -152,3 +152,75 @@ upstream HaWoR tests. Synthetic checks exercise timestamps, MP4 preparation,
 unchanged export/provenance, orchestrator failures, and single-run reports.
 They do not download or validate HaWoR, CUDA, model/MANO assets, or real datasets;
 GPU execution and visual inspection remain separate local acceptance gates.
+
+## Milestone 2 dataset workflow
+
+Use the separate Python 3.12 environment so LeRobot does not replace HaWoR's Torch:
+
+```bash
+uv venv --python 3.12 .venv-lerobot
+uv pip install --python .venv-lerobot/bin/python -r environment/lerobot-requirements.txt
+```
+
+The requirement file pins Linux x86_64 CPU wheels for dataset I/O. The CLI clears
+inherited `LD_LIBRARY_PATH` for LeRobot and configures CUDA 11.7/HaWoR libraries
+only in the inference subprocess. Run from the repository root, using the actual
+path to your HaWoR interpreter:
+
+```bash
+PYTHONPATH=src .venv-lerobot/bin/python scripts/video_to_dataset.py \
+    --video data/source/iphone/demo-01.mp4 \
+    --dataset-root data/lerobot/iphone-pilot \
+    --task "Pick up the cup and place it on the mat" \
+    --source-dataset iphone --video-id demo-01 \
+    --hawor-python /path/to/hawor/bin/python
+```
+
+Invoke again with a distinct MP4/interval to append. All episodes in one dataset
+must have matching image geometry and timing; unsupported inputs are rejected.
+`--start-s` and `--end-s` select an interval, `--source-metadata` accepts a JSON file
+with capture/source attribution, and `--focal-length-px` records a supplied focal
+length. Only `.mp4` is supported. Without calibration, HaWoR's 600 px default is
+explicitly approximate. Existing source files are preserved.
+
+Reuse an already-completed attempt without GPU inference:
+
+```bash
+PYTHONPATH=src .venv-lerobot/bin/python scripts/video_to_dataset.py \
+    --run-manifest outputs/hawor/milestone-2/PATH/run_manifest.json \
+    --dataset-root data/lerobot/iphone-pilot --task "Pick up the cup and place it on the mat"
+```
+
+Runs/reports are under `outputs/hawor/milestone-2/`; older evidence and baseline
+commands use `milestone-1/`. The dataset contains RGB, world/canonical root poses,
+MANO articulation/shape, masks, confidence, per-episode provenance, canonical
+previews, and a generated `DATA_CARD.md`. The [contract and limitations](knowledge/wiki/topics/lerobot-pipeline.md)
+explain atomic updates, duplicate detection, canonical inversion, exact timestamps,
+and the upstream v3.0/v3.1 metadata discrepancy.
+
+The default annotation model does not fit this laptop's 8 GiB GPU. On a suitable
+Linux desktop with a separately provisioned OpenAI-compatible VLM server, use:
+
+```bash
+PYTHONPATH=src .venv-lerobot/bin/python scripts/annotate_dataset.py \
+    --dataset-root data/lerobot/iphone-pilot \
+    --model Qwen/Qwen3.6-27B --api-base http://localhost:8000/v1
+```
+
+This runs the official annotation CLI for plans/subtasks only, disables thinking,
+and preserves prior episodes/annotations. It does not start or install a VLM
+server. Review saved labels against video and timestamps before accepting them;
+local fixture tests do not establish annotation quality. Real VLM execution and
+the unrecorded iPhone demonstrations remain pending.
+
+Run dataset integration checks in the isolated environment:
+
+```bash
+PYTHONPATH=src .venv-lerobot/bin/python -m pytest tests/test_lerobot_export.py tests/test_canonical.py
+```
+
+These include the real `lerobot-annotate` command against a deterministic local
+HTTP fixture, without sending video externally or downloading model weights.
+In a restricted environment, set `HF_HOME` and `MPLCONFIGDIR` to writable cache
+directories. The legacy CPU job skips LeRobot tests; CI has a separate integration
+job with the pinned environment.
