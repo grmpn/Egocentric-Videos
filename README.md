@@ -155,6 +155,10 @@ GPU execution and visual inspection remain separate local acceptance gates.
 
 ## Milestone 2 dataset workflow
 
+[Eidon validation and remaining acceptance](knowledge/wiki/experiments/milestone-2-eidon-validation.md)
+reports all three attempts. [Local review index](outputs/hawor/milestone-2/README.md)
+links generated evidence on this machine.
+
 Use the separate Python 3.12 environment so LeRobot does not replace HaWoR's Torch:
 
 ```bash
