@@ -12,7 +12,9 @@ import numpy as np
 import pytest
 
 pytest.importorskip("lerobot")
+import pyarrow as pa
 import pyarrow.parquet as pq
+from lerobot.datasets.io_utils import write_table_one_row_group_per_episode
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from egocentric_pipeline.clip_request import ClipRequest
@@ -160,10 +162,31 @@ def test_actual_annotation_cli_and_append_preserve_annotations(tmp_path, runs):
         del reader
         append_run(runs[1], root, task='Move a second block')
         assert old_shard.read_bytes() == original
+        # The upstream annotator replaces language columns for an entire file.
+        # Put both episodes in one valid shard to exercise preservation of an
+        # unselected episode sharing the selected episode's rewritten file.
+        shards = sorted(root.glob('data/*/*.parquet'))
+        assert len(shards) == 2
+        # Upstream infers annotated language timestamps as float64; the
+        # recording writer declares float32. Promote those nested field types.
+        shared = pa.concat_tables([pq.read_table(p) for p in shards], promote_options='permissive')
+        write_table_one_row_group_per_episode(shared, shards[0])
+        shards[1].unlink()
+        for path in root.glob('meta/episodes/*/*.parquet'):
+            table = pq.read_table(path)
+            column = table.schema.get_field_index('data/file_index')
+            table = table.set_column(column, table.schema.field(column),
+                                     pa.array([0] * len(table), type=table.column(column).type))
+            pq.write_table(table, path)
+        reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
+        assert reader.meta.get_data_file_path(0) == reader.meta.get_data_file_path(1)
+        assert len(reader) == 12 and reader[0]['language_persistent'] == atoms
+        del reader
         annotate_dataset(root, model='integration-test-fixture', api_base=endpoint)
         reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
-        assert reader[0]['language_persistent'] == atoms
-        assert reader[6]['language_persistent']
+        for i in range(6):
+            assert reader[i]['language_persistent'] == atoms
+            assert {atom['style'] for atom in reader[6 + i]['language_persistent']} == {'plan', 'subtask'}
         saved = files(root)
         with pytest.raises(ValueError, match='already contain'):
             annotate_dataset(root, model='integration-test-fixture', api_base=endpoint, episodes=[0])

@@ -94,9 +94,17 @@ The pinned upstream writer replaces language columns and can clear unselected
 episodes sharing a shard. This wrapper restores those episodes' prior language
 values, checks all non-language data, requires nonempty plan/subtask coverage from
 frame zero at real timestamps, and reloads through LeRobot before publication.
+The real CLI regression covers two episodes sharing one file and checks preserved
+labels on every frame of the older episode.
 An upstream run that exits successfully with empty annotations fails this check.
 The annotation record remains `review_status: pending`: a human/video-grounded
 review is required before acceptance.
+
+The upstream annotator infers nested Arrow language types. Annotated timestamps
+can therefore be float64 while newly recorded language columns declare float32;
+null camera/tool-call fields can also have different physical types. The official
+reader supports these files. Direct Arrow concatenation requires type promotion
+when combining annotated and unannotated shards.
 
 ## Local inference feasibility
 
