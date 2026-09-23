@@ -199,7 +199,7 @@ Run the [setup checker](../scripts/check_hawor_setup.py) before the bundled
 example, choosing a fresh evidence path for each check:
 
 ```bash
-PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/setup-check/setup_check.json
+PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/milestone-1/setup-check/setup_check.json
 ```
 
 The checker refuses to replace an existing evidence file. Retain its JSON

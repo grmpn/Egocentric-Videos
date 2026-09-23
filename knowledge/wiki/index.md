@@ -12,7 +12,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — draft scope and acceptance; approval pending.
+- [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance; implementation in progress.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
 
 ## Topics and evidence

@@ -17,7 +17,8 @@ def main():
     source.add_argument("--prepared", type=Path, help="Existing clip_metadata.json")
     add_request_arguments(parser)
     parser.add_argument("--role", choices=ROLES, help="Default: setup_smoke for the example; ego4d for that dataset; otherwise other_test")
-    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--output-root", type=Path,
+                        default=Path(__file__).resolve().parents[1] / "outputs/hawor/milestone-1")
     parser.add_argument("--prepared-root", type=Path)
     parser.add_argument("--hawor-root", type=Path)
     parser.add_argument("--sample-interval-s", type=float, default=0.5)

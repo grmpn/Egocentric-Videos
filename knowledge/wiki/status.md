@@ -1,12 +1,11 @@
 # Project status
 
 - Current milestone: **2 — Record and annotate a pilot dataset**.
-- Stage: **Planning**.
-- Active plan: [Video-to-LeRobot pilot, draft revision 2](plans/milestone-2-lerobot-pilot.md); not approved.
-- Deliverable: reusable video-to-LeRobotDataset v3.1 creation/append, 1–2 annotated iPhone demonstrations for Milestone 3, selected Eidon validation, and a data card.
-- Completed outcome: Milestone 1 accepted on 2026-09-18 and merged into `main`; [acceptance, evidence, and limitations](experiments/milestone-1-baseline.md). No Milestone 2 execution evidence yet.
-- Current work: draft 2 awaits approval for `.mp4`-only input and LeRobotDataset v3.1. A [HuRo source review](topics/huro-source-review.md) establishes that its released workflow bypasses HaWoR's infiller; it does not establish a fix or change pilot scope.
-- Blockers or decisions: plan approval pending. Selected Eidon camera geometry/intrinsics, task-length inference feasibility, and annotation backend/resources remain unverified. Detector/infiller fixes and undistortion are excluded.
-- Next action: review and explicitly approve or revise draft 2, including its three-segment Eidon sample and acceptance criteria; then begin implementation. Capture task and annotation backend can be selected before their execution phases.
-- Last milestone verification: **2026-09-18** for Milestone 1 only; see acceptance evidence. Planning did not rerun tests or inference.
-- Last documentation verification: **2026-09-22**; see `20260922-huro-comparison-002` in the [action history](logs/2026-09.jsonl) for checks and limits.
+- Stage: **Implementing**.
+- Active plan: [Video-to-LeRobot pilot, approved revision 2](plans/milestone-2-lerobot-pilot.md), approved 2026-09-23 by the instruction to implement it.
+- Deliverable: reusable LeRobotDataset v3.1 creation/append, 1–2 annotated iPhone demonstrations for Milestone 3, selected Eidon validation, and a data card.
+- Completed outcome: Milestone 1 accepted; [evidence and limitations](experiments/milestone-1-baseline.md). Existing evidence is now organized by milestone; all 82 baseline tests pass.
+- Current work: establish an isolated LeRobot environment, creation/append and canonical trajectory contracts, and organize HaWoR evidence by milestone.
+- Blockers or decisions: iPhone demonstrations are not yet recorded (confirmed by user); Eidon camera information and local annotation feasibility remain unverified. This WSL machine has an RTX 3070 Laptop GPU with 8 GiB VRAM (about 5.8 GiB free at preflight).
+- Next action: validate the pinned LeRobot reader/writer and annotation command without altering the HaWoR environment, then process the three selected Eidon segments.
+- Last verification: **2026-09-23**, clean initial working tree and GPU capacity preflight; see `20260923-m2-implementation-001` in the [action log](logs/2026-09.jsonl). No new inference or dataset acceptance yet.

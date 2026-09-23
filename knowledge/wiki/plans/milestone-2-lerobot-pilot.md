@@ -1,6 +1,6 @@
 # Milestone 2 — Video-to-LeRobot pilot dataset
 
-Draft revision 2 · 2026-09-22 · Not approved; approval event pending.
+Approved revision 2 · 2026-09-23 · Approval: `20260923-m2-implementation-001` in the [action log](../logs/2026-09.jsonl).
 
 ## Objective and deliverable
 

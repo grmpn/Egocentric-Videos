@@ -32,7 +32,7 @@ def run_clip(request=None, *, prepared_metadata=None, output_root=None, prepared
     if not math.isfinite(sample_interval_s) or sample_interval_s <= 0:
         raise ValueError("Resource sampling interval must be positive")
     repository_root = Path(__file__).resolve().parents[2]
-    output_root = Path(output_root) if output_root is not None else repository_root / "outputs/hawor"
+    output_root = Path(output_root) if output_root is not None else repository_root / "outputs/hawor/milestone-2"
     prepared_root = Path(prepared_root) if prepared_root is not None else repository_root / "data/prepared"
     hawor_root = Path(hawor_root) if hawor_root is not None else repository_root / "external/HaWoR"
     run_directory = new_run_directory(output_root)

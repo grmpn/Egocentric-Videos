@@ -29,7 +29,7 @@ On 2026-09-18 the user confirmed that both supplied videos were obtained through
 | `Ego4D-cooking.mp4` | `002c3b5c-ed86-4af3-99a1-4b497b7c8a86` | `a5d1e917021aff07196c8c8e6abd3d021bf03937ae47eda0db5e0107f8cc7014` |
 | `Ego4D-bike-trim.mp4` | `01aed4ae-486e-41eb-91f8-4d2e8a46db7d` | `c59f1ea2301fe6e23485b23d0f4899632a2d73731943c0ea2340cd1e0e635989` |
 
-The required Ego4D acceptance example is cooking interval **20:00–20:04**, run `20260918T171726548487Z-01f003922c21`. Its separate input `cooking-1200-1204.mp4` has SHA-256 `edb9567defa02e842d37118b59e3cb8b63196c21bed0fe701aadd1583bda4152`; add 1200 seconds to exported timestamps to recover the original cooking-video timestamps. The [trim evidence](../../../outputs/hawor/ego4d-evaluation-20260918-01/trimming.json) records the command and source chain. The accepted bundled example is run `20260916T202520659122Z-b078a74f8804`. Both runs have reviewed overlays, world previews, unchanged native-world exports, finalized manifests, and per-run benchmark reports. The bicycle evaluation is supplementary; its unknown full-recording offset does not affect the cooking acceptance example.
+The required Ego4D acceptance example is cooking interval **20:00–20:04**, run `20260918T171726548487Z-01f003922c21`. Its separate input `cooking-1200-1204.mp4` has SHA-256 `edb9567defa02e842d37118b59e3cb8b63196c21bed0fe701aadd1583bda4152`; add 1200 seconds to exported timestamps to recover the original cooking-video timestamps. The [trim evidence](../../../outputs/hawor/milestone-1/ego4d-evaluation-20260918-01/trimming.json) records the command and source chain. The accepted bundled example is run `20260916T202520659122Z-b078a74f8804`. Both runs have reviewed overlays, world previews, unchanged native-world exports, finalized manifests, and per-run benchmark reports. The bicycle evaluation is supplementary; its unknown full-recording offset does not affect the cooking acceptance example.
 
 This is a dated post-run provenance addendum. Original manifests, requests, benchmarks, and evaluation summaries remain unchanged, including their execution-time missing-license warnings. This record resolves that missing source-access/license evidence for both supplied sources without rewriting run history or rerunning inference. The machine-readable acceptance record has SHA-256 `922a42a62d4ba57bde23a0b9ba15f7675aa5f65e1a4f928ad97e77d8261ed00d`.
 
@@ -47,9 +47,9 @@ Acceptance establishes a reproducible unchanged-HaWoR baseline with documented f
 
 ## Evidence locations
 
-- [Machine-readable acceptance](../../../outputs/hawor/milestone-1-acceptance-20260918-01.json).
-- [Five cooking evaluations](../../../outputs/hawor/ego4d-evaluation-20260918-01/SUMMARY.md).
-- [Five bicycle evaluations](../../../outputs/hawor/ego4d-bike-evaluation-20260918-01/SUMMARY.md).
+- [Machine-readable acceptance](../../../outputs/hawor/milestone-1/milestone-1-acceptance-20260918-01.json).
+- [Five cooking evaluations](../../../outputs/hawor/milestone-1/ego4d-evaluation-20260918-01/SUMMARY.md).
+- [Five bicycle evaluations](../../../outputs/hawor/milestone-1/ego4d-bike-evaluation-20260918-01/SUMMARY.md).
 - [Local Milestone 1 summary](../../agent/summaries/MILESTONE_1_SUMMARY.md) and [Week 1 report](../../agent/summaries/reports/Week-1.md).
 
 Outputs, reports, licensed inputs, and figures remain local and ignored by Git.

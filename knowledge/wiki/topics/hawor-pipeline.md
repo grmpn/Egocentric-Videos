@@ -22,9 +22,17 @@ distinction between detection, gap grouping, and infilling.
 
 Original inputs stay under `data/source/`; prepared RGB and source/frame mappings
 live under `data/prepared/`. Each attempt receives its own directory under
-`outputs/hawor/`, containing native evidence, exported trajectories, a run manifest,
+`outputs/hawor/milestone-1/` for the baseline entry point, or
+`outputs/hawor/milestone-2/` for the reusable pipeline default, containing native evidence, exported trajectories, a run manifest,
 and review artifacts. The Milestone 1 entry point creates a report for that attempt,
 including reportable failures. Input files and previous runs must not be overwritten.
+
+On 2026-09-23 existing output directories moved beneath `milestone-1/`. Their
+contents are preserved; historical manifests, logs, and reports can retain old
+absolute paths. Resolve those by inserting `milestone-1/` after `outputs/hawor/`;
+[local relocation evidence](../../../outputs/hawor/relocation-20260923.json) records
+the move. The archived recreation environment is evidence, not a relocatable
+runtime. Maintained review links point at the new locations.
 
 Use the [README](../../../README.md) for commands and the
 [environment guide](../../../environment/README.md) for setup. Those documents own

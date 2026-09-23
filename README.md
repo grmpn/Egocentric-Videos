@@ -31,7 +31,7 @@ using `PYTHONPATH=src`; it is not installed as a Python distribution.
 
 ```bash
 PYTHONPATH=src python -c 'import egocentric_pipeline; print(egocentric_pipeline.__file__)'
-PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/setup-new/setup_check.json
+PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/milestone-1/setup-new/setup_check.json
 PYTHONPATH=src python -m pytest tests
 ```
 
@@ -104,7 +104,7 @@ kept separate from native and exported results:
 data/prepared/<clip_id>/
   rgb.mp4
   clip_metadata.json
-outputs/hawor/<run_id>/
+outputs/hawor/milestone-1/<run_id>/
   run_manifest.json
   benchmark.json
   benchmark_report.md

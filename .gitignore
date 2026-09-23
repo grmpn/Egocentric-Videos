@@ -19,3 +19,6 @@ __pycache__/
 .pytest_cache/
 .conda/
 /environment/condaenv.*.requirements.txt
+
+# Isolated LeRobot dataset/annotation environment
+/.venv-lerobot/
