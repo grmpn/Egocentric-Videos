@@ -1,0 +1,22 @@
+# RTX 4090 / 24 GiB. Run separately from HaWoR GPU inference.
+# Start from the repository root with HF_HOME="$PWD/data/models/huggingface".
+model: QuantTrio/Qwen3.6-27B-AWQ
+revision: 9b507bdc9afafb87b7898700cc2a591aa6639461
+served-model-name: QuantTrio/Qwen3.6-27B-AWQ
+host: 127.0.0.1
+port: 8000
+max-model-len: 8192
+max-num-seqs: 1
+max-num-batched-tokens: 2048
+gpu-memory-utilization: 0.90
+# vLLM 0.19.1 rejects CPU offload with this hybrid attention cache.
+enforce-eager: true
+# Plans/subtasks use up to three contact sheets of twenty frames each.
+limit-mm-per-prompt:
+  image: 3
+  video: 0
+mm-processor-kwargs:
+  max_pixels: 2097152
+reasoning-parser: qwen3
+default-chat-template-kwargs:
+  enable_thinking: false

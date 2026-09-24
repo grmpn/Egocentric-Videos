@@ -61,12 +61,14 @@ def main():
                     command += [f"--{option}", str(value)]
             environment = {**os.environ, "PYTHONPATH": str(root / "src"), "PYTHONUNBUFFERED": "1"}
             prefix = args.hawor_python.expanduser().absolute().parent.parent
-            torch_libraries = list(prefix.glob("lib/python*/site-packages/torch/lib"))
+            # Conda can expose python3.10 through a python3.1 compatibility symlink.
+            torch_libraries = sorted({path.resolve() for path in prefix.glob("lib/python*/site-packages/torch/lib")})
             if len(torch_libraries) != 1:
                 raise ValueError("--hawor-python must point to the installed HaWoR environment's interpreter")
             environment["PATH"] = str(prefix / "bin") + os.pathsep + environment.get("PATH", "")
             environment["LD_LIBRARY_PATH"] = os.pathsep.join([
-                "/usr/lib/wsl/lib", "/usr/local/cuda-11.7/lib64", str(torch_libraries[0])])
+                "/usr/lib/wsl/lib", "/usr/local/cuda-11.7/lib64",
+                str(prefix / "lib"), str(torch_libraries[0])])
             result = subprocess.run(command, env=environment, cwd=root)
             manifests = list(attempt.glob("*/run_manifest.json"))
             if len(manifests) != 1:

@@ -156,8 +156,8 @@ GPU execution and visual inspection remain separate local acceptance gates.
 ## Milestone 2 dataset workflow
 
 [Eidon validation and remaining acceptance](knowledge/wiki/experiments/milestone-2-eidon-validation.md)
-reports all three attempts. [Local review index](outputs/hawor/milestone-2/README.md)
-links generated evidence on this machine.
+reports all three attempts. The [historical laptop review index](outputs/hawor/milestone-2/README.md)
+links generated evidence retained on that machine; it is absent from this desktop clone.
 
 Use the separate Python 3.12 environment so LeRobot does not replace HaWoR's Torch:
 
@@ -216,8 +216,9 @@ PYTHONPATH=src .venv-lerobot/bin/python scripts/annotate_dataset.py \
 This runs the official annotation CLI for plans/subtasks only, disables thinking,
 and preserves prior episodes/annotations. It does not start or install a VLM
 server. Review saved labels against video and timestamps before accepting them;
-local fixture tests do not establish annotation quality. Real VLM execution and
-the unrecorded iPhone demonstrations remain pending.
+local fixture tests do not establish annotation quality. The desktop passes real
+VLM annotation on the bundled example; the unrecorded iPhone demonstrations and
+their annotation review remain pending.
 
 Run dataset integration checks in the isolated environment:
 

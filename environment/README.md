@@ -103,7 +103,7 @@ export PATH="$CUDA_HOME/bin:$PATH"
 export CC=/usr/bin/gcc-11
 export CXX=/usr/bin/g++-11
 export CUDAHOSTCXX=/usr/bin/g++-11
-export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}"
 if [ -d /usr/lib/wsl/lib ]; then
     export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
 fi
@@ -120,6 +120,13 @@ Confirm GPU access before downloading/building the remaining stack:
 The WSL library path is needed for cuDNN to load `libcuda.so`; a simple CUDA
 allocation can pass while convolution aborts without it. The setup checker
 exercises both operations.
+
+Keep `$CONDA_PREFIX/lib` in this HaWoR-only library path. On Ubuntu 22.04 the
+system `libstdc++` lacks the ABI required by Conda's ICU/SQLite libraries;
+otherwise an import of SQLite after Torch can fail during inference even when
+the basic CUDA checks pass. The video-to-dataset command applies this path only
+to its HaWoR subprocess, preserving the separate modern LeRobot runtime. It
+resolves Conda's Python-directory aliases before locating Torch libraries.
 
 ```bash
 python -c 'import torch; print(torch.__version__, torch.version.cuda); print(torch.cuda.get_device_name(0)); print((torch.ones(8, device="cuda") * 2).cpu())'
@@ -275,8 +282,13 @@ paths, for example:
 
 ```bash
 export PATH="$PWD/.conda/envs/hawor/bin:$PATH"
+export HF_HOME="$PWD/data/models/huggingface"
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-lerobot/bin/python -m pytest tests
 ```
+
+Keep this `HF_HOME` export for dataset creation and annotation too. The desktop's
+default `~/.cache/huggingface` directory is not writable by the current user;
+the repository-local cache works for both datasets and model weights.
 
 Install the annotation server separately:
 
@@ -289,14 +301,53 @@ uv pip check --python .venv-vlm/bin/python
 
 [vLLM 0.19.1](https://docs.vllm.ai/en/v0.19.1/getting_started/installation/gpu/)
 uses Torch 2.10.0/CUDA 12.9 here. Its dependency check, GPU matrix multiplication,
-and serving CLI import pass; actual model serving is a separate check.
-The full-precision Qwen3.6-27B exceeds 24 GiB VRAM. The selected local candidate is
+and real image serving pass. The full-precision Qwen3.6-27B exceeds 24 GiB VRAM.
+The verified local serving checkpoint is
 [QuantTrio/Qwen3.6-27B-AWQ](https://huggingface.co/QuantTrio/Qwen3.6-27B-AWQ),
 revision `9b507bdc9afafb87b7898700cc2a591aa6639461`; this is a community 4-bit
-quantization, whose annotation quality still needs video review. Public model
-downloads use `HF_HOME="$PWD/data/models/huggingface"`. MANO must be supplied
-separately at the exact paths linked in Assets and rendering above.
+quantization, whose pilot annotation quality still needs video review.
+
+Download the **complete** snapshot, then start the server in its own terminal:
+
+```bash
+export HF_HOME="$PWD/data/models/huggingface"
+.venv-lerobot/bin/hf download QuantTrio/Qwen3.6-27B-AWQ \
+    --revision 9b507bdc9afafb87b7898700cc2a591aa6639461
+env -u LD_LIBRARY_PATH CUDA_HOME=/usr/local/cuda-12.9 HF_HUB_OFFLINE=1 \
+    .venv-vlm/bin/vllm serve --config environment/vlm-server.yaml
+```
+
+The [server configuration](vlm-server.yaml) binds only to `127.0.0.1:8000`,
+uses an 8192-token context, one request at a time, and up to three contact sheets
+(the annotator's default sixty-frame window). CPU offload is disabled: this
+vLLM version rejects it with Qwen's hybrid cache. GPU-only model loading uses
+19.78 GiB; run HaWoR and the server sequentially. Stop the server with Ctrl+C
+before HaWoR inference. Larger prompts or different image layouts require a
+separate capacity check.
+
+Desktop verification completed on 2026-09-24:
+
+- All three dependency checks, 34 HaWoR preflight checks, and CUDA execution in
+  PyTorch3D, torch-scatter, DROID and LieTorch pass. Both separately supplied MANO
+  files are present and readable; no further setup asset download is needed.
+- The bundled 121-frame video completes HaWoR inference, export, rendering and
+  validation in 68.920 seconds, with 13.476 GiB sampled peak device memory.
+  Five overlay frames and world/canonical trajectory previews were inspected.
+- LeRobot creation and reload pass. Actual `lerobot-annotate` generates plans
+  and subtasks through the local Qwen server; its validator reports zero errors
+  or warnings. Reload preserves all 121 frames and labels at 0 and 2 seconds.
+  The pickup/carry-to-sink labels match the inspected example frames.
+- The full project suite passed 88 tests across two runs; six focused dataset,
+  canonical and annotation checks passed again after the subprocess fixes.
+
+This verifies setup on the bundled example, not acceptance of the unrecorded
+iPhone pilot or metric trajectory accuracy. Dataset annotations retain their
+`pending` review status. The test server is stopped. The earlier standalone
+three-contact-sheet client smoke also passed in 6.20 seconds.
 
 Desktop setup evidence is local-only under
-`outputs/setup/desktop-20260924/`. Historical laptop evidence remains historical;
-this fresh clone does not contain its datasets, MANO files, or generated runs.
+`outputs/setup/desktop-20260924/`: `setup_check.json`, `compiled-kernels.json`,
+`bundled-reload.json`, `bundled-annotation.log`, and `overlay-review.jpg` record
+the checks above. `bundled-dataset/` contains the annotated example; failed
+attempts and their logs are preserved alongside it. This clone does not contain
+the laptop's datasets or generated runs.

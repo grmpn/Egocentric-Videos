@@ -120,8 +120,11 @@ The current annotator supports an OpenAI-compatible server; its previous in-proc
 `transformers`/`vllm` backends are explicitly rejected. vLLM is not installed by the
 annotation extra. The 2026-09-24 native desktop setup uses a separate server
 environment, with an RTX 4090 and community 4-bit Qwen3.6-27B checkpoint. Its
-GPU runtime and package checks pass; model serving and real annotation quality
-remain separate gates. [The environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
+GPU runtime, package checks, and real three-image request through LeRobot's client
+pass. The bundled 121-frame video also passes HaWoR, LeRobot creation, actual
+plan/subtask annotation and reload. Its labels agree with representative video
+frames; the unrecorded iPhone pilot and its full review remain separate gates.
+[The environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
 owns versions, installation commands, model provenance, and current setup evidence.
 The 2026-09-23 statement that no weights had been downloaded applies only to the
 laptop session. No cloud job or dataset upload has been started.
@@ -131,5 +134,10 @@ inheriting HaWoR's `LD_LIBRARY_PATH` made modern CPU Torch crash during import
 with SIGSEGV. A controlled import reproduces the crash with legacy paths and
 succeeds without them. Both dataset CLIs now re-execute with a clean library path;
 the video command configures the pinned CUDA 11.7/HaWoR paths only for its inference
-child. Programmatic callers must likewise use the isolated dataset runtime. See
-[local reproduction](../../../outputs/hawor/milestone-2/setup/library-isolation.json).
+child. Programmatic callers must likewise use the isolated dataset runtime. The
+[historical reproduction](../../../outputs/hawor/milestone-2/setup/library-isolation.json)
+is local to the laptop and absent from this desktop clone.
+On the native desktop, the child also needs Conda's `lib` directory for its newer
+C++ runtime. Torch-library discovery resolves Python-directory symlinks so Conda
+aliases do not count as separate installations. The environment guide owns these
+desktop settings and the required writable Hugging Face cache.
