@@ -108,7 +108,7 @@ when combining annotated and unannotated shards.
 
 ## Local inference feasibility
 
-On 2026-09-23 this WSL machine exposed an RTX 3070 Laptop GPU with **8192 MiB**
+Historical laptop evidence: on 2026-09-23 the WSL machine exposed an RTX 3070 Laptop GPU with **8192 MiB**
 VRAM (5977 MiB free at preflight) and about 15 GiB system RAM. The documented default
 [Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) has 27 billion language-model
 parameters: roughly 54 GB at 16 bits or 13.5 GB at 4 bits for those weights alone,
@@ -117,11 +117,14 @@ this is a capacity bound, not an attempted OOM benchmark. Smaller quantized mode
 and CPU offloading have not been validated here.
 
 The current annotator supports an OpenAI-compatible server; its previous in-process
-`transformers`/`vllm` backends are explicitly rejected. VLLM is not installed by the
-annotation extra. Use a separately provisioned Linux desktop VLM server and the
-same dataset/annotation commands. Desktop hardware, serving dependencies and actual
-VLM output remain unverified. No model weights were downloaded and no cloud job or
-dataset upload was started. The HaWoR environment remains separate and unchanged.
+`transformers`/`vllm` backends are explicitly rejected. vLLM is not installed by the
+annotation extra. The 2026-09-24 native desktop setup uses a separate server
+environment, with an RTX 4090 and community 4-bit Qwen3.6-27B checkpoint. Its
+GPU runtime and package checks pass; model serving and real annotation quality
+remain separate gates. [The environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
+owns versions, installation commands, model provenance, and current setup evidence.
+The 2026-09-23 statement that no weights had been downloaded applies only to the
+laptop session. No cloud job or dataset upload has been started.
 
 The first real Eidon packaging attempt exposed a library-loader conflict:
 inheriting HaWoR's `LD_LIBRARY_PATH` made modern CPU Torch crash during import

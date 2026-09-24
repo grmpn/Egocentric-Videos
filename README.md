@@ -202,13 +202,15 @@ previews, and a generated `DATA_CARD.md`. The [contract and limitations](knowled
 explain atomic updates, duplicate detection, canonical inversion, exact timestamps,
 and the upstream v3.0/v3.1 metadata discrepancy.
 
-The default annotation model does not fit this laptop's 8 GiB GPU. On a suitable
-Linux desktop with a separately provisioned OpenAI-compatible VLM server, use:
+The RTX 4090 desktop uses a separate vLLM environment and a 4-bit annotation model;
+see [desktop setup](environment/README.md#native-desktop-and-annotation-environments)
+for installation, model revision, and verification limits. With that model served
+through an OpenAI-compatible endpoint, use:
 
 ```bash
 PYTHONPATH=src .venv-lerobot/bin/python scripts/annotate_dataset.py \
     --dataset-root data/lerobot/iphone-pilot \
-    --model Qwen/Qwen3.6-27B --api-base http://localhost:8000/v1
+    --model QuantTrio/Qwen3.6-27B-AWQ --api-base http://localhost:8000/v1
 ```
 
 This runs the official annotation CLI for plans/subtasks only, disables thinking,

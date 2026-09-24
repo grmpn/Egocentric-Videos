@@ -22,3 +22,6 @@ __pycache__/
 
 # Isolated LeRobot dataset/annotation environment
 /.venv-lerobot/
+
+# Isolated local VLM server (separate Torch/CUDA from HaWoR and LeRobot)
+/.venv-vlm/

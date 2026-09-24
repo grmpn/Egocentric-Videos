@@ -1,4 +1,4 @@
-# HaWoR environment
+# Workflow environments
 
 [hawor.yml](hawor.yml) is the reviewed dependency declaration for the local
 Milestone 1 runtime. The acceptance evidence linked below records recreation,
@@ -15,7 +15,7 @@ merely to repeat the installation instructions below.
 ## System prerequisites
 
 Use Linux or WSL2 with an exposed NVIDIA GPU, at least 40 GB free disk space,
-FFmpeg/ffprobe, Git, a C/C++ build toolchain, CMake, and OpenGL/EGL runtime
+FFmpeg/ffprobe **6 or newer**, Git, a C/C++ build toolchain, CMake, and OpenGL/EGL runtime
 libraries. The inspected compiler combination is CUDA toolkit 11.7.64 with
 GCC/G++ 11.5.0 on Ubuntu 24.04. The host driver must support Torch's CUDA 11.7
 runtime. WSL2 uses the Windows host driver; its Linux installation needs the
@@ -67,13 +67,31 @@ git -C external/HaWoR rev-parse HEAD
 The expected HaWoR revision is
 `66c7d4108d58a716deccd192cb7645170cdc7bd7`. Its source remains unchanged.
 
+To suppress untracked build/asset noise from the nested repositories, apply these
+**local** settings after initialization (they do not modify upstream source):
+
+```bash
+git config --local submodule.external/HaWoR.ignore untracked
+git -C external/HaWoR config --local submodule.thirdparty/DROID-SLAM/thirdparty/eigen.ignore untracked
+git -C external/HaWoR config --local submodule.thirdparty/DROID-SLAM/thirdparty/lietorch.ignore untracked
+git -C external/HaWoR/thirdparty/DROID-SLAM/thirdparty/lietorch config --local submodule.eigen.ignore untracked
+```
+
+Tracked edits and changed submodule revisions remain visible. To inspect all
+untracked files explicitly, run `git status --short --ignore-submodules=none`
+inside HaWoR and each child, or use `git submodule foreach --recursive
+'git status --short --ignore-submodules=none'` from the project root. Repeat
+the local settings in a fresh clone. The laptop's exact prior command was not
+found in tracked history; the user confirmed the issue was dirty-status noise.
+
 For a new machine, bootstrap the Conda environment and the build prerequisites
 listed in `hawor.yml`. Torch must already be importable when PyTorch3D and
 torch-scatter build; one initial `conda env create -f hawor.yml` does not provide
 that ordering. These commands repeat only the pins needed for the bootstrap:
 
 ```bash
-conda create -n hawor python=3.10.21 pip=26.2.1 wheel=0.47.0
+conda create --override-channels -c conda-forge -n hawor \
+    python=3.10.21 pip=26.2.1 wheel=0.47.0 'ffmpeg>=6'
 conda activate hawor
 python -m pip install \
     setuptools==80.10.2 ninja==1.13.2 Cython==3.3.0 numpy==1.26.4 \
@@ -90,6 +108,12 @@ if [ -d /usr/lib/wsl/lib ]; then
     export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
 fi
 ```
+
+On the RTX 4090, set `TORCH_CUDA_ARCH_LIST="8.6+PTX"` for source builds:
+CUDA 11.7 cannot compile native Ada (`8.9`) instructions. The existing
+DROID/LieTorch build already includes `sm_86`; verify execution on the actual
+GPU after compilation. Keep CUDA 11.7 selected only for HaWoR, alongside any
+newer toolkit used by the annotation server.
 
 Confirm GPU access before downloading/building the remaining stack:
 
@@ -139,13 +163,35 @@ set.
 
 ## Assets and rendering
 
-Use the exact weight and MANO locations in the
-[plan's setup requirements](../knowledge/wiki/plans/milestone-1-hawor-baseline.md#38-required-model-files-and-exact-locations).
-Weights, MANO, and source videos remain untracked. The setup checker records
-their presence and weight hashes. Model download links are in the
+The [runtime asset contract](../src/egocentric_pipeline/hawor_runner.py) and
+setup checker require these paths relative to `external/HaWoR/`:
+
+```text
+weights/external/droid.pth
+weights/external/detector.pt
+weights/hawor/checkpoints/hawor.ckpt
+weights/hawor/checkpoints/infiller.pt
+weights/hawor/model_config.yaml
+thirdparty/Metric3D/weights/metric_depth_vit_large_800k.pth
+_DATA/data/mano/MANO_RIGHT.pkl
+_DATA/data_left/mano_left/MANO_LEFT.pkl
+```
+
+The model config belongs directly under `weights/hawor/`; the historical plan's
+`checkpoints/model_config.yaml` path was a documentation error. Weights, MANO,
+and source videos remain untracked. The checker records presence and SHA-256
+hashes. Model download links are in the
 [pinned upstream installation guide](https://github.com/ThunderVVV/HaWoR/blob/66c7d4108d58a716deccd192cb7645170cdc7bd7/README.md#installation);
 obtain MANO separately through its licensed download. Assets are external inputs,
 not Conda packages.
+
+The desktop obtains the six public files from the
+[maintainer's HaWoR model repository](https://huggingface.co/ThunderVVV/HaWoR/tree/da6335f47f9806308992d5ae1002a4cc5f7252c2)
+at revision `da6335f47f9806308992d5ae1002a4cc5f7252c2`. Its `external/` files
+map to the DROID, detector, and Metric3D destinations above; its `hawor/` files
+map beneath `weights/hawor/`. This avoids requiring Google Drive for the
+maintainer's mirrored DROID/Metric3D weights. Obtain the two MANO files through
+[MANO's download process](https://mano.is.tue.mpg.de/) or your existing licensed copy.
 
 The installed stock viewer uses ModernGL's default X11 backend even in its
 headless mode. Setting `PYOPENGL_PLATFORM=egl` alone does not change that viewer
@@ -208,3 +254,49 @@ snapshot records what was installed; `hawor.yml`
 continues to own dependency choices and recreation instructions. Final runtime
 acceptance requires successful recreation, dependency consistency, CUDA
 execution, compiled kernels, real inference, and inspected rendering.
+
+## Native desktop and annotation environments
+
+The 2026-09-24 desktop uses Ubuntu 22.04, RTX 4090 (24 GiB), driver 580.159.03,
+and 62 GiB RAM. Its local Conda installation is `.conda/`, with HaWoR at
+`.conda/envs/hawor/`; LeRobot uses `.venv-lerobot/`, and vLLM uses `.venv-vlm/`.
+All are ignored by Git. To activate HaWoR in a terminal:
+
+```bash
+source .conda/etc/profile.d/conda.sh
+conda activate "$PWD/.conda/envs/hawor"
+```
+
+Apply the CUDA/compiler exports above in that terminal. Ubuntu 22.04's system
+FFmpeg 4.4 lacks required frame-PTS and CLI features; use the Conda FFmpeg in
+both HaWoR and LeRobot commands. This desktop installed FFmpeg 9.0.2 from
+conda-forge. For LeRobot, use its explicit interpreter and clear legacy library
+paths, for example:
+
+```bash
+export PATH="$PWD/.conda/envs/hawor/bin:$PATH"
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-lerobot/bin/python -m pytest tests
+```
+
+Install the annotation server separately:
+
+```bash
+uv venv --python 3.12 .venv-vlm
+uv pip install --python .venv-vlm/bin/python --torch-backend=cu129 \
+    -r environment/vlm-requirements.txt
+uv pip check --python .venv-vlm/bin/python
+```
+
+[vLLM 0.19.1](https://docs.vllm.ai/en/v0.19.1/getting_started/installation/gpu/)
+uses Torch 2.10.0/CUDA 12.9 here. Its dependency check, GPU matrix multiplication,
+and serving CLI import pass; actual model serving is a separate check.
+The full-precision Qwen3.6-27B exceeds 24 GiB VRAM. The selected local candidate is
+[QuantTrio/Qwen3.6-27B-AWQ](https://huggingface.co/QuantTrio/Qwen3.6-27B-AWQ),
+revision `9b507bdc9afafb87b7898700cc2a591aa6639461`; this is a community 4-bit
+quantization, whose annotation quality still needs video review. Public model
+downloads use `HF_HOME="$PWD/data/models/huggingface"`. MANO must be supplied
+separately at the exact paths linked in Assets and rendering above.
+
+Desktop setup evidence is local-only under
+`outputs/setup/desktop-20260924/`. Historical laptop evidence remains historical;
+this fresh clone does not contain its datasets, MANO files, or generated runs.

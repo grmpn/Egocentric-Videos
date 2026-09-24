@@ -1,14 +1,15 @@
-# Phase 0 candidate: versions inspected in the existing hawor environment.
-# Dependency/import checks pass; clean recreation and the example smoke test
-# must pass before this is described as the validated runtime specification.
+# HaWoR package pins validated in the Milestone 1 recreation.
+# New hosts still require compiled-kernel, inference, and rendering checks.
 # Follow README.md's bootstrap order before `conda env update -f`.
 name: hawor
 channels:
-  - defaults
+  - conda-forge
+  - nodefaults
 dependencies:
   - python=3.10.21
   - pip=26.2.1
   - wheel=0.47.0
+  - ffmpeg>=6
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu117
 
