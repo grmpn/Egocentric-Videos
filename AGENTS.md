@@ -220,6 +220,10 @@ standard command or configuration already does so.
 
 Report exactly what was tested, what passed, and what remains unverified.
 
+Whenever running a validation, tell the user where its outputs are saved so they
+can inspect them manually. Include concrete paths or links to the relevant logs,
+reports, videos, or visualizations in progress updates and the final handoff.
+
 ## Repository cleanup
 
 At each milestone's completion, remind the user to start a focused repository

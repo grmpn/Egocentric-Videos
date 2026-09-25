@@ -90,6 +90,32 @@ memory, task rephrasings and task re-derivation; plans and subtasks remain enabl
 Thinking is disabled for the intended Qwen backend. It selects only unannotated
 episodes and refuses an explicit selection containing existing annotations.
 
+The wrapper accepts these arguments (checked against its CLI on 2026-09-25):
+
+| Argument | Meaning |
+| --- | --- |
+| `--dataset-root PATH` | Required existing project LeRobot dataset; successful annotation updates this directory atomically. |
+| `--model ID` | Required model name exposed by the running VLM server. |
+| `--api-base URL` | OpenAI-compatible endpoint; default `http://localhost:8000/v1`. |
+| `--episodes 0 1` | Optional episode indices; omitted means every unannotated episode. |
+
+The pinned annotator samples RGB at **2 frames/s**, packs timestamped frames into
+contact sheets, and uses up to 60 sampled frames per prompt. Longer episodes are
+split into windows. It first describes the visible activity, then segments it
+into subtasks, with a configured minimum duration of 1.5 s. At each subtask
+boundary it writes the current subtask and a plan of remaining steps, snapping
+boundaries to real dataset frame timestamps. These are upstream defaults, not
+additional wrapper arguments. The existing task label guides prompts; HaWoR
+trajectories are preserved but are not the VLM's input.
+
+There is no separate output-directory argument: language atoms are saved in
+the dataset's `data/*/*.parquet` under `language_persistent`, and the model,
+selected episodes, command and pending review status go into
+`meta/egocentric/annotation_vNNNN.json`. Console logs must be redirected to the
+chosen validation output directory. The wrapper neither starts the server nor
+uploads the dataset. See the [launch command](../../../README.md#milestone-2-dataset-workflow)
+and [server setup](../../../environment/README.md#native-desktop-and-annotation-environments).
+
 The pinned upstream writer replaces language columns and can clear unselected
 episodes sharing a shard. This wrapper restores those episodes' prior language
 values, checks all non-language data, requires nonempty plan/subtask coverage from

@@ -1,9 +1,11 @@
 # Milestone 2 integration and Eidon validation
 
-Verified 2026-09-23 against implementation `5ef3b56` and the
-[approved plan](../plans/milestone-2-lerobot-pilot.md). **Milestone acceptance remains
-open:** the iPhone demonstrations are not recorded, and real VLM annotation and
-video-grounded label review have not run.
+Historical laptop validation below was verified 2026-09-23 against implementation
+`5ef3b56` and the [approved plan](../plans/milestone-2-lerobot-pilot.md).
+**Milestone acceptance remains open:** the iPhone demonstrations are not recorded.
+Real VLM annotation subsequently passed on the bundled desktop example on
+2026-09-24; Eidon annotation is still pending. See the desktop retry below and
+the [desktop setup evidence](../../../environment/README.md#native-desktop-and-annotation-environments).
 
 ## Selection and reproducibility
 
@@ -94,3 +96,36 @@ library isolation. It also records why the default 27B model does not fit this
 8 GiB GPU; smaller/offloaded models remain untested. Next acceptance work is the
 1–2 unrecorded iPhone demonstrations and real plan/subtask annotation on a suitable
 Linux desktop, followed by timestamp/video review. No Milestone 3 work is started.
+
+## Desktop annotation retry — 2026-09-25
+
+The user requested another validation with manually inspectable outputs. Restored
+all three original MP4s to `data/source/eidon/recordings/` from the same pinned
+revision, totaling 766,650,813 bytes. Byte counts match the fixed selection;
+[source records](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/sources.json)
+retain new SHA-256 measurements and ffprobe output. Historical laptop hashes are
+not available on this desktop for a direct comparison.
+
+The existing `prepare_clip.py` CLI passed cooking 20–24 s and cleaning 45–49 s,
+each with 120 frames at 30 FPS and unchanged 1920×1080 geometry. Laundry 60–64 s
+again failed at 33.53 ms maximum timestamp error versus the unchanged 16.67 ms
+limit. Its interval was not substituted and the gate was not weakened.
+
+**GPU validation is blocked before inference:** the loaded NVIDIA kernel module
+is 580.159.03, while a system package update installed libraries and an on-disk
+module at 580.178.04. Unsandboxed `nvidia-smi` exits 18 with a driver/library version
+mismatch. No Eidon HaWoR run, LeRobot dataset, or VLM labels were generated on this
+desktop in this retry. Restart the machine, check GPU availability, then resume
+HaWoR/create/append followed by local VLM annotation and video review.
+
+Local-only inspection outputs are in
+[`outputs/hawor/milestone-2/eidon-annotation-20260925/`](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/):
+
+- [Review page](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/review.html): playable prepared cooking/cleaning clips, representative frames, source links and failure evidence.
+- [Resume commands](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/README.md): environment, dataset creation and annotation commands; `dataset/` is the intended future annotation output.
+- [Preparation results](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/preparation-results.json) and [GPU diagnosis](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-preflight.json).
+
+The wrapper's arguments, sampling behavior and output fields are explained in the
+[annotation topic](../topics/lerobot-pipeline.md#mutation-and-annotation-preservation).
+This retry establishes source restoration and CPU preparation only; it does not
+establish Eidon annotation quality or resolve pilot acceptance.
