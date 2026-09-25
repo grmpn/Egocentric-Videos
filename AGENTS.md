@@ -160,13 +160,20 @@ cannot meet a concrete need within the approved scope. Record the reason and
 reproducible version declaration; significant tradeoffs belong in a wiki decision.
 An ordinary dependency choice does not require editing the milestone plan.
 
-Implement the smallest amount of project code needed for the current deliverable.
-Avoid convenience wrappers, helper layers, abstractions, and scripts that do not
-remove necessary complexity from the supported workflow.
+Implement the smallest correct, maintainable change that fully satisfies the
+current requirement. Reuse existing patterns and interfaces; use or propose a
+simpler approach when available. Avoid convenience wrappers, helper layers,
+abstractions, and scripts that do not remove necessary complexity from the
+supported workflow. Do not add production functionality solely to support tests.
+
+Add metadata, hashes, fingerprints, manifests, freeze rules, or similar complexity
+only to address a concrete failure mode or an explicit safety, interface, release,
+transfer, publication, or reproducibility requirement.
 
 ## Legibility standards
 
 Optimize for a human reader who needs to understand and modify the project later.
+Keep solutions concise, simple, and clear, and workflows efficient and intuitive.
 
 - Use descriptive names and straightforward control flow.
 - Keep files and functions focused on one responsibility.
@@ -182,6 +189,11 @@ Optimize for a human reader who needs to understand and modify the project later
 
 Every implementation plan must define how its deliverable will be verified.
 
+Add tests only when they meaningfully verify essential behavior. Keep validation
+proportional to the project stage, risk, and current objective. Reserve exhaustive
+integrity, provenance, and reproducibility gates for workflows that explicitly
+require them. Do not repeat expensive checks without a concrete reason.
+
 Use the smallest representative data needed for routine tests. Do not place large datasets or generated runs in the repository unless explicitly required.
 
 Validation should cover the contracts most likely to cause silent errors, including:
@@ -194,6 +206,11 @@ Validation should cover the contracts most likely to cause silent errors, includ
 - schema compatibility between pipeline stages
 - robot workspace and kinematic limits when applicable
 
+For physical or probabilistic systems, use justified tolerances, acceptance ranges,
+or confidence measures that reflect real-world variability. Avoid unrealistic
+requirements that reject a functioning system; preserve agreed acceptance criteria
+and safety limits.
+
 For visual outputs, inspect representative overlays or trajectory visualizations in addition to automated checks.
 
 Write focused tests that exercise reusable modules and user-facing scripts or
@@ -202,6 +219,19 @@ scripts whose only purpose is to invoke the test suite when the test framework's
 standard command or configuration already does so.
 
 Report exactly what was tested, what passed, and what remains unverified.
+
+## Repository cleanup
+
+At each milestone's completion, remind the user to start a focused repository
+cleanup before beginning the next milestone, unless that cleanup is already done
+or scheduled. Use milestone completion as the checkpoint rather than elapsed idle
+time. Record completed cleanup and any deferred work in the existing action log.
+
+When cleanup is within scope, keep the active repository focused on capabilities
+that are currently used or intentionally maintained. Remove obsolete run-specific
+configs, scripts, tests, tracked artifacts, and orchestration only after verifying
+that no active consumer or protected evidence requires them. Preserve raw sources
+and required acceptance evidence; rely on Git for ordinary source history.
 
 ## Git staging and commits
 
