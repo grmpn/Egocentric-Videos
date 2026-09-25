@@ -4,7 +4,8 @@ Historical laptop validation below was verified 2026-09-23 against implementatio
 `5ef3b56` and the [approved plan](../plans/milestone-2-lerobot-pilot.md).
 **Milestone acceptance remains open:** the iPhone demonstrations are not recorded.
 Real VLM annotation subsequently passed on the bundled desktop example on
-2026-09-24; Eidon annotation is still pending. See the desktop retry below and
+2026-09-24 and the two eligible Eidon clips on 2026-09-25. Cooking's generated
+object label is questionable; human review remains pending. See the desktop retry below and
 the [desktop setup evidence](../../../environment/README.md#native-desktop-and-annotation-environments).
 
 ## Selection and reproducibility
@@ -111,21 +112,57 @@ each with 120 frames at 30 FPS and unchanged 1920×1080 geometry. Laundry 60–6
 again failed at 33.53 ms maximum timestamp error versus the unchanged 16.67 ms
 limit. Its interval was not substituted and the gate was not weakened.
 
-**GPU validation is blocked before inference:** the loaded NVIDIA kernel module
-is 580.159.03, while a system package update installed libraries and an on-disk
-module at 580.178.04. Unsandboxed `nvidia-smi` exits 18 with a driver/library version
-mismatch. No Eidon HaWoR run, LeRobot dataset, or VLM labels were generated on this
-desktop in this retry. Restart the machine, check GPU availability, then resume
-HaWoR/create/append followed by local VLM annotation and video review.
+The initial attempt stopped before GPU inference: the loaded NVIDIA kernel module
+was 580.159.03 while updated libraries were 580.178.04. After the user restarted
+the desktop, `nvidia-smi` succeeded with the RTX 4090 and driver 580.178.04.
+The existing `video_to_dataset.py` CLI then completed both HaWoR runs and dataset
+creation/append without implementation changes:
+
+| Recording | HaWoR pipeline time | Peak RSS / device GPU memory | Direct / infilled / invalid frames, left; right |
+| --- | --- | --- | --- |
+| 56, cooking | 83.369 s | 8.476 / 12.542 GiB | 3 / 116 / 1; 119 / 1 / 0 |
+| 1566, cleaning | 131.885 s | 8.364 / 13.300 GiB | 56 / 63 / 1; 88 / 32 / 0 |
+
+Times include preparation, inference, export, rendering and pipeline validation;
+LeRobot packaging follows afterward. Memory is sampled and device totals include
+other processes. These results are distinct from the historical laptop runs.
+Four pre-existing cooking artifacts retained their hashes after append.
+
+The actual `annotate_dataset.py` wrapper invoked the pinned annotation CLI against
+local `QuantTrio/Qwen3.6-27B-AWQ`, revision
+`9b507bdc9afafb87b7898700cc2a591aa6639461`. Plan/subtask generation took **13.3 s**;
+the upstream validator reported **zero errors and zero warnings**. Publication
+produced dataset revision **3**, with two episodes and 240 frames. Independent
+checks confirm unchanged non-language data, videos and episode provenance;
+exact source timestamps and frame indexing; valid plan/subtask boundaries; and
+official reader reload with RGB at frames 0/60/119 per episode.
+
+| Episode | Generated subtask at clip time 0 s | Agent semantic review |
+| --- | --- | --- |
+| 0, cooking | `slice the meat` | Slicing is supported, but the visible object appears to be a tuber/vegetable. The noun is likely wrong; exact food identity needs human confirmation. |
+| 1, cleaning | `wipe the helmet` | Matches the visible action. |
+
+Each plan contains its single subtask. Both four-second clips received one label
+from frame zero; this does not validate multi-step transition timing. Labels are
+preserved as generated and remain `review_status: pending`.
+
+Six representative overlays per clip plus both world/canonical plots were
+inspected. Cooking's left infill projects a large displaced mesh, with an early
+root discontinuity; cleaning shows reversed association at frame zero, displaced
+meshes and large trajectory jumps. Both omit a visible left hand at the final
+frame. These reconstructions remain unsuitable as high-quality pilot evidence.
+The VLM uses RGB/task text rather than these trajectories.
 
 Local-only inspection outputs are in
 [`outputs/hawor/milestone-2/eidon-annotation-20260925/`](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/):
 
-- [Review page](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/review.html): playable prepared cooking/cleaning clips, representative frames, source links and failure evidence.
-- [Resume commands](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/README.md): environment, dataset creation and annotation commands; `dataset/` is the intended future annotation output.
-- [Preparation results](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/preparation-results.json) and [GPU diagnosis](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-preflight.json).
+- [Review page](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/review.html): video with active labels, RGB/overlay switch, speed and seek controls, trajectories, raw label JSONL and reproduced VLM contact sheets. Chrome checks verified both videos, labels, seeking/source-time display, speed and overlay switching.
+- [Commands and outputs](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/README.md): `dataset/` contains the annotated LeRobot result; the server is stopped, with 408 MiB GPU memory used afterward.
+- [Annotation/reload evidence](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/annotation-validation.json), [annotation log](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/annotation.log), and [browser checks](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/browser-check.json).
+- [Preparation results](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/preparation-results.json), [initial GPU failure](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-preflight.json), and [restart verification](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-after-restart.json).
 
 The wrapper's arguments, sampling behavior and output fields are explained in the
 [annotation topic](../topics/lerobot-pipeline.md#mutation-and-annotation-preservation).
-This retry establishes source restoration and CPU preparation only; it does not
-establish Eidon annotation quality or resolve pilot acceptance.
+This validation establishes end-to-end execution, dataset preservation and
+inspectable real model outputs. The cooking label needs review; neither general
+annotation quality, metric trajectory accuracy nor iPhone pilot acceptance is established.
