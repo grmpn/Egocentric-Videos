@@ -1,11 +1,11 @@
 # Project status
 
-- Current milestone: **2 — Record and annotate a pilot dataset**.
-- Stage: **Blocked**.
-- Active plan: [Video-to-LeRobot pilot, approved revision 2](plans/milestone-2-lerobot-pilot.md), approved 2026-09-23.
-- Deliverable: reusable LeRobot v3.1 creation/append, 1–2 annotated iPhone demonstrations for Milestone 3, selected Eidon validation, and a data card.
-- Completed outcome: desktop Eidon HaWoR/create/append and real plan/subtask annotation pass; dataset revision 3 reloads two episodes/240 frames with prior data preserved. Laundry repeats the unchanged timing rejection. [Validation and visual quality evidence](experiments/milestone-2-eidon-validation.md#desktop-annotation-retry--2026-09-25).
-- Current work: outputs are ready for user inspection in the [interactive review page](../../outputs/hawor/milestone-2/eidon-annotation-20260925/review.html). Agent review flags cooking's generated noun and major hand-trajectory errors in both clips.
-- Blockers or decisions: iPhone demonstrations remain unrecorded. Cooking says “slice the meat,” but the object appears to be a tuber/vegetable; human confirmation is pending. Eidon intrinsics/scale remain unverified and reconstructions are unsuitable as high-quality pilot evidence. The GPU restart issue is resolved.
-- Next action: user reviews saved labels and overlays, then supplies the intended iPhone MP4s for processing and annotation under the approved plan. No next-milestone work is authorized.
-- Last verification: **2026-09-25**; actual annotation reports zero errors/warnings, reload/preservation/timestamp checks pass, representative overlays and world/canonical plots inspected, browser controls verified. VLM server stopped; 408 MiB GPU memory used. Evidence: `20260925-eidon-annotation-011`/`012` in the [action log](logs/2026-09.jsonl).
+- Current milestone: **3 — Fixed-base trajectory preparation, Part 1**. The user authorized starting ahead of iPhone capture on 2026-10-14; Milestone 2 remains incomplete.
+- Stage: **Planning**.
+- Active plan: [Part 1: Gravity alignment, draft revision 1](plans/milestone-3-part-1-gravity-alignment.md); awaiting approval.
+- Deliverable: Stage 3 outputs hand trajectories in the robot base frame with verified kinematic limits. Part 1 proposes a reusable Z-up hand/camera export, reversible transform, original/aligned plots and diagnostics on the bundled example.
+- Completed outcome: spec organized and Part 1 drafted; no Stage 3 code or runtime acceptance. Earlier [Eidon integration evidence](experiments/milestone-2-eidon-validation.md#desktop-annotation-retry--2026-09-25) remains valid historical evidence, with significant reconstruction/label limitations.
+- Current work: review the Part 1 scope and acceptance. [Parts 2–3](topics/stage-3-retargeting.md) remain planning only.
+- Blockers or decisions: Part 1 needs explicit plan approval. The iPhone demonstrations remain unrecorded; processing/review and pilot acceptance remain under the [approved Milestone 2 plan](plans/milestone-2-lerobot-pilot.md). Eidon quality/label review remains unresolved. Robot constraints and final feasibility verification belong to later planning.
+- Next action: approve or revise Part 1, then implement it on the bundled example. Resume iPhone pilot processing when recordings are available; do not mark Milestone 2 complete from Stage 3 progress.
+- Last verification: **2026-10-14**, static source/planning review and documentation checks only; see `20261014-stage3-planning-001`/`004` in the [action log](logs/2026-10.jsonl). No new inference or robot validation.

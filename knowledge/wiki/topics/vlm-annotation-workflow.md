@@ -12,8 +12,11 @@ scope still need agreement in the relevant milestone plan.
 
 The [LeRobot pipeline](lerobot-pipeline.md#mutation-and-annotation-preservation)
 owns current commands, storage and preservation behavior. The
-[approved Milestone 2 plan](../plans/milestone-2-lerobot-pilot.md) remains the active
-scope. Implementation claims below were checked against project revision
+[approved Milestone 2 plan](../plans/milestone-2-lerobot-pilot.md) owns the existing
+pilot workflow; [status](../status.md) owns the current work. The
+[Stage 3 reference](stage-3-retargeting.md) records the later fixed-base direction
+without authorizing this proposed annotation refinement.
+Implementation claims below were checked against project revision
 `f1784f1` and installed LeRobot revision `9a6bb610` on 2026-10-01; no new inference
 or workflow experiment was run for this reference.
 
