@@ -12,13 +12,13 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — draft scope and acceptance; awaiting approval.
+- [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
 - [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
 
 ## Topics and evidence
 
-- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — three-part direction, robot embodiment, Part 1 source/convention review and later feasibility decisions; not implemented.
+- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — three-part direction, robot embodiment, Part 1 source/convention review and later feasibility decisions; Part 1 implementation underway.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
 - [LeRobot pipeline](topics/lerobot-pipeline.md) — v3.1 creation/append, canonical transforms, annotation preservation and local inference limits.
 - [VLM annotation workflow reference](topics/vlm-annotation-workflow.md) — proposed task hierarchy and independent activity modes, source-time mapping, and later fixed-base filtering; not implemented or an approved plan.

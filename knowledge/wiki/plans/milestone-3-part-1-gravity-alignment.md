@@ -1,6 +1,6 @@
 # Milestone 3, Part 1 — Gravity-aligned hand and camera trajectories
 
-Draft revision 1 · 2026-10-14 · Awaiting explicit approval; implementation has not started.
+Approved revision 1 · 2026-10-14 · Approval: `20261014-gravity-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 

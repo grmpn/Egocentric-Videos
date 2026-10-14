@@ -1,11 +1,11 @@
 # Stage 3 — Fixed-base trajectory preparation
 
-Planning reference · 2026-10-14 · No Stage 3 implementation or acceptance yet.
+Part 1 approved for implementation · 2026-10-14 · Acceptance pending.
 The user's [original spec](../../../Stage-3-Spec.md) remains unchanged local input
 (untracked; unavailable in a fresh clone). This page preserves its planning content.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
-not HuRo's numbered stages. The [Part 1 draft](../plans/milestone-3-part-1-gravity-alignment.md)
-is the only scope currently proposed for implementation approval.
+not HuRo's numbered stages. The [Part 1 plan](../plans/milestone-3-part-1-gravity-alignment.md)
+is the only scope approved for implementation.
 
 ## Repository role and sequence
 
@@ -23,7 +23,7 @@ The current request does not authorize real-robot execution.
 
 | Part | Intended result | Current boundary |
 | --- | --- | --- |
-| 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Draft plan; bundled example is the acceptance input. |
+| 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Approved plan; bundled example is the acceptance input. |
 | 2. Robot workspace | Forward-kinematics (FK) samples → reachable-position point cloud → SDF, voxels, or mesh for workspace queries. | Planning only; representation and validation remain open. |
 | 3. Placement and episode export | Gravity-aligned trajectories + workspace → optimized base position/yaw → valid manipulation intervals and base-frame hand trajectories. | Planning only; final feasibility criteria must be agreed. |
 
