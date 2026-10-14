@@ -1,0 +1,17 @@
+# Python 3.12; independent of HaWoR, LeRobot and vLLM environments.
+# Bootstrap build tools as documented in environment/README.md, then install
+# with --torch-backend=cu129 --no-build-isolation-package chumpy.
+# HuRo's GeoCalib revision, using its public single-image calibration API.
+geocalib @ git+https://github.com/cvg/GeoCalib.git@747054d743ca64bf4b0055c26ab709fa6d234996
+torch==2.10.0
+torchvision==0.25.0
+numpy==2.2.6
+scipy==1.15.3
+opencv-python==4.13.0.92
+kornia==0.8.1
+matplotlib==3.10.8
+smplx==0.1.28
+# Same maintained Chumpy revision as HaWoR; needed by licensed MANO pickle assets.
+chumpy @ git+https://github.com/mattloper/chumpy@580566eafc9ac68b2614b64d6f7aaa84eebb70da
+joblib==1.6.0
+pytest==8.4.2

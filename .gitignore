@@ -25,3 +25,6 @@ __pycache__/
 
 # Isolated local VLM server (separate Torch/CUDA from HaWoR and LeRobot)
 /.venv-vlm/
+
+# Isolated GeoCalib inference and rigid hand geometry
+/.venv-gravity/

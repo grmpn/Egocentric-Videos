@@ -1,11 +1,11 @@
 # Project status
 
-- Current milestone: **3 — Fixed-base trajectory preparation, Part 1**. The user authorized starting ahead of iPhone capture on 2026-10-14; Milestone 2 remains incomplete.
-- Stage: **Implementing**.
-- Active plan: [Part 1: Gravity alignment, approved revision 1](plans/milestone-3-part-1-gravity-alignment.md), approved 2026-10-14.
-- Deliverable: Stage 3 outputs hand trajectories in the robot base frame with verified kinematic limits. Part 1 proposes a reusable Z-up hand/camera export, reversible transform, original/aligned plots and diagnostics on the bundled example.
-- Completed outcome: spec organized and Part 1 drafted; no Stage 3 code or runtime acceptance. Earlier [Eidon integration evidence](experiments/milestone-2-eidon-validation.md#desktop-annotation-retry--2026-09-25) remains valid historical evidence, with significant reconstruction/label limitations.
-- Current work: implement and validate the approved gravity-alignment workflow. [Parts 2–3](topics/stage-3-retargeting.md) remain planning only.
-- Blockers or decisions: The iPhone demonstrations remain unrecorded; processing/review and pilot acceptance remain under the [approved Milestone 2 plan](plans/milestone-2-lerobot-pilot.md). Eidon quality/label review remains unresolved. Robot constraints and final feasibility verification belong to later planning.
-- Next action: establish isolated GeoCalib inference, implement the shared transform/export and validate the bundled example. Resume iPhone pilot processing when recordings are available; do not mark Milestone 2 complete from Stage 3 progress.
-- Last verification: **2026-10-14**, static source/planning review and documentation checks only; see `20261014-stage3-planning-001`/`004` in the [action log](logs/2026-10.jsonl). No new inference or robot validation.
+- Current milestone: **3 — Fixed-base trajectory preparation**. Part 1 is complete; the overall milestone is not. The user authorized starting ahead of iPhone capture on 2026-10-14.
+- Stage: **Planning** — Parts 2–3 remain planning only; no further implementation scope is approved.
+- Active plan: [Part 1: Gravity alignment, approved revision 1](plans/milestone-3-part-1-gravity-alignment.md), fulfilled; no active Part 2 implementation plan.
+- Deliverable: Stage 3 outputs hand trajectories in the robot base frame with verified kinematic limits. Completed Part 1 supplies the shared Z-up hand/camera representation.
+- Completed outcome: bundled real GeoCalib run, reloadable aligned export/reversible transform, plots and diagnostics; 20 inliers, source fields preserved, full MANO/camera checks and 31 tests passed. [Part 1 acceptance and review artifacts](experiments/gravity-alignment-bundled.md).
+- Current work: Part 1 handoff; [workspace and placement/segmentation](topics/stage-3-retargeting.md) await their own approved plans.
+- Blockers or decisions: no remaining Part 1 implementation blocker. Gravity accuracy/metric scale remain unverified, and estimates cluster late in the example. Milestone 2's iPhone demonstrations remain unrecorded; [pilot processing/acceptance](plans/milestone-2-lerobot-pilot.md) and Eidon quality/label review remain outstanding. Parts 2–3 need robot constraint and feasibility decisions.
+- Next action: user reviews Part 1 outputs and chooses when to plan Part 2. Process iPhone MP4s under the existing pilot plan when available. Do not mark Milestone 2 or all of Stage 3 complete.
+- Last verification: **2026-10-14**, real GeoCalib CUDA inference, full geometry comparison against pinned HaWoR helpers, source/reload checks, focused/regression tests and visual inspection. Evidence: `20261014-gravity-implementation-008`/`009` in the [action log](logs/2026-10.jsonl).

@@ -6,7 +6,9 @@ This project turns egocentric RGB video into time-aligned 3D hand trajectories,
 with language annotations and robot-compatible trajectories planned downstream.
 Milestone 1 reproduces the unchanged HaWoR baseline on its bundled example and
 one short Ego4D MP4 segment. It preserves HaWoR's world coordinates: no
-canonicalization, alignment, smoothing, or robot conversion is performed.
+canonicalization, alignment, smoothing, or robot conversion is performed by that
+baseline. Milestone 2 adds LeRobot packaging/canonical coordinates; Stage 3 Part 1
+adds a separate, reversible gravity-aligned export.
 
 See the [roadmap](knowledge/raw/Project-Milestones-and-Timeline.md),
 [current status](knowledge/wiki/status.md), and [knowledge index](knowledge/wiki/index.md).
@@ -231,3 +233,40 @@ HTTP fixture, without sending video externally or downloading model weights.
 In a restricted environment, set `HF_HOME` and `MPLCONFIGDIR` to writable cache
 directories. The legacy CPU job skips LeRobot tests; CI has a separate integration
 job with the pinned environment.
+
+## Stage 3 Part 1: gravity alignment
+
+Install the [isolated gravity environment](environment/README.md#gravity-alignment-environment),
+then pass a completed HaWoR run and a **new** output directory:
+
+```bash
+PYTHONPATH=src .venv-gravity/bin/python scripts/align_gravity.py \
+    --run-manifest PATH/TO/run_manifest.json \
+    --output-directory outputs/gravity/my-clip
+```
+
+The command verifies and reuses prepared RGB, world hands and scaled camera poses.
+It runs GeoCalib on sharp frames, estimates world up and rotates both hands/camera
+into one Z-up frame. It preserves the original world/canonical dataset and
+annotations. MANO parameters retain their articulation/shape; the saved physical
+wrist coordinates account for the model's root offset.
+
+`trajectory_aligned.npz` contains the source fields plus derived poses and the
+reversible transform. Inspect `alignment_report.json`, `gravity_diagnostics.json`,
+`trajectory_comparison.png`, `vertical_review.png` and `gravity_diagnostics.png`.
+The report distinguishes completed numerical checks from pending visual review.
+Failures return nonzero with diagnostics when a run directory was allocated;
+insufficient gravity support never produces an accepted trajectory.
+
+Settings live in [configs/gravity_alignment.json](configs/gravity_alignment.json);
+use `--config PATH` for another explicit configuration. `--device cpu` is available
+when CUDA is unavailable; the validated default is CUDA. The command clears inherited
+`LD_LIBRARY_PATH` before importing modern Torch. `--help` lists model/input overrides.
+
+See the [frame/export contract](knowledge/wiki/topics/stage-3-retargeting.md#implemented-part-1-export)
+and [bundled acceptance evidence](knowledge/wiki/experiments/gravity-alignment-bundled.md).
+Gravity alignment does not certify metric accuracy or robot feasibility.
+
+```bash
+PYTHONPATH=src .venv-gravity/bin/python -m pytest tests/test_gravity_alignment.py tests/test_world_export.py
+```

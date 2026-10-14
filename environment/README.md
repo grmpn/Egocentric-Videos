@@ -351,3 +351,50 @@ Desktop setup evidence is local-only under
 the checks above. `bundled-dataset/` contains the annotated example; failed
 attempts and their logs are preserved alongside it. This clone does not contain
 the laptop's datasets or generated runs.
+
+## Gravity alignment environment
+
+Stage 3 Part 1 uses a separate Python 3.12 environment. Existing HaWoR, LeRobot
+and VLM environments do not need package changes. GeoCalib supplies learned
+gravity estimation; the existing SMPL-X implementation supplies MANO geometry,
+and SciPy supplies rotations. Reuse HaWoR's licensed MANO assets in the paths above.
+
+```bash
+uv venv --python 3.12 .venv-gravity
+uv pip install --python .venv-gravity/bin/python \
+    pip==26.2.1 setuptools==80.10.2 wheel==0.47.0
+uv pip install --python .venv-gravity/bin/python --torch-backend=cu129 \
+    --no-build-isolation-package chumpy -r environment/gravity-requirements.txt
+uv pip check --python .venv-gravity/bin/python
+```
+
+Chumpy is the same revision used by HaWoR; its legacy asset loader needs `pip` at
+build time without declaring it. The package-specific build option above addresses
+that requirement. No dependency code is patched. Torch 2.10.0/CUDA 12.9 and
+torchvision 0.25.0 run GeoCalib on the RTX 4090; geometry reconstruction uses CPU.
+
+The [requirements](gravity-requirements.txt) pin GeoCalib to HuRo's revision
+`747054d743ca64bf4b0055c26ab709fa6d234996`. Download the official
+[v1.0 pinhole checkpoint](https://github.com/cvg/GeoCalib/releases/tag/v1.0) once:
+
+```bash
+mkdir -p data/models/geocalib
+curl --fail --location \
+    https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar \
+    --output data/models/geocalib/geocalib-pinhole-v1.0.tar
+sha256sum data/models/geocalib/geocalib-pinhole-v1.0.tar
+```
+
+Expected SHA-256:
+`86d6aeacd8bbd974c59ce39f61854e00d36911c732ad89be471476fd708722ac`.
+The workflow verifies this checkpoint and installed GeoCalib revision before
+inference; it never downloads weights automatically. Models and environments are
+ignored local files. The public single-image GeoCalib API is used with the saved
+focal prior, without modifying source images/intrinsics or adopting HuRo's SLAM.
+
+The [2026-10-14 acceptance](../knowledge/wiki/experiments/gravity-alignment-bundled.md)
+records package checks, GPU inference, geometry comparisons, tests and visual
+review. Exact installed versions and setup logs are local under
+`outputs/gravity/part-1-20261014/`. The legacy HaWoR comparison required
+`PYTHONNOUSERSITE=1`: a user-installed NumPy 2 otherwise shadowed its pinned NumPy
+1.26.4. No existing environment or user package was altered.

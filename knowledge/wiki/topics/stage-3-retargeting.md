@@ -1,6 +1,6 @@
 # Stage 3 — Fixed-base trajectory preparation
 
-Part 1 approved for implementation · 2026-10-14 · Acceptance pending.
+Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../experiments/gravity-alignment-bundled.md).
 The user's [original spec](../../../Stage-3-Spec.md) remains unchanged local input
 (untracked; unavailable in a fresh clone). This page preserves its planning content.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
@@ -23,7 +23,7 @@ The current request does not authorize real-robot execution.
 
 | Part | Intended result | Current boundary |
 | --- | --- | --- |
-| 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Approved plan; bundled example is the acceptance input. |
+| 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Implemented; bundled-example acceptance complete. |
 | 2. Robot workspace | Forward-kinematics (FK) samples → reachable-position point cloud → SDF, voxels, or mesh for workspace queries. | Planning only; representation and validation remain open. |
 | 3. Placement and episode export | Gravity-aligned trajectories + workspace → optimized base position/yaw → valid manipulation intervals and base-frame hand trajectories. | Planning only; final feasibility criteria must be agreed. |
 
@@ -71,7 +71,8 @@ Static source inspection on 2026-10-14 used HuRo revision
 [`aeaae17f`](https://github.com/3587jjh/HuRo/tree/aeaae17f0fd51cc325b030bbef79ceb68a25199e),
 its [camera-extrinsics stage](https://github.com/3587jjh/HuRo/blob/aeaae17f0fd51cc325b030bbef79ceb68a25199e/pipeline/stage5_annot_extrinsics.py)
 and [MAD helper](https://github.com/3587jjh/HuRo/blob/aeaae17f0fd51cc325b030bbef79ceb68a25199e/common/stats.py).
-No inference was run. The relevant external behavior is:
+This source review was static; project execution is recorded separately in the
+[acceptance evidence](../experiments/gravity-alignment-bundled.md). The relevant external behavior is:
 
 1. Rank grayscale Laplacian variance; select the sharpest 30%, with a minimum of
    50 frames capped by available frames. Use pinhole GeoCalib with a focal prior.
@@ -85,15 +86,15 @@ No inference was run. The relevant external behavior is:
    row if any component exceeds the threshold: 4 for 5–6 samples, 3.5 for 7–9,
    3 for 10+. Take the retained component-wise median and normalize it.
 
-HuRo falls back to the unfiltered median when every row is rejected. The Part 1
-proposal instead reports failure for that case or fewer than three final inliers;
+HuRo falls back to the unfiltered median when every row is rejected. Our workflow
+instead reports failure for that case or fewer than three final inliers;
 it must not present rejected evidence as a successful estimate. Retain the small-
 sample path explicitly in diagnostics. HuRo's windowed SLAM, smoothing and scale
 estimation are outside this adoption; reuse the project's existing camera poses.
 
-## Proposed frame and geometry conventions
+## Frame and geometry conventions
 
-Names below define the proposed mathematical contract, not an existing schema.
+Names below define the implemented mathematical contract.
 `W` is HaWoR's clip-local world, `C_i` the matching OpenCV camera, and `A` the
 new aligned frame. Column-vector transforms map source coordinates to destination.
 
@@ -105,7 +106,7 @@ downward gravity direction is `−u_W`. Camera translation does not act on a dir
 
 The spec's “same 90 degree rotation” needs a reference axis: a single fixed
 90° rotation cannot make every possible 3D vector perpendicular to itself.
-Proposed deterministic rule, without fitting X to SLAM X:
+Implemented deterministic rule, without fitting X to SLAM X:
 
 ```text
 z = u_W
@@ -132,9 +133,10 @@ However, the current [hand export](lerobot-pipeline.md#dataset-contract) stores
 **MANO translation parameters**, not wrist coordinates. HaWoR's
 [`cam2world_convert`](../../../external/HaWoR/lib/eval_utils/custom_utils.py)
 transforms the reconstructed root joint and reapplies the MANO offset. A new
-alignment must respect that distinction; simply rotating the translation
-parameter can move reconstructed geometry incorrectly. Verify against reconstructed
-wrist/joints or vertices, keeping local articulation and shape unchanged.
+alignment respects that distinction: for the rest root `J(beta)`, the new MANO
+translation is `R_A_from_W @ (translation_W + J) - J`. Local articulation and shape
+stay unchanged. Every valid frame's reconstructed joints/vertices are checked
+against the rigidly rotated originals before acceptance.
 
 The same source's `load_slam_cam` supplies camera-to-world rotation from native
 quaternions in (`x,y,z,w`) order and translation multiplied by saved
@@ -142,20 +144,54 @@ scale; the inverse world-to-camera translation is different. Use exact prepared
 frame indices to pair RGB, cameras and hands. Existing world and per-hand
 canonical representations stay intact; the new frame is shared by both hands.
 
+## Implemented Part 1 export
+
+[README](../../../README.md#stage-3-part-1-gravity-alignment) owns the command;
+[environment setup](../../../environment/README.md#gravity-alignment-environment)
+owns dependencies/model installation. The workflow reads a verified completed run
+through the shared [world loader](../../../src/egocentric_pipeline/world_export.py),
+then estimates, transforms, saves/reloads, checks and plots into a new directory.
+It does not update LeRobot features or annotations.
+
+`trajectory_aligned.npz` copies every source world field byte-for-byte, including
+invalid entries and exact clip/source timestamps. Added fields are:
+
+| Fields | Shape / meaning |
+| --- | --- |
+| `root_translation_aligned_m`, `root_orientation_aligned_axis_angle` | `[T,2,3]` float32 corrected MANO translation and root axis-angle; radians, left/right order. |
+| `wrist_position_world_m`, `wrist_position_aligned_m`, `mano_root_offset_m` | `[T,2,3]` float32 physical wrists and model rest root `J(beta)`; metres. |
+| `camera_rotation_{world,aligned}_from_camera` | `[T,3,3]` float64 camera-to-frame matrices. |
+| `camera_position_{world,aligned}_m` | `[T,3]` float64 camera origins; existing HaWoR scale applied once. |
+| `rotation_aligned_from_world`, `rotation_world_from_aligned`, `up_world` | Two `[3,3]` float64 inverse rotations and one `[3]` unit UP direction; origin unchanged. |
+
+Derived hand geometry is NaN wherever `export_valid` is false. Missing hands are
+not assigned an invented pose; original confidence and infill masks remain intact.
+World and aligned camera poses cover every prepared frame. Native `tstamp` indexes
+SLAM keyframes, not the dense `traj` array; it is not used as the full timeline.
+Model geometry uses SMPL-X 0.1.28 with HaWoR's left-hand shapedirs correction.
+
+`alignment_report.json` records status, source identities, units/frames, full
+settings, packages, transform and numerical checks. `gravity_diagnostics.json`
+records sharpness, selected frames, pose rejection, sign changes, MAD decisions
+and pre/post-filter angular residuals. The separate visual review records findings;
+an automatically completed report does not imply measured physical accuracy.
+Use `np.load(..., allow_pickle=False)` and read the report when consuming exports.
+
 ## Deliverable and evidence boundaries
 
 The [Part 1 plan](../plans/milestone-3-part-1-gravity-alignment.md#acceptance) owns
-acceptance. Recommended evidence combines the spec's original/aligned 3D graph
+acceptance. Saved evidence combines the spec's original/aligned 3D graph
 with a reloadable export/transform, synthetic known-direction checks, rigid
 geometry invariants, per-frame estimation diagnostics and image-space vertical
 cues. Rotating the estimated vector to Z proves transform consistency, not the
 estimator's physical accuracy. There is no measured gravity reference for the
 bundled example; angular dispersion and visual review must be labeled accordingly.
 
-The existing completed 121-frame bundled run is recorded in the
+The original completed 121-frame bundled HaWoR run is recorded in the
 [desktop setup evidence](../../../environment/README.md#native-desktop-and-annotation-environments).
-Its camera/export artifacts are candidates for reuse, not freshly revalidated
-acceptance. The run's focal length is an assumption and scale remains unverified.
+Its camera/export artifacts were verified and reused for Part 1. The run's focal
+length is an assumption and scale remains unverified. Final estimator support is
+clustered in frames 77–96; whole-clip vertical previews expose that limitation.
 Gravity alignment cannot repair those uncertainties, recover heading/floor height,
 or establish robot reachability. The iPhone recording and later robot checks
 remain separate deliverables.

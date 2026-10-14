@@ -11,13 +11,12 @@ import pyarrow.parquet as pq
 from .canonical import canonicalize, save_canonical_preview
 from .dataset_transaction import staged_dataset
 from .run_metadata import read_json, sha256_file, utc_now, write_json
-from .world_export import WORLD_FIELDS, HAND_ORDER
+from .world_export import WORLD_FIELDS, HAND_ORDER, MASK_FIELDS, load_run
 
 
 LEROBOT_REVISION = "9a6bb61043bac8c14353fcb6ea513b7473c118e3"
 CAMERA = "observation.images.ego"
 CONTRACT_VERSION = "1.0"
-MASK_FIELDS = ("direct_detection", "motion_infilled", "hawor_valid", "export_valid")
 
 
 def write_data_card(root, contract):
@@ -49,62 +48,6 @@ def write_data_card(root, contract):
             "under `meta/egocentric/annotation_vNNNN.json`, with review pending. This dataset is not by "
             "itself evidence of an accepted iPhone pilot, safe robot trajectories, or training readiness.\n")
     (root / "DATA_CARD.md").write_text(text, encoding="utf-8")
-
-
-def load_run(manifest_path):
-    """Verify successful execution and artifact hashes, including relocated runs."""
-    manifest_path = Path(manifest_path).resolve()
-    manifest = read_json(manifest_path)
-    if manifest["status"] != "completed" or any(s["status"] != "completed" for s in manifest["stages"]):
-        raise ValueError("Only a completed HaWoR run can be packaged; inspect its failure report")
-    artifacts = {}
-    for name in ("clip_metadata", "prepared_video", "trajectory_world", "trajectory_metadata"):
-        record = manifest["artifacts"][name]
-        path = Path(record["path"])
-        # Run-local artifacts move with their manifest. Source/prepared paths do not.
-        if path.is_relative_to(manifest["run_directory"]):
-            path = manifest_path.parent / path.relative_to(manifest["run_directory"])
-        if sha256_file(path) != record["sha256"]:
-            raise ValueError(f"Run artifact hash mismatch: {name}")
-        artifacts[name] = path
-    clip = read_json(artifacts["clip_metadata"])
-    world_meta = read_json(artifacts["trajectory_metadata"])
-    if not clip["source"]["path"].lower().endswith(".mp4"):
-        raise ValueError("Only .mp4 sources are supported")
-    if world_meta["hand_order"] != HAND_ORDER or world_meta["schema_version"] != "1.0":
-        raise ValueError("Unsupported world trajectory contract")
-    if not world_meta["validation"]["upstream_stages_completed"]:
-        raise ValueError("Missing upstream completion evidence")
-    with np.load(artifacts["trajectory_world"], allow_pickle=False) as stored:
-        arrays = {name: stored[name] for name in stored.files}
-    count = clip["prepared"]["frame_count"]
-    for name, _, size in WORLD_FIELDS:
-        if arrays[name].shape != (count, 2, size) or arrays[name].dtype != np.float32:
-            raise ValueError(f"Invalid world shape/dtype: {name}")
-    for name in MASK_FIELDS:
-        if arrays[name].shape != (count, 2) or arrays[name].dtype != np.bool_:
-            raise ValueError(f"Invalid hand mask: {name}")
-    if arrays["detector_confidence"].shape != (count, 2) or arrays["detector_confidence"].dtype != np.float32:
-        raise ValueError("Invalid detector confidence")
-    finite = np.logical_and.reduce([np.isfinite(arrays[name]).all(axis=2) for name, _, _ in WORLD_FIELDS])
-    if not np.array_equal(arrays["export_valid"], arrays["hawor_valid"] & finite):
-        raise ValueError("Export validity disagrees with native validity/finite geometry")
-    if (arrays["motion_infilled"] & ~arrays["hawor_valid"]).any():
-        raise ValueError("Motion infill cannot mark a native-invalid frame")
-    scores = arrays["detector_confidence"]
-    direct = arrays["direct_detection"]
-    if (not np.isnan(scores[~direct]).all() or not np.isfinite(scores[direct]).all()
-            or (scores[direct] <= 0).any() or (scores[direct] > 1).any()):
-        raise ValueError("Confidence must be (0,1] on detections and unknown (NaN) otherwise")
-    mapping = clip["frames"]["mapping"]
-    for name in ("frame_index", "timestamp_s", "source_timestamp_s"):
-        if not np.array_equal(arrays[name], [row[name] for row in mapping]):
-            raise ValueError(f"Frame mapping mismatch: {name}")
-    if (not np.array_equal(arrays["frame_index"], np.arange(count))
-            or not np.allclose(arrays["timestamp_s"], np.arange(count) / 30, rtol=0, atol=1e-9)
-            or clip["prepared"]["fps"] != "30/1"):
-        raise ValueError("Only synchronized 30 FPS prepared RGB is supported")
-    return manifest, artifacts, clip, world_meta, arrays
 
 
 def episode_features(clip, arrays):

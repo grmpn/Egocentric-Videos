@@ -18,7 +18,8 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — three-part direction, robot embodiment, Part 1 source/convention review and later feasibility decisions; Part 1 implementation underway.
+- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented Part 1 frame/export contract, three-part direction, robot embodiment and later feasibility decisions.
+- [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
 - [LeRobot pipeline](topics/lerobot-pipeline.md) — v3.1 creation/append, canonical transforms, annotation preservation and local inference limits.
 - [VLM annotation workflow reference](topics/vlm-annotation-workflow.md) — proposed task hierarchy and independent activity modes, source-time mapping, and later fixed-base filtering; not implemented or an approved plan.
