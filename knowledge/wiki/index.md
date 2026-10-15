@@ -12,13 +12,14 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — draft FK sampling, voxel distance queries and interactive review; awaiting approval.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
 - [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
 
 ## Topics and evidence
 
-- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented Part 1 frame/export contract, three-part direction, robot embodiment and later feasibility decisions.
+- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented Part 1 contract, proposed Part 2 workspace conventions, robot embodiment and later feasibility decisions.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
 - [LeRobot pipeline](topics/lerobot-pipeline.md) — v3.1 creation/append, canonical transforms, annotation preservation and local inference limits.
@@ -34,7 +35,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Source notes
 
-- [Stage 3 user spec](../../Stage-3-Spec.md) — unchanged local-only input; maintained content is in the Stage 3 reference above.
+- [Stage 3 user spec](../../Stage-3-Spec.md) — local-only input updated by the user for Part 2; preserved during planning, with maintained content in the Stage 3 reference above.
 - [HaWoR research notes](../raw/Sources/HaWoR-Review.md) — original source material, preserved.
 - [Eidon and LeRobot](../raw/Sources/Eidon-LeRobot-Review.md) — pilot selection, camera-evidence limits, and the v3.1 annotation choice.
 - [HuRo workflow reference](../raw/Sources/HuRo-Review.md) — related pipeline and pointers for later investigation; not an adopted implementation.
