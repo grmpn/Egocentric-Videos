@@ -50,7 +50,7 @@ reachable under the sampled joint limits; their empty cells demonstrate remainin
 sampling gaps. Coverage is weighted by the joint-space sampling distribution;
 it does not establish uniform Cartesian coverage or classify every empty cell.
 
-The default run took **1.82 s**; the 1m run took **4.65 s**, with **612 MiB**
+The initial 100k run took **1.82 s**; the 1m run took **4.65 s**, with **612 MiB**
 peak process RSS. These are single CPU runs, including model loading, generation,
 export and checks, excluding interpreter startup/imports and viewer/browser memory.
 
@@ -71,9 +71,14 @@ EDT signs and metric center distances using independent nearest-neighbor trees.
 
 The user authorized both larger runs on 2026-10-15. Only the supported sample
 ceiling and CLI help changed; sampling, FK, occupancy and query algorithms are
-unchanged. Default sampling remains 100,000 per arm. Both runs use seed 42, the
+unchanged. Both runs use seed 42, the
 same pinned model/packages, 2 cm voxels and the original independent 10,000
 held-out configurations per arm. Original outputs are preserved.
+
+After reviewing these results, the user selected **10 million samples per arm**
+as the preferred default on 2026-10-15. The
+[default configuration](../../../configs/robot_workspace.json) now matches the
+validated 10m run; the 100k run remains historical comparison evidence.
 
 | Samples per arm | Both-arm build time | Left sampling/check/export | Right sampling/check/export | Peak process RSS |
 | --- | ---: | ---: | ---: | ---: |

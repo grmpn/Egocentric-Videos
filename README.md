@@ -279,12 +279,12 @@ signed-distance tensors in `PEDESTAL_LINK` coordinates:
 
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/build_robot_workspace.py \
-    --output-directory outputs/workspace/example-100k
+    --output-directory outputs/workspace/example-10m
 ```
 
-The default samples 100,000 configurations per arm. Use `--samples-per-arm` with
-`1000000`, `5000000` or `10000000` and a new output directory for density comparisons;
-the supported maximum is 10 million per arm. The command preserves
+The preferred default is 10 million configurations per arm. Use `--samples-per-arm`
+with a smaller count for quick checks or density comparisons, choosing a new output
+directory; the supported maximum is 10 million per arm. The command preserves
 source assets and refuses to overwrite a run. It saves `samples_left.npz`,
 `samples_right.npz`, `workspace_grid.npz` and `workspace_report.json`, including
 FK comparisons, coordinate/reload checks, held-out coverage, settings and resources.
@@ -306,7 +306,7 @@ To interactively inspect the saved workspace:
 
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_robot_workspace.py \
-    outputs/workspace/example-100k --open-browser
+    outputs/workspace/example-10m --open-browser
 ```
 
 The command prints a local viewer URL (normally `http://localhost:8080`). Drag to

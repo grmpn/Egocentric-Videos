@@ -7,7 +7,7 @@
     ["LEFT_SHOULDER_Y", "LEFT_SHOULDER_X", "LEFT_SHOULDER_Z", "LEFT_ELBOW_Y", "LEFT_WRIST_Z", "LEFT_WRIST_X", "LEFT_GRIPPER_Y"],
     ["RIGHT_SHOULDER_Y", "RIGHT_SHOULDER_X", "RIGHT_SHOULDER_Z", "RIGHT_ELBOW_Y", "RIGHT_WRIST_Z", "RIGHT_WRIST_X", "RIGHT_GRIPPER_Y"]
   ],
-  "samples_per_arm": 100000,
+  "samples_per_arm": 10000000,
   "seed": 42,
   "voxel_size_m": 0.02,
   "padding_cells": 2,

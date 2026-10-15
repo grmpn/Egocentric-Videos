@@ -9,6 +9,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 - [Planning specification](planning-specs.md) — short scope, optional subphases, and acceptance.
 - [Knowledge maintenance](knowledge-maintenance.md) — page ownership, JSONL event format, and queries.
 - [Planning and knowledge decision](decisions/planning-and-knowledge.md) — approved ownership and migration choices.
+- [Future pipeline improvements](future-improvements.md) — deferred ideas to revisit after the full baseline works, starting with targeted IK sampling of suspected workspace gaps.
 
 ## Plans
 

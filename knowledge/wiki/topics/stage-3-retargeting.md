@@ -73,10 +73,12 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 [approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance.
 The original Part 2 user spec requests 100,000–1,000,000 FK samples; the user
 authorized extending the comparison to 5 million and 10 million per arm on
-2026-10-15 (plan revision 2). The default remains 100,000, with a supported maximum
-of 10 million per arm. The workflow supplies separate left/right occupancy at
-2 cm spacing, Euclidean
-distance transforms and interpolated SDF queries, movable-camera point/voxel views,
+2026-10-15 (plan revision 2), then selected **10 million samples per arm as the
+preferred default**, also the supported maximum. The
+[density comparison](../experiments/robot-workspace-purdue.md#density-extension-5m-and-10m-per-arm)
+records the supporting coverage and runtime evidence. The workflow supplies
+separate left/right occupancy at 2 cm spacing, Euclidean distance transforms and
+interpolated SDF queries, movable-camera point/voxel views,
 and verification of base-coordinate to voxel-index conversion.
 
 Static inspection on 2026-10-15 of the [canonical URDF at `9ac4bd45`](https://github.com/PatrizioAcquadro/purdue-alex-assets/blob/9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b/assets/robots/alex_purdue/urdf/baseline/alex_purdue_full_convex.urdf)
