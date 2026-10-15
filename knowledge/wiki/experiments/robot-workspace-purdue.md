@@ -1,6 +1,7 @@
 # Stage 3 Part 2 — Purdue Alex workspace acceptance
 
-Verified 2026-10-15 against [approved revision 1](../plans/milestone-3-part-2-robot-workspace.md).
+Verified 2026-10-15 against [approved revision 2](../plans/milestone-3-part-2-robot-workspace.md),
+including the user-authorized 5m/10m density extension after initial acceptance.
 Part 2 is complete. This accepts a sampled positional approximation; Part 3
 placement and trajectory feasibility remain unimplemented and unapproved.
 
@@ -38,16 +39,20 @@ border; no dilation, filling or hull construction is applied.
 | --- | ---: | ---: | ---: | ---: |
 | 100,000 | 79,177 | 79,125 | 36.65% | 37.60% |
 | 1,000,000 | 269,985 | 268,420 | 93.78% | 94.28% |
+| 5,000,000 | 316,951 | 315,175 | 99.75% | 99.72% |
+| 10,000,000 | 323,388 | 321,562 | 99.91% | 99.92% |
 
 Coverage uses 10,000 independent FK positions per arm, with no out-of-grid cases.
-The 100k subset is an exact prefix of the 1m samples and is evaluated on the same
-lattice. **622 left / 572 right misses remain** at 1m; these are sampling holes
-or voxel-resolution effects, not evidence that the held-out configurations are
-unreachable. Neither percentage establishes uniform Cartesian coverage.
+The runs share one lattice and seed, with exact sample prefixes and identical
+held-out configurations. Misses fall from **622 left / 572 right** at 1m to
+**25 / 28** at 5m and **9 / 8** at 10m. These held-out FK configurations are
+reachable under the sampled joint limits; their empty cells demonstrate remaining
+sampling gaps. Coverage is weighted by the joint-space sampling distribution;
+it does not establish uniform Cartesian coverage or classify every empty cell.
 
 The default run took **1.82 s**; the 1m run took **4.65 s**, with **612 MiB**
 peak process RSS. These are single CPU runs, including model loading, generation,
-export and checks, excluding interpreter startup and viewer/browser memory.
+export and checks, excluding interpreter startup/imports and viewer/browser memory.
 
 All sampled configurations obey the source URDF position bounds. Every sample
 maps into its saved hand grid; maximum center reconstruction error remains below
@@ -56,11 +61,64 @@ reloaded interpolation queries match. Per-arm batch FK checks include zero,
 lower/upper bounds and 32 sampled configurations; errors against ordinary FK are
 below **5.49e-10 m**, within the configured **1e-8 m** tolerance.
 
-The independent audit reconstructs occupancy from all two million saved points,
+The initial acceptance audit reconstructs occupancy from all two million saved points,
 checks joint limits directly from the URDF, verifies exact sample prefixes and
 recomputes coverage. Across 400 real-field queries, PyTorch differs from SciPy
 regular-grid interpolation by at most **6.53e-16 m**. Another 256 queries verify
 EDT signs and metric center distances using independent nearest-neighbor trees.
+
+## Density extension: 5m and 10m per arm
+
+The user authorized both larger runs on 2026-10-15. Only the supported sample
+ceiling and CLI help changed; sampling, FK, occupancy and query algorithms are
+unchanged. Default sampling remains 100,000 per arm. Both runs use seed 42, the
+same pinned model/packages, 2 cm voxels and the original independent 10,000
+held-out configurations per arm. Original outputs are preserved.
+
+| Samples per arm | Both-arm build time | Left sampling/check/export | Right sampling/check/export | Peak process RSS |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000,000 | 4.65 s | 1.39 s | 1.37 s | 0.60 GiB |
+| 5,000,000 | 17.42 s | 6.84 s | 6.87 s | 1.37 GiB |
+| 10,000,000 | 32.81 s | 13.50 s | 13.47 s | 2.33 GiB |
+
+These are single sequential CPU runs, not repeated benchmarks or isolated FK
+timings. The timing boundaries match initial acceptance. Doubling 5m to 10m adds
+6,437 left and 6,387 right occupied cells (about 2% growth) and reduces held-out
+misses from 53 to 17 across both arms. This is diminishing measured gain, with
+remaining holes still unclassified outside the known held-out misses.
+
+Both production runs passed all sample-to-cell checks, representative ordinary
+FK comparisons (maximum error below 5.49e-10 m), exact sample/grid reloads and 64
+reloaded interpolation queries. A separate comparison verified exact 1m→5m→10m
+sample prefixes, identical held-out arrays/settings/packages/lattice, monotonically
+growing occupancy, recomputed coverage and distance signs. All **10 focused tests
+passed in 4.04 s**. Prior independent interpolation and interactive control tests
+were not repeated because those algorithms did not change.
+
+Agent inspection of saved X/Z slices at Y = +0.31 m (left) and −0.29 m (right)
+shows that the scattered gaps visible at 1m largely disappear by 5m and shrink
+further at 10m. Central empty regions and scattered boundary gaps persist; the
+figure alone does not establish whether each remaining cell is unreachable.
+No geometric hole filling was applied. Plotting reused the existing gravity
+environment's Matplotlib; no workspace dependency was added.
+
+- [5m report](../../../outputs/workspace/density-20261015/5m/workspace_report.json)
+  and [execution log](../../../outputs/workspace/density-20261015/5m.log).
+- [10m report](../../../outputs/workspace/density-20261015/10m/workspace_report.json)
+  and [execution log](../../../outputs/workspace/density-20261015/10m.log).
+- [Comparison and checks](../../../outputs/workspace/density-20261015/comparison.json),
+  [reproduction script](../../../outputs/workspace/density-20261015/compare.py),
+  [voxel slice comparison](../../../outputs/workspace/density-20261015/voxel-slices.png),
+  [visual review](../../../outputs/workspace/density-20261015/visual-review.json),
+  [focused tests](../../../outputs/workspace/density-20261015/tests.log).
+
+Each new run retains both full sample archives and `workspace_grid.npz`. Open
+either directory with the existing viewer, for example:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_robot_workspace.py \
+    outputs/workspace/density-20261015/10m --open-browser
+```
 
 ## Tests and interactive review
 

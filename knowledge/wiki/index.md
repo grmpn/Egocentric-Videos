@@ -12,7 +12,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review; fulfilled.
+- [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
 - [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
@@ -20,7 +20,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 ## Topics and evidence
 
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented Part 1 and Part 2 workspace contracts, robot embodiment and later feasibility decisions.
-- [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — full Purdue FK runs, grid/query verification, sampling gaps and interactive review.
+- [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
 - [LeRobot pipeline](topics/lerobot-pipeline.md) — v3.1 creation/append, canonical transforms, annotation preservation and local inference limits.

@@ -282,8 +282,9 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/build_r
     --output-directory outputs/workspace/example-100k
 ```
 
-The default samples 100,000 configurations per arm. Add `--samples-per-arm 1000000`
-and choose a new output directory for the density comparison. The command preserves
+The default samples 100,000 configurations per arm. Use `--samples-per-arm` with
+`1000000`, `5000000` or `10000000` and a new output directory for density comparisons;
+the supported maximum is 10 million per arm. The command preserves
 source assets and refuses to overwrite a run. It saves `samples_left.npz`,
 `samples_right.npz`, `workspace_grid.npz` and `workspace_report.json`, including
 FK comparisons, coordinate/reload checks, held-out coverage, settings and resources.
@@ -316,4 +317,4 @@ The robot stays at its zero reference pose. Stop the viewer with Ctrl-C. Browser
 hardware acceleration is preferable for large voxel layers; software rendering
 works but is slower. `--asset-root` can relocate the same pinned assets.
 See the [Purdue workspace acceptance](knowledge/wiki/experiments/robot-workspace-purdue.md)
-for the 100k/1m comparison, review images and measured limitations.
+for the 100k/1m/5m/10m comparison, review images and measured limitations.

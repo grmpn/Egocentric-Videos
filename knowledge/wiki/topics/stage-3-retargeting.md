@@ -71,8 +71,11 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 
 **Implemented and validated.** The
 [approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance.
-The updated user spec requests 100,000–1,000,000
-FK samples, separate left/right occupancy at an initial 2 cm spacing, Euclidean
+The original Part 2 user spec requests 100,000–1,000,000 FK samples; the user
+authorized extending the comparison to 5 million and 10 million per arm on
+2026-10-15 (plan revision 2). The default remains 100,000, with a supported maximum
+of 10 million per arm. The workflow supplies separate left/right occupancy at
+2 cm spacing, Euclidean
 distance transforms and interpolated SDF queries, movable-camera point/voxel views,
 and verification of base-coordinate to voxel-index conversion.
 

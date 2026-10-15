@@ -13,7 +13,7 @@ def main():
     parser.add_argument("--asset-root", type=Path, default=root / "data/models/purdue-alex-assets")
     parser.add_argument("--config", type=Path, default=root / "configs/robot_workspace.json")
     parser.add_argument("--output-directory", type=Path, required=True, help="New directory; existing outputs are never overwritten")
-    parser.add_argument("--samples-per-arm", type=int, help="Override the configured count, up to 1,000,000")
+    parser.add_argument("--samples-per-arm", type=int, help="Override the configured count, up to 10,000,000")
     args = parser.parse_args()
     settings = read_json(args.config)
     if args.samples_per_arm is not None:

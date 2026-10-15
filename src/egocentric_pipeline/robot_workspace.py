@@ -21,8 +21,8 @@ def validate_settings(settings):
                 "padding_cells", "viewer_max_points_per_arm"):
         if type(settings[key]) is not int or settings[key] < 1:
             raise ValueError(f"{key} must be a positive integer")
-    if settings["samples_per_arm"] > 1_000_000:
-        raise ValueError("samples_per_arm exceeds the approved 1,000,000 maximum")
+    if settings["samples_per_arm"] > 10_000_000:
+        raise ValueError("samples_per_arm exceeds the approved 10,000,000 maximum")
     if type(settings["seed"]) is not int or settings["seed"] < 0:
         raise ValueError("seed must be a nonnegative integer")
     for key in ("voxel_size_m", "fk_tolerance_m"):

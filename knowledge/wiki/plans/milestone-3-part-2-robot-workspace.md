@@ -1,6 +1,6 @@
 # Milestone 3, Part 2 — Robot workspace sampling and distance queries
 
-Approved revision 1 · 2026-10-15 · Approval: `20261015-workspace-implementation-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 2 · 2026-10-15 · Density extension: `20261015-workspace-density-001`; original approval: `20261015-workspace-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
@@ -21,7 +21,7 @@ records source evidence and proposed conventions.
   movable joints at documented zero positions. Preserve native geometry,
   metres, radians and left/right identity. Missing frames or bounds fail explicitly.
 - Generate reproducible uniform joint-space samples with a recorded seed:
-  initially 100,000 per arm, configurable through 1,000,000. Use scikit-robot's
+  initially 100,000 per arm, configurable through 10,000,000. Use scikit-robot's
   existing batch FK/voxel capabilities where compatible; pin necessary dependencies
   without disrupting working environments. Retain sampled configurations for
   representative FK checks.
@@ -48,9 +48,10 @@ records source evidence and proposed conventions.
 
 - Run the workflow on the Purdue Alex model, reload both clouds/grids/tensors,
   and reproduce queries. Save settings, asset revision, commands, timing/memory,
-  sample counts and limits. Compare 100,000 versus 1,000,000 samples per arm and
-  report occupancy growth and held-out FK coverage; report remaining sampling
-  gaps without claiming completeness.
+  sample counts and limits. Compare 100,000, 1,000,000, 5,000,000 and 10,000,000
+  samples per arm at 2 cm with the same seed and independent held-out positions.
+  Report occupancy growth, held-out FK coverage and remaining gaps without
+  claiming completeness.
 - Check representative batched FK against ordinary model FK and known transforms;
   verify joint bounds, base/tool frames and hand identity.
 - Verify negative coordinates, boundaries, axis order and base/index round trips:
