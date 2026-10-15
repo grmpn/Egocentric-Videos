@@ -28,3 +28,6 @@ __pycache__/
 
 # Isolated GeoCalib inference and rigid hand geometry
 /.venv-gravity/
+
+# Robot workspace FK and interactive visualization
+/.venv-workspace/

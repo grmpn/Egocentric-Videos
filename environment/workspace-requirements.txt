@@ -1,0 +1,9 @@
+# Python 3.12, Linux x86_64; CPU FK/EDT/interpolation and browser visualization.
+# Independent of the working HaWoR, annotation and gravity environments.
+scikit-robot==0.3.39
+viser==1.1.1
+trimesh==5.1.1
+numpy==2.2.6
+scipy==1.15.3
+torch @ https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl
+pytest==8.4.2

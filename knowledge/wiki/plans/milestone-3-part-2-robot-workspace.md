@@ -1,6 +1,6 @@
 # Milestone 3, Part 2 — Robot workspace sampling and distance queries
 
-Draft revision 1 · 2026-10-15 · Awaiting user approval; no implementation authorized.
+Approved revision 1 · 2026-10-15 · Approval: `20261015-workspace-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
@@ -9,7 +9,7 @@ fixed-base Purdue Alex with SAKE EZGrippers. Deliver reloadable FK point clouds,
 2 cm occupancy grids, signed-distance tensors and trilinear queries in robot-base
 coordinates, plus interactive 3D views and a verification report for Part 3
 placement, independently of human recordings.
-The [Stage 3 reference](../topics/stage-3-retargeting.md#part-2-proposed-workspace-contract)
+The [Stage 3 reference](../topics/stage-3-retargeting.md#part-2-workspace-contract)
 records source evidence and proposed conventions.
 
 ## Scope and boundaries

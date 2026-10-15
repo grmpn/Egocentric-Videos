@@ -267,6 +267,36 @@ See the [frame/export contract](knowledge/wiki/topics/stage-3-retargeting.md#imp
 and [bundled acceptance evidence](knowledge/wiki/experiments/gravity-alignment-bundled.md).
 Gravity alignment does not certify metric accuracy or robot feasibility.
 
+## Stage 3 Part 2: Robot workspace
+
+Set up the [workspace environment and pinned robot assets](environment/README.md#robot-workspace-environment),
+then build independent left/right tool-position clouds, 2 cm voxel occupancy and
+signed-distance tensors in `PEDESTAL_LINK` coordinates:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/build_robot_workspace.py \
+    --output-directory outputs/workspace/example-100k
+```
+
+The default samples 100,000 configurations per arm. Add `--samples-per-arm 1000000`
+and choose a new output directory for the density comparison. The command preserves
+source assets and refuses to overwrite a run. It saves `samples_left.npz`,
+`samples_right.npz`, `workspace_grid.npz` and `workspace_report.json`, including
+FK comparisons, coordinate/reload checks, held-out coverage, settings and resources.
+Only consume runs whose report has `status: completed`.
+
+The [workspace contract](knowledge/wiki/topics/stage-3-retargeting.md#part-2-workspace-contract)
+defines frames, array order, query validity and limitations. Grid occupancy is
+sampled position coverage; it does not establish collision-free poses, tool
+orientation reachability or feasible trajectories.
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests/test_robot_workspace.py -q
+```
+
+The CLI integration check requires the pinned local assets; it is skipped when
+they are absent. Other tests use small synthetic volumes and an analytic URDF.
+
 ```bash
 PYTHONPATH=src .venv-gravity/bin/python -m pytest tests/test_gravity_alignment.py tests/test_world_export.py
 ```

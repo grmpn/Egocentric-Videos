@@ -1,12 +1,12 @@
 # Stage 3 — Fixed-base trajectory preparation
 
 Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../experiments/gravity-alignment-bundled.md).
-Part 2 spec reviewed and [draft plan](../plans/milestone-3-part-2-robot-workspace.md) added · 2026-10-15.
+Part 2 [approved plan](../plans/milestone-3-part-2-robot-workspace.md) in implementation · 2026-10-15.
 The user's [spec](../../../Stage-3-Spec.md), updated for Part 2, is preserved local input
 (untracked; unavailable in a fresh clone). This page preserves its planning content.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
-not HuRo's numbered stages. The [Part 1 plan](../plans/milestone-3-part-1-gravity-alignment.md)
-is the only scope approved for implementation.
+not HuRo's numbered stages. The Part 1 and [Part 2 plans](../plans/milestone-3-part-2-robot-workspace.md)
+are approved; Part 3 remains planning only.
 
 ## Repository role and sequence
 
@@ -25,7 +25,7 @@ The current request does not authorize real-robot execution.
 | Part | Intended result | Current boundary |
 | --- | --- | --- |
 | 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Implemented; bundled-example acceptance complete. |
-| 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Draft revision 1; not approved or implemented. |
+| 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Approved revision 1; numerical workflow verified, interactive review underway. |
 | 3. Placement and episode export | Gravity-aligned trajectories + workspace → optimized base position/yaw → valid manipulation intervals and base-frame hand trajectories. | Planning only; final feasibility criteria must be agreed. |
 
 Part 2 can be developed independently of human capture after its own approval.
@@ -41,9 +41,10 @@ Its [README at inspected revision `9ac4bd45`](https://github.com/PatrizioAcquadr
 identifies Purdue Alex with SAKE EZGripper as the default fixed-base profile and
 `assets/robots/alex_purdue/urdf/baseline/alex_purdue_full_convex.urdf` as its
 canonical URDF. WSG32/UMI is opt-in. These are source claims from static inspection,
-not a local robot-model validation; no robot assets or simulator were installed.
+not simulation validation. Part 2 now loads the pinned URDF locally and verifies
+batched against ordinary FK; no simulator is installed for this workflow.
 
-Part 2 proposes base/TCP frames and positional sampling below. Before approving
+Part 2 uses the base/TCP frames and positional sampling below. Before approving
 Part 3, resolve:
 
 - Base/tool frames, hand-to-tool pose mapping, active arms/joints, locked torso or
@@ -66,10 +67,10 @@ provides a possible semantic input: manipulation cores, optional context expansi
 under one base placement, and semantic task instructions. That hierarchy/mode
 workflow is not implemented; Stage 3 does not implicitly authorize it.
 
-## Part 2 proposed workspace contract
+## Part 2 workspace contract
 
-**Planning only.** The [draft plan](../plans/milestone-3-part-2-robot-workspace.md)
-owns proposed scope and acceptance. The updated user spec requests 100,000–1,000,000
+**Numerical workflow implemented; interactive acceptance pending.** The
+[approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance. The updated user spec requests 100,000–1,000,000
 FK samples, separate left/right occupancy at an initial 2 cm spacing, Euclidean
 distance transforms and interpolated SDF queries, movable-camera point/voxel views,
 and verification of base-coordinate to voxel-index conversion.
@@ -77,12 +78,12 @@ and verification of base-coordinate to voxel-index conversion.
 Static inspection on 2026-10-15 of the [canonical URDF at `9ac4bd45`](https://github.com/PatrizioAcquadro/purdue-alex-assets/blob/9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b/assets/robots/alex_purdue/urdf/baseline/alex_purdue_full_convex.urdf)
 found root `PEDESTAL_LINK`, a fixed torso attachment, seven bounded revolute joints
 per arm (shoulder Y/X/Z, elbow Y, wrist Z/X, gripper Y), and fixed
-`LEFT_EZGRIPPER_TCP_LINK` / `RIGHT_EZGRIPPER_TCP_LINK` tool frames. Proposed
+`LEFT_EZGRIPPER_TCP_LINK` / `RIGHT_EZGRIPPER_TCP_LINK` tool frames. The
 workspaces use these TCP origins with the pedestal fixed and other movable joints
 at zero. These are asset-defined tool points, not calibrated human wrists; the
-human-to-tool mapping remains Part 3 work. Runtime model loading/FK is unverified.
+human-to-tool mapping remains Part 3 work. The actual model and both FK paths have now been exercised.
 
-Proposed grid convention: one common lattice aligned to the base axes, with
+Implemented grid convention: one common lattice aligned to the base axes, with
 separate hand occupancy arrays. Its stored origin is the lower cell corner
 **expressed in the robot base frame**, not necessarily base coordinate zero;
 negative coordinates must remain representable. Record spacing, dimensions and
@@ -99,21 +100,54 @@ invalid/out-of-domain inputs, and avoid treating tensor padding values as worksp
 evidence. Position, axis order, voxel-center offsets and normalized tensor
 coordinates need explicit conversion checks.
 
-The dependency direction is supported by official documentation, not yet tested
-in this project:
+The implementation reuses these library capabilities:
 
 - [Scikit-robot reachability maps](https://scikit-robot.readthedocs.io/en/latest/examples_guide/reachability_map.html)
   document seeded sampling, NumPy batch FK, position-only mode and voxel maps.
-  Reuse these where their frame/grid conventions fit; do not recreate an FK engine.
+  This workflow uses its lower-level position-only NumPy batch FK. The high-level
+  map adds unused manipulability work and separate unpadded origins; NumPy
+  indexing constructs the required common lattice without a new FK engine.
 - [SciPy EDT](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.distance_transform_edt.html)
   supports per-axis metric spacing. NumPy/SciPy already have project version pins.
 - [PyTorch `grid_sample`](https://docs.pytorch.org/docs/2.10/generated/torch.nn.functional.grid_sample.html)
   uses trilinear interpolation for 5D input with `mode="bilinear"`; axis ordering,
-  `align_corners` and out-of-bounds behavior must be set explicitly.
+  `align_corners` and out-of-bounds behavior are explicitly handled below.
 - [Scikit-robot viewers](https://scikit-robot.readthedocs.io/en/latest/reference/viewers.html)
   provide interactive camera controls and a Viser browser option. Use one suitable
-  viewer for robot, points and voxel cells; a separate Open3D dependency is not
-  initially needed. Display reduction must preserve full saved workspace data.
+  viewer for robot, points and voxel cells; Viser is selected. Point display
+  reduction preserves full saved workspace data; all occupied voxels are available.
+
+
+The [README](../../../README.md#stage-3-part-2-robot-workspace) owns build commands;
+[environment setup](../../../environment/README.md#robot-workspace-environment)
+owns installation. New run directories contain:
+
+| Artifact | Contract |
+| --- | --- |
+| `samples_left.npz`, `samples_right.npz` | Float64 `positions_base_m [N,3]`, `joint_angles_rad [N,7]`, ordered `joint_names [7]`; independent `held_out_positions_base_m` and `held_out_joint_angles_rad`. |
+| `workspace_grid.npz` | Float64 `origin_m [3]`, scalar `spacing_m`, boolean `occupancy [2,X,Y,Z]`, float64 `distance_m [2,X,Y,Z]`; explicit `axis_order` and `hand_order`. |
+| `workspace_report.json` | Completion/failure, pinned asset and actual package versions, settings, limits/locked joints, FK checks, reload/query evidence, prefix coverage, timing and process peak RSS. |
+
+Use `np.load(..., allow_pickle=False)` for samples and
+`WorkspaceGrid.load` from [workspace.py](../../../src/egocentric_pipeline/workspace.py)
+for the grid. `indices(points)` returns `[N,3]` integer indices and validity,
+with `-1` for invalid rows. `contains(points)` returns `[N,2]` occupancy plus
+validity; an out-of-grid false value must not be interpreted as tested infeasibility.
+`centers(indices)` returns base-frame metres. Grid cells use a half-open domain.
+
+`query(torch_points)` accepts float32/64 `[N,3]` and returns `[N,2]` distances
+plus `[N]` validity, retaining gradients with respect to points. Its domain is the
+closed box between outermost cell centers. Values outside it or at nonfinite
+inputs are NaN with false validity. Tensor storage is permuted to `[1,2,Z,Y,X]`,
+normalized query coordinates remain XYZ, and `align_corners=True` maps extreme
+centers to ±1. Interpolated signs can differ from voxel membership near cell
+boundaries; no claim of an exact Euclidean SDF or certified reachability is made.
+
+Sampling uses independent NumPy SeedSequence streams `[seed, hand_index, 0]`;
+held-out samples use `[seed, hand_index, 1]`. The 100k subset of a million-sample
+run shares its lattice and random prefix, allowing a direct density comparison.
+All sampled configurations are retained as FK witnesses, but neither voxel volume
+nor joint-space sampling frequency measures complete physical workspace coverage.
 
 ## Part 1 estimator reference
 

@@ -1,0 +1,19 @@
+{
+  "asset_revision": "9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b",
+  "urdf": "assets/robots/alex_purdue/urdf/baseline/alex_purdue_full_convex.urdf",
+  "base_frame": "PEDESTAL_LINK",
+  "tool_frames": ["LEFT_EZGRIPPER_TCP_LINK", "RIGHT_EZGRIPPER_TCP_LINK"],
+  "arm_joints": [
+    ["LEFT_SHOULDER_Y", "LEFT_SHOULDER_X", "LEFT_SHOULDER_Z", "LEFT_ELBOW_Y", "LEFT_WRIST_Z", "LEFT_WRIST_X", "LEFT_GRIPPER_Y"],
+    ["RIGHT_SHOULDER_Y", "RIGHT_SHOULDER_X", "RIGHT_SHOULDER_Z", "RIGHT_ELBOW_Y", "RIGHT_WRIST_Z", "RIGHT_WRIST_X", "RIGHT_GRIPPER_Y"]
+  ],
+  "samples_per_arm": 100000,
+  "seed": 42,
+  "voxel_size_m": 0.02,
+  "padding_cells": 2,
+  "fk_batch_size": 50000,
+  "held_out_samples_per_arm": 10000,
+  "fk_check_samples_per_arm": 32,
+  "fk_tolerance_m": 1e-8,
+  "viewer_max_points_per_arm": 50000
+}

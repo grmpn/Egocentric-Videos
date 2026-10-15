@@ -398,3 +398,27 @@ review. Exact installed versions and setup logs are local under
 `outputs/gravity/part-1-20261014/`. The legacy HaWoR comparison required
 `PYTHONNOUSERSITE=1`: a user-installed NumPy 2 otherwise shadowed its pinned NumPy
 1.26.4. No existing environment or user package was altered.
+
+## Robot workspace environment
+
+Use a separate Python 3.12 environment for scikit-robot FK, SciPy EDT, CPU PyTorch
+interpolation and the Viser browser viewer. The direct dependencies are pinned in
+[workspace-requirements.txt](workspace-requirements.txt). NumPy/SciPy reuse the
+existing project versions; the new scikit-robot dependency supplies URDF loading
+and batch FK, and its viewer uses Viser/trimesh. JAX, Open3D and a simulator are
+unnecessary for this positional-workspace workflow.
+
+```bash
+uv venv --python 3.12 .venv-workspace
+uv pip install --python .venv-workspace/bin/python -r environment/workspace-requirements.txt
+uv pip check --python .venv-workspace/bin/python
+git clone --no-checkout https://github.com/PatrizioAcquadro/purdue-alex-assets.git data/models/purdue-alex-assets
+git -C data/models/purdue-alex-assets checkout --detach 9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b
+```
+
+The [workspace configuration](../configs/robot_workspace.json) pins the asset
+revision, canonical SAKE URDF, base/tool frames and seven-joint chains. The build
+command verifies the revision and unchanged tracked assets. The downloaded
+repository retains its license/provenance files and meshes; it stays ignored.
+Existing HaWoR, annotation and gravity environments remain separate. Setup and
+installed-package evidence is local under `outputs/workspace/part-2-20261015/`.

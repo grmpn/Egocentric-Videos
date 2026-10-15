@@ -12,7 +12,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — draft FK sampling, voxel distance queries and interactive review; awaiting approval.
+- [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review; implementation underway.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
 - [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance.
 - [Milestone 1: HaWoR baseline](plans/milestone-1-hawor-baseline.md) — preserved approval record for a completed milestone; historical paths and resolved questions remain unchanged. New plans use the short specification above.
