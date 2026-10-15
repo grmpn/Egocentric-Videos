@@ -267,6 +267,10 @@ See the [frame/export contract](knowledge/wiki/topics/stage-3-retargeting.md#imp
 and [bundled acceptance evidence](knowledge/wiki/experiments/gravity-alignment-bundled.md).
 Gravity alignment does not certify metric accuracy or robot feasibility.
 
+```bash
+PYTHONPATH=src .venv-gravity/bin/python -m pytest tests/test_gravity_alignment.py tests/test_world_export.py
+```
+
 ## Stage 3 Part 2: Robot workspace
 
 Set up the [workspace environment and pinned robot assets](environment/README.md#robot-workspace-environment),
@@ -297,6 +301,19 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests
 The CLI integration check requires the pinned local assets; it is skipped when
 they are absent. Other tests use small synthetic volumes and an analytic URDF.
 
+To interactively inspect the saved workspace:
+
 ```bash
-PYTHONPATH=src .venv-gravity/bin/python -m pytest tests/test_gravity_alignment.py tests/test_world_export.py
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_robot_workspace.py \
+    outputs/workspace/example-100k --open-browser
 ```
+
+The command prints a local viewer URL (normally `http://localhost:8080`). Drag to
+orbit, right-drag to pan, and scroll to zoom. Toggle left/right point and voxel
+layers separately; hide all four to inspect the reference robot and base axes.
+Points are reduced only for display, while all occupied 2 cm cubes are available.
+The robot stays at its zero reference pose. Stop the viewer with Ctrl-C. Browser
+hardware acceleration is preferable for large voxel layers; software rendering
+works but is slower. `--asset-root` can relocate the same pinned assets.
+See the [Purdue workspace acceptance](knowledge/wiki/experiments/robot-workspace-purdue.md)
+for the 100k/1m comparison, review images and measured limitations.

@@ -49,6 +49,19 @@ def load_robot(urdf_path, base_frame):
     return robot
 
 
+def verify_asset_source(asset_root, settings):
+    """Use the same pinned, unmodified model for numerical work and its viewer."""
+    asset_root = Path(asset_root).resolve()
+    revision = subprocess.check_output(["git", "-C", str(asset_root), "rev-parse", "HEAD"], text=True).strip()
+    if revision != settings["asset_revision"]:
+        raise ValueError(f"Robot assets must be checked out at {settings['asset_revision']}, found {revision}")
+    result = subprocess.run(["git", "-C", str(asset_root), "diff", "--exit-code", "HEAD", "--", "assets"],
+                            capture_output=True)
+    if result.returncode:
+        raise ValueError("Robot assets have tracked changes or cannot be checked; use a clean pinned checkout")
+    return asset_root / settings["urdf"]
+
+
 def arm_parameters(robot, tool_frame, joint_names):
     """Extract library FK parameters after checking the actual base-to-tool chain."""
     from skrobot.kinematics.differentiable import extract_fk_parameters
@@ -135,13 +148,8 @@ def build_workspace(asset_root, output_directory, settings):
               "limitations": "Sampled positional occupancy only; collision, orientation, simultaneous bimanual and trajectory feasibility are unverified."}
     write_json(output / "workspace_report.json", report)
     try:
-        revision = subprocess.check_output(["git", "-C", str(asset_root), "rev-parse", "HEAD"], text=True).strip()
-        if revision != settings["asset_revision"]:
-            raise ValueError(f"Robot assets must be checked out at {settings['asset_revision']}, found {revision}")
-        subprocess.run(["git", "-C", str(asset_root), "diff", "--exit-code", "HEAD", "--", "assets"],
-                       check=True, capture_output=True)
-        urdf = asset_root / settings["urdf"]
-        report["asset_root"], report["asset_revision"], report["urdf"] = str(asset_root), revision, str(urdf)
+        urdf = verify_asset_source(asset_root, settings)
+        report["asset_root"], report["asset_revision"], report["urdf"] = str(asset_root), settings["asset_revision"], str(urdf)
         robot = load_robot(urdf, settings["base_frame"])
         report["locked_joint_positions_rad"] = {j.name: 0. for j in robot.joint_list
                                                if j.name not in sum(settings["arm_joints"], [])}
@@ -175,7 +183,7 @@ def build_workspace(asset_root, output_directory, settings):
         report["arms"] = arm_reports
         for hand, points in enumerate(clouds):
             indices, valid = grid.indices(points)
-            if not valid.all() or not grid.occupancy[hand, *indices.T].all():
+            if not valid.all() or not grid.occupancy[(hand, *indices.T)].all():
                 raise ValueError("Sample-to-voxel membership check failed")
             error = float(np.max(np.abs(grid.centers(indices) - points)))
             if error > grid.spacing_m / 2 + 1e-12:

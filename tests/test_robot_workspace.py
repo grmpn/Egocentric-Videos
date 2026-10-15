@@ -112,6 +112,13 @@ def test_fk_known_rotated_base_fixed_tool_offset_and_seeded_prefix(tmp_path):
         arm_parameters(robot, "tool", ["wrong"])
     with pytest.raises(ValueError, match="Missing tool"):
         arm_parameters(robot, "missing", ["hinge"])
+    # Moving the entire model in the viewer/world must not change base-frame outputs.
+    robot.translate([.7, -.9, 1.2])
+    robot.rotate(.6, "x")
+    _, _, moved_parameters = arm_parameters(robot, "tool", ["hinge"])
+    moved_q, moved_points = sample_arm(robot, moved_parameters, 100, 21, 11)
+    np.testing.assert_array_equal(moved_q, q)
+    np.testing.assert_allclose(moved_points, expected, atol=1e-9)
 
 
 def test_cli_build_and_reload_actual_purdue_assets(tmp_path):
@@ -143,3 +150,12 @@ def test_cli_build_and_reload_actual_purdue_assets(tmp_path):
             assert valid.all() and hits[:, hand].all()
     second = subprocess.run(command, env=environment, capture_output=True, text=True)
     assert second.returncode != 0 and 'FileExistsError' in second.stderr
+    # A mismatched model revision must leave a failed report and no accepted grid.
+    settings["asset_revision"] = "0" * 40
+    config.write_text(json.dumps(settings))
+    failed = tmp_path / "wrong-model"
+    command[-1] = str(failed)
+    result = subprocess.run(command, env=environment, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert json.loads((failed / "workspace_report.json").read_text())["status"] == "failed"
+    assert not (failed / "workspace_grid.npz").exists()

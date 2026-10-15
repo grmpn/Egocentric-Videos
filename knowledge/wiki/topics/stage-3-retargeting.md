@@ -1,7 +1,7 @@
 # Stage 3 — Fixed-base trajectory preparation
 
 Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../experiments/gravity-alignment-bundled.md).
-Part 2 [approved plan](../plans/milestone-3-part-2-robot-workspace.md) in implementation · 2026-10-15.
+Part 2 implemented and validated · 2026-10-15 · [Acceptance evidence](../experiments/robot-workspace-purdue.md).
 The user's [spec](../../../Stage-3-Spec.md), updated for Part 2, is preserved local input
 (untracked; unavailable in a fresh clone). This page preserves its planning content.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
@@ -25,7 +25,7 @@ The current request does not authorize real-robot execution.
 | Part | Intended result | Current boundary |
 | --- | --- | --- |
 | 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Implemented; bundled-example acceptance complete. |
-| 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Approved revision 1; numerical workflow verified, interactive review underway. |
+| 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Implemented; numerical and interactive acceptance complete. |
 | 3. Placement and episode export | Gravity-aligned trajectories + workspace → optimized base position/yaw → valid manipulation intervals and base-frame hand trajectories. | Planning only; final feasibility criteria must be agreed. |
 
 Part 2 can be developed independently of human capture after its own approval.
@@ -69,8 +69,9 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 
 ## Part 2 workspace contract
 
-**Numerical workflow implemented; interactive acceptance pending.** The
-[approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance. The updated user spec requests 100,000–1,000,000
+**Implemented and validated.** The
+[approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance.
+The updated user spec requests 100,000–1,000,000
 FK samples, separate left/right occupancy at an initial 2 cm spacing, Euclidean
 distance transforms and interpolated SDF queries, movable-camera point/voxel views,
 and verification of base-coordinate to voxel-index conversion.
@@ -81,7 +82,8 @@ per arm (shoulder Y/X/Z, elbow Y, wrist Z/X, gripper Y), and fixed
 `LEFT_EZGRIPPER_TCP_LINK` / `RIGHT_EZGRIPPER_TCP_LINK` tool frames. The
 workspaces use these TCP origins with the pedestal fixed and other movable joints
 at zero. These are asset-defined tool points, not calibrated human wrists; the
-human-to-tool mapping remains Part 3 work. The actual model and both FK paths have now been exercised.
+human-to-tool mapping remains Part 3 work. The actual model and both FK paths
+have been exercised.
 
 Implemented grid convention: one common lattice aligned to the base axes, with
 separate hand occupancy arrays. Its stored origin is the lower cell corner
@@ -113,14 +115,18 @@ The implementation reuses these library capabilities:
   uses trilinear interpolation for 5D input with `mode="bilinear"`; axis ordering,
   `align_corners` and out-of-bounds behavior are explicitly handled below.
 - [Scikit-robot viewers](https://scikit-robot.readthedocs.io/en/latest/reference/viewers.html)
-  provide interactive camera controls and a Viser browser option. Use one suitable
-  viewer for robot, points and voxel cells; Viser is selected. Point display
+  provide interactive camera controls. The implementation uses Viser for robot,
+  points and voxel cells. Point display
   reduction preserves full saved workspace data; all occupied voxels are available.
-
 
 The [README](../../../README.md#stage-3-part-2-robot-workspace) owns build commands;
 [environment setup](../../../environment/README.md#robot-workspace-environment)
-owns installation. New run directories contain:
+owns installation. The [viewer](../../../src/egocentric_pipeline/workspace_visualization.py)
+loads completed exports and the same verified robot revision, holds the robot
+at its zero reference pose, and offers separate left/right point and voxel layers.
+Point display can be reduced; voxel display uses all occupied cells with LOD off.
+The [acceptance page](../experiments/robot-workspace-purdue.md) owns measured results,
+screenshots and remaining sampling/physical limitations. New run directories contain:
 
 | Artifact | Contract |
 | --- | --- |

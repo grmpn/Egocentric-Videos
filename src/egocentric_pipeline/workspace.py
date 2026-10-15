@@ -65,7 +65,7 @@ class WorkspaceGrid:
         """Return [N,2] sampled occupancy and [N] domain validity."""
         indices, valid = self.indices(points_m)
         inside = np.zeros((len(indices), 2), dtype=bool)
-        inside[valid] = self.occupancy[:, *indices[valid].T].T
+        inside[valid] = self.occupancy[(slice(None), *indices[valid].T)].T
         return inside, valid
 
     def query(self, points_m):
@@ -132,7 +132,7 @@ def build_grid(point_clouds, spacing_m=0.02, padding_cells=2):
     occupancy = np.zeros((2, *shape), dtype=bool)
     for hand, points in enumerate(clouds):
         indices = np.floor((points - origin) / spacing_m).astype(np.int64)
-        occupancy[hand, *indices.T] = True
+        occupancy[(hand, *indices.T)] = True
     distance = np.stack([distance_transform_edt(~o, sampling=spacing_m)
                          - distance_transform_edt(o, sampling=spacing_m) for o in occupancy])
     return WorkspaceGrid(origin, spacing_m, occupancy, distance)
