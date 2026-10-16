@@ -2,13 +2,14 @@
 
 Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../experiments/gravity-alignment-bundled.md).
 Part 2 implemented and validated · 2026-10-15 · [Acceptance evidence](../experiments/robot-workspace-purdue.md).
+Part 3 implemented and validated · 2026-10-16 · [Acceptance evidence](../experiments/retargeting-bundled.md).
 The user's [spec](../../../Stage-3-Spec.md), updated through Part 3 on 2026-10-16,
 is preserved local input (untracked; unavailable in a fresh clone). This page owns
 implemented contracts; the [approved Part 3 plan](../plans/milestone-3-part-3-placement-and-segmentation.md)
 owns placement/segmentation scope and acceptance.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
-not HuRo's numbered stages. All three part plans are approved; Part 3 implementation
-and numerical/visual verification are complete, with final acceptance recorded separately.
+not HuRo's numbered stages. All three approved part plans are fulfilled within
+their documented positional scope; dynamic simulation and physical execution are unverified.
 
 ## Repository role and sequence
 

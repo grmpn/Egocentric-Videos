@@ -359,3 +359,6 @@ wrists; white markers show verified TCPs. Failed/missing arms are hidden.
 The base changes only between separately labeled episodes. Large joint changes
 are flagged; no motion is synthesized across gaps. This is position-only IK,
 without collision, orientation, dynamic-limit, floor or real-robot certification.
+See [bundled Part 3 acceptance](knowledge/wiki/experiments/retargeting-bundled.md)
+for the two retained episodes, independent audit, visual evidence and remaining
+IK failure/joint discontinuities.

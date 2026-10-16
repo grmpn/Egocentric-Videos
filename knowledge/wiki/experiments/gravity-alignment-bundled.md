@@ -1,8 +1,9 @@
 # Stage 3 Part 1 — Bundled gravity-alignment acceptance
 
 Verified 2026-10-14 against [approved revision 1](../plans/milestone-3-part-1-gravity-alignment.md).
-Part 1 is complete. Parts 2–3 and Milestone 2's unrecorded iPhone pilot remain
-outstanding; this establishes no robot feasibility or measured metric accuracy.
+Part 1 is complete. At this checkpoint Parts 2–3 and the unrecorded iPhone pilot
+were outstanding; this result establishes no robot feasibility or measured metric
+accuracy. Later robot verification is recorded in [Part 3 acceptance](retargeting-bundled.md).
 
 ## Reproduction and evidence
 

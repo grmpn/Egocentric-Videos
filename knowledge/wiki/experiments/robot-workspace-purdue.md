@@ -2,8 +2,9 @@
 
 Verified 2026-10-15 against [approved revision 2](../plans/milestone-3-part-2-robot-workspace.md),
 including the user-authorized 5m/10m density extension after initial acceptance.
-Part 2 is complete. This accepts a sampled positional approximation; Part 3
-placement and trajectory feasibility remain unimplemented and unapproved.
+Part 2 is complete. This accepts a sampled positional approximation. At this
+acceptance checkpoint Part 3 was unimplemented/unapproved; its later result is
+recorded in [Part 3 acceptance](retargeting-bundled.md).
 
 ## Reproduction and artifacts
 
