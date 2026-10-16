@@ -11,6 +11,35 @@ from .gravity_alignment import rotate_mano_parameters
 from .world_export import HAND_ORDER
 
 
+def load_mano_model(path, hand):
+    """Load a licensed MANO asset with HaWoR's left-hand shape correction."""
+    import smplx
+
+    model = smplx.MANOLayer(str(path), is_rhand=hand == 1)
+    if hand == 0:
+        model.shapedirs[:, 0, :] *= -1
+    return model
+
+
+def reconstruct_mano(model, translation, orientation, hand_pose, betas):
+    """Evaluate saved MANO parameters: metres, axis-angle radians, batch first.
+
+    Translation is the MANO parameter, not the physical wrist. Returns CPU
+    joints [N,16,3] and vertices [N,778,3] in the parameters' coordinate frame.
+    """
+    import torch
+
+    pose = torch.from_numpy(Rotation.from_rotvec(hand_pose.reshape(-1, 3))
+                            .as_matrix().astype(np.float32)).reshape(-1, 15, 3, 3)
+    root = torch.from_numpy(Rotation.from_rotvec(orientation)
+                            .as_matrix().astype(np.float32))[:, None]
+    with torch.no_grad():
+        result = model(betas=torch.from_numpy(betas.copy()), hand_pose=pose,
+                       global_orient=root, transl=torch.from_numpy(translation.copy()),
+                       pose2rot=False)
+    return result.joints.numpy(), result.vertices.numpy()
+
+
 def align_hand_geometry(world, rotation, model_paths):
     """Return corrected MANO poses, physical wrists, rest roots and error evidence.
 
@@ -33,22 +62,14 @@ def align_hand_geometry(world, rotation, model_paths):
         if not len(indices):
             evidence[name] = {"valid_frames": 0, "geometry_check": "absent_hand"}
             continue
-        model = smplx.MANOLayer(str(model_paths[hand]), is_rhand=hand == 1)
-        if hand == 0:
-            model.shapedirs[:, 0, :] *= -1
+        model = load_mano_model(model_paths[hand], hand)
         translation = world["root_translation_world_m"][indices, hand]
         orientation = world["root_orientation_world_axis_angle"][indices, hand]
-        pose = torch.from_numpy(Rotation.from_rotvec(
-            world["hand_pose_axis_angle"][indices, hand].reshape(-1, 3)).as_matrix().astype(np.float32)
-        ).reshape(len(indices), 15, 3, 3)
+        pose = world["hand_pose_axis_angle"][indices, hand]
         betas = torch.from_numpy(world["mano_betas"][indices, hand].copy())
 
         def reconstruct(position, orient):
-            with torch.no_grad():
-                result = model(betas=betas, hand_pose=pose,
-                               global_orient=torch.from_numpy(Rotation.from_rotvec(orient).as_matrix().astype(np.float32))[:, None],
-                               transl=torch.from_numpy(position.copy()), pose2rot=False)
-            return result.joints.numpy(), result.vertices.numpy()
+            return reconstruct_mano(model, position, orient, pose, betas.numpy())
 
         joints, vertices = reconstruct(translation, orientation)
         # J(beta) is independent of global rotation and articulation. Obtain it

@@ -22,7 +22,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 ## Topics and evidence
 
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
-- [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — bundled episodes, independent transform/SDF/IK audit, annotated video, interactive playback and preserved failures/discontinuities.
+- [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — bundled episodes, independent transform/SDF/IK audit, annotated video, interactive playback with original MANO comparison and preserved failures/discontinuities.
 - [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.

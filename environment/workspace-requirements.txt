@@ -1,5 +1,6 @@
 # Python 3.12, Linux x86_64; CPU FK/EDT/interpolation and browser visualization.
 # Independent of the working HaWoR, annotation and gravity environments.
+# Bootstrap build tools, then use --no-build-isolation-package chumpy; see README.md.
 scikit-robot==0.3.39
 viser==1.1.1
 trimesh==5.1.1
@@ -9,3 +10,6 @@ torch @ https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manyl
 pytest==8.4.2
 # Source-video overlays; already installed through the viewer dependencies.
 Pillow==12.3.0
+# Original MANO comparison; same evaluator/pickle compatibility as gravity alignment.
+smplx==0.1.28
+chumpy @ git+https://github.com/mattloper/chumpy@580566eafc9ac68b2614b64d6f7aaa84eebb70da

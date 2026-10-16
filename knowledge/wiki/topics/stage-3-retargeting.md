@@ -132,6 +132,26 @@ The viewer animates only verified arm samples, hides missing/failed arms, and
 shows the fixed base, full wrist/camera paths and current seed/episode boundaries.
 Neither the display nor the workspace heuristic detects semantic manipulation.
 
+The MANO comparison reconstructs the **original world-frame** translation,
+orientation, articulation and shape with the same SMPL-X evaluator and left-hand
+shape correction as Part 1. Each episode's `transform_base_from_world` moves all
+778 vertices into its base frame. The viewer attaches them beneath the base scene
+node, whose `transform_aligned_from_base` places both robot and meshes in the
+shared aligned scene. No extra wrist offset, rotation matching, scaling or
+gripper deformation is applied. Reconstructed physical wrists must agree with
+saved base-frame targets within **10 µm** (float32 geometry consistency, not an
+accuracy claim). Meshes are reconstructed in memory; saved trajectories stay intact.
+
+Blue/orange means left/right. The **MANO meshes** toggle and **MANO opacity**
+slider control the overlay. A valid original mesh survives IK failure; missing
+hands and frames without a retained base are hidden. Original hand orientations
+can differ from robot tools because IK constrains only position. Asset paths
+default to the alignment report; `--mano-models LEFT RIGHT` relocates licensed
+inputs and `--no-mano` supports review without them. The
+[environment instructions](../../../environment/README.md#robot-workspace-environment)
+own dependencies; [acceptance evidence](../experiments/retargeting-bundled.md#original-mano-mesh-comparison)
+owns geometry and visual checks.
+
 ## Part 2 workspace contract
 
 **Implemented and validated.** The

@@ -137,7 +137,39 @@ def annotate_video(output, arrays, report, clip):
                        "review_frames": sorted(review_frames)}
 
 
-def view_retargeting(directory, *, asset_root=None, open_browser=False):
+def base_hand_meshes(arrays, report, model_paths):
+    """Original MANO vertices in each frame's episode base; no IK deformation.
+
+    Returns left/right (vertices [T,778,3] metres, faces [F,3]). Missing hands
+    and frames without a retained base stay NaN, independently of IK success.
+    """
+    from .hand_geometry import load_mano_model, reconstruct_mano
+
+    meshes = []
+    for hand, path in enumerate(model_paths):
+        if not Path(path).is_file():
+            raise FileNotFoundError(f"MANO asset missing: {path}; supply --mano-models LEFT RIGHT or use --no-mano")
+        model = load_mano_model(path, hand)
+        vertices = np.full((len(arrays["episode_id"]), len(model.v_template), 3), np.nan, np.float32)
+        for episode in report["episodes"]:
+            indices = np.flatnonzero((arrays["episode_id"] == episode["episode_id"]) & arrays["export_valid"][:, hand])
+            if not len(indices):
+                continue
+            joints, world_vertices = reconstruct_mano(
+                model, arrays["root_translation_world_m"][indices, hand],
+                arrays["root_orientation_world_axis_angle"][indices, hand],
+                arrays["hand_pose_axis_angle"][indices, hand], arrays["mano_betas"][indices, hand])
+            transform = arrays["transform_base_from_world"][episode["candidate_id"]]
+            # Catch incorrect assets/hand conventions before showing a misleading overlay.
+            if not np.allclose(transform_points(joints[:, 0], transform),
+                               arrays["wrist_position_base_m"][indices, hand], atol=1e-5, rtol=0):
+                raise ValueError("MANO wrists disagree with saved base-frame targets; check model assets and hand order")
+            vertices[indices] = transform_points(world_vertices, transform)
+        meshes.append((vertices, model.faces))
+    return meshes
+
+
+def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_models=None, show_mano=True):
     """Orbit/pan/zoom and source-timed playback; failed arm poses are hidden."""
     from scipy.spatial.transform import Rotation
     from skrobot.coordinates import Coordinates
@@ -151,6 +183,12 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False):
         arrays = {key: data[key] for key in data.files}
     if not report["episodes"]:
         raise ValueError("No retained episodes to animate; review annotated_video.mp4 and candidate diagnostics")
+    meshes = []
+    if show_mano:
+        if mano_models is None:
+            alignment = read_json(Path(report["alignment_directory"]) / "alignment_report.json")
+            mano_models = [alignment["inputs"][f"mano_{name}"]["path"] for name in ("left", "right")]
+        meshes = base_hand_meshes(arrays, report, mano_models)
     settings = report["robot_settings"]
     robot = load_robot(verify_asset_source(asset_root or report["asset_root"], settings), settings["base_frame"])
     viewer = ViserViewer(draw_grid=False, enable_ik=False, enable_motion_planning=False)
@@ -160,6 +198,11 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False):
     for link in robot.link_list:
         viewer.add(link)
     base_axes = server.scene.add_frame("/base", axes_length=.2, axes_radius=.004)
+    mesh_handles = [server.scene.add_mesh_simple(
+        f"/base/mano_{name}", vertices=np.zeros_like(vertices[0]), faces=faces,
+        color=(70, 145, 245) if hand == 0 else (245, 155, 60), opacity=.65,
+        side="double", visible=False) for hand, (name, (vertices, faces))
+        in enumerate(zip(("left", "right"), meshes))]
     server.scene.add_label("/base/label", "Fixed robot base", position=(0, 0, -.06))
     server.scene.add_frame("/aligned", axes_length=.25, axes_radius=.003)
     server.scene.add_label("/aligned/label", "Aligned origin", position=(0, 0, -.06))
@@ -173,11 +216,23 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False):
         paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[valid, hand].astype(np.float32), colors=colors, point_size=.018))
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.012, color=(245, 245, 245)))
-    server.gui.add_markdown("## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\nBlue/orange: left/right wrist · White: verified TCP\nPath: green pass, red workspace failure, purple IK failure, gray unassigned.\n\nPosition-only IK. Missing/failed arms are hidden; collisions and dynamic limits are unchecked.")
+    server.gui.add_markdown("## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\nBlue/orange: original left/right hand and wrist · White: verified TCP\nPath: green pass, red workspace failure, purple IK failure, gray unassigned.\n\nPosition-only IK. Missing/failed robot arms are hidden; MANO retains the original hand orientation and articulation. Collisions and dynamic limits are unchecked.")
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
     play = server.gui.add_checkbox("Play", initial_value=False)
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
     path_control = server.gui.add_checkbox("Wrist paths", initial_value=True)
+    if meshes:
+        mesh_control = server.gui.add_checkbox("MANO meshes", initial_value=True)
+        opacity_control = server.gui.add_slider("MANO opacity", min=.1, max=1., step=.05, initial_value=.65)
+
+        @mesh_control.on_update
+        def toggle_meshes(event):
+            update(int(slider.value))
+
+        @opacity_control.on_update
+        def change_opacity(event):
+            for handle in mesh_handles:
+                handle.opacity = event.target.value
     status = server.gui.add_markdown("")
 
     @camera_control.on_update
@@ -209,6 +264,11 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False):
             if handle is not None:
                 handle.visible = eid >= 0 and (hand is None or bool(arrays["ik_success"][frame, hand]))
         for hand in range(2):
+            if meshes:
+                handle = mesh_handles[hand]
+                handle.visible = mesh_control.value and eid >= 0 and bool(arrays["export_valid"][frame, hand])
+                if handle.visible:
+                    handle.vertices = meshes[hand][0][frame]
             targets[hand].visible = bool(arrays["export_valid"][frame, hand])
             if targets[hand].visible:
                 targets[hand].position = wrists[frame, hand]

@@ -1,6 +1,6 @@
 # Milestone 3, Part 3 — Manipulation regions and robot-base placement
 
-Approved revision 1 · 2026-10-16 · User requested implementation; approval: `20261016-part-3-implementation-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 2 · 2026-10-16 · Implementation approved in `20261016-part-3-implementation-001`; original MANO mesh comparison requested in `20261016-mano-viewer-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
@@ -38,6 +38,9 @@ reloadable episode, transform, feasibility and joint-trajectory evidence.
   locked-joint settings. Seed successive solutions from previous successes; verify
   URDF position bounds and FK residual **≤5 mm**. Preserve failures and gaps;
   report joint discontinuities. Solver failure does not prove unreachability.
+- Display original MANO hand meshes transformed into each episode’s base frame,
+  synchronized with robot playback, with visibility and opacity controls. Preserve
+  original articulation and missing-hand validity independently of IK success.
 - Exclude gripper actuation, collision/orientation constraints, dynamic-limit
   certification, retiming, floor calibration, simulation/control, dataset changes
   and workspace gap filling. This is a positional kinematic demonstration.
@@ -55,6 +58,8 @@ reloadable episode, transform, feasibility and joint-trajectory evidence.
   placements, IK failures, FK residuals, joint bounds and export reload.
 - Inspect annotated video and movable-camera playback showing initial/final
   intervals, fixed bases, wrists/TCPs and feasible/infeasible/unknown/IK-failed frames.
+  Verify mesh/wrist alignment across episode changes and inspect missing/failed-IK
+  frames with the original meshes visible when valid.
   Save commands, settings, logs, coverage, residuals and review evidence under
   `outputs/retargeting/`. Sampled occupancy, metric scale, gravity accuracy,
   collision clearance and dynamic executability remain uncertified.

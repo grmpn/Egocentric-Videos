@@ -354,8 +354,15 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest \
 ```
 
 The viewer prints a local URL and supports orbit/pan/zoom, frame scrubbing,
-play/pause and camera/wrist-path toggles. Blue/orange markers show left/right
-wrists; white markers show verified TCPs. Failed/missing arms are hidden.
+play/pause and camera/wrist-path toggles. Blue/orange meshes show the original
+left/right MANO hands in each episode's base frame; matching markers show wrists,
+and white markers show verified TCPs. Toggle **MANO meshes** or adjust **MANO opacity**
+to compare with the robot. Original hand orientation and articulation are preserved;
+failed robot IK hides that robot arm while the valid MANO hand remains visible.
+Missing hand estimates are hidden. Meshes use the licensed MANO paths recorded by
+alignment; override with `--mano-models LEFT RIGHT`, or use `--no-mano` without assets.
+Update the [viewer environment](environment/README.md#robot-workspace-environment)
+to install its pinned MANO evaluator dependencies before using the mesh overlay.
 The base changes only between separately labeled episodes. Large joint changes
 are flagged; no motion is synthesized across gaps. This is position-only IK,
 without collision, orientation, dynamic-limit, floor or real-robot certification.

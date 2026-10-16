@@ -1,6 +1,6 @@
 # Stage 3 Part 3 — Bundled placement and IK acceptance
 
-Verified 2026-10-16 against [approved revision 1](../plans/milestone-3-part-3-placement-and-segmentation.md).
+Verified 2026-10-16 against the positional scope of [approved revision 2](../plans/milestone-3-part-3-placement-and-segmentation.md).
 Part 3 is complete within its positional scope. Together with
 [Part 1](gravity-alignment-bundled.md) and [Part 2](robot-workspace-purdue.md),
 this completes the approved fixed-base Stage 3 workflow. It does not establish
@@ -105,3 +105,35 @@ semantic manipulation labels. Scale, gravity accuracy, floor height, collisions,
 orientation and dynamic executability remain unverified; iPhone pilot acceptance
 is still separate work. Focused repository cleanup is the next checkpoint before
 another milestone; it has not been performed by this task.
+
+## Original MANO mesh comparison
+
+The user requested this viewer extension on 2026-10-16 (approved revision 2).
+It reuses the accepted run without redoing inference, placement or IK. Original
+MANO pose/shape parameters are evaluated with the shared Part 1 geometry code,
+then transformed into each episode's base frame and displayed with the robot.
+The [contract](../topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+owns transform, validity and asset conventions.
+
+[26 retargeting/workspace tests](../../../outputs/retargeting/mano-viewer-20261016/tests.log)
+and [11 gravity regression tests](../../../outputs/retargeting/mano-viewer-20261016/gravity-regression.log)
+passed, including nontrivial rotations/translations, deliberately different
+candidate/episode IDs, missing/unassigned geometry, IK-independent visibility,
+unchanged inputs and mismatched-wrist rejection. Licensed-asset tests executed
+locally; fresh clones without those assets skip the MANO integration check.
+The [bundled audit](../../../outputs/retargeting/mano-viewer-20261016/geometry-audit.json)
+compared all **241 valid hand frames**, each with **778 vertices / 1,538 faces**,
+against reconstruction from Part 1's aligned parameters followed by aligned-to-base
+transformation. Maximum coordinate disagreement was **0.211 µm**, below the
+**10 µm** geometry consistency tolerance. This does not measure physical accuracy.
+
+[Browser checks](../../../outputs/retargeting/mano-viewer-20261016/browser.json)
+passed with no page errors for playback, scrubbing across the base switch,
+orbit/pan/zoom, path toggles, MANO visibility and opacity. The
+[visual review](../../../outputs/retargeting/mano-viewer-20261016/visual-review.json)
+confirmed blue left/orange right original hands, including
+[frame 75's valid mesh despite IK failure](../../../outputs/retargeting/mano-viewer-20261016/viewer-frame-0075.png),
+the [base switch](../../../outputs/retargeting/mano-viewer-20261016/viewer-frame-0076.png)
+and [frame 120's missing right hand](../../../outputs/retargeting/mano-viewer-20261016/viewer-frame-0120.png).
+The viewer preserves original hand orientation and articulation; robot tool
+orientation remains unconstrained by positional IK. Artifacts are local-only.

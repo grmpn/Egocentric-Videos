@@ -201,3 +201,58 @@ def test_visual_state_exposes_ik_failure_even_when_workspace_also_fails():
     report = {"episodes": [{"candidate_id": 0}]}
     assert [frame_state(i, arrays, report)[0] for i in range(5)] == ["ik_failed", "infeasible", "feasible", "unknown", "unknown"]
     assert "workspace margin failed" in frame_state(0, arrays, report)[1]
+
+
+def test_original_mano_meshes_follow_episode_base_and_missing_hand_validity():
+    pytest.importorskip("smplx")
+    from scipy.spatial.transform import Rotation
+    from egocentric_pipeline.hand_geometry import align_hand_geometry, load_mano_model, reconstruct_mano
+    from egocentric_pipeline.retargeting_visualization import base_hand_meshes
+
+    models = [ROOT / "external/HaWoR" / path for path in (
+        "_DATA/data_left/mano_left/MANO_LEFT.pkl", "_DATA/data/mano/MANO_RIGHT.pkl")]
+    if not all(p.is_file() for p in models):
+        pytest.skip("Requires licensed MANO assets; see environment/README.md")
+    rng = np.random.default_rng(7)
+    arrays = {name: rng.normal(0, .15, (5, 2, width)).astype(np.float32) for name, width in (
+        ("root_translation_world_m", 3), ("root_orientation_world_axis_angle", 3),
+        ("hand_pose_axis_angle", 45), ("mano_betas", 10))}
+    arrays["export_valid"] = np.ones((5, 2), bool)
+    arrays["export_valid"][1, 1] = False
+    original = {k: v.copy() for k, v in arrays.items()}
+    rotation = Rotation.from_rotvec([.4, -.6, .2]).as_matrix()
+    aligned, _ = align_hand_geometry(arrays, rotation, models)
+    arrays.update(aligned)
+    world_to_aligned = np.eye(4)
+    world_to_aligned[:3, :3] = rotation
+    base_transforms = [base_transform([.2, -.1, .4, .7]), base_transform([-.5, .3, -.2, -.6])]
+    arrays["transform_base_from_world"] = np.array([t @ world_to_aligned for t in base_transforms])
+    arrays["episode_id"] = np.array([0, 0, 1, 1, -1])
+    arrays["ik_success"] = np.zeros((5, 2), bool)  # original meshes survive IK failure
+    arrays["wrist_position_base_m"] = np.full((5, 2, 3), np.nan)
+    report = {"episodes": [{"episode_id": 0, "candidate_id": 1}, {"episode_id": 1, "candidate_id": 0}]}
+    for e in report["episodes"]:
+        frames = arrays["episode_id"] == e["episode_id"]
+        arrays["wrist_position_base_m"][frames] = transform_points(
+            aligned["wrist_position_aligned_m"][frames], base_transforms[e["candidate_id"]])
+    meshes = base_hand_meshes(arrays, report, models)
+    for hand, (vertices, faces) in enumerate(meshes):
+        valid = arrays["export_valid"][:, hand] & (arrays["episode_id"] >= 0)
+        assert vertices.shape == (5, 778, 3) and faces.shape[1] == 3
+        assert faces.min() == 0 and faces.max() < 778
+        assert np.isnan(vertices[~valid]).all() and np.isfinite(vertices[valid]).all()
+        # Independent route: reconstruct Part 1's rotated parameters, then apply
+        # aligned-to-base. This catches wrong composition or an extra rotation.
+        model = load_mano_model(models[hand], hand)
+        _, aligned_vertices = reconstruct_mano(model,
+            aligned["root_translation_aligned_m"][valid, hand],
+            aligned["root_orientation_aligned_axis_angle"][valid, hand],
+            arrays["hand_pose_axis_angle"][valid, hand], arrays["mano_betas"][valid, hand])
+        for i, frame in enumerate(np.flatnonzero(valid)):
+            cid = report["episodes"][arrays["episode_id"][frame]]["candidate_id"]
+            np.testing.assert_allclose(vertices[frame], transform_points(aligned_vertices[i], base_transforms[cid]), atol=1e-6, rtol=0)
+    for name, value in original.items():
+        np.testing.assert_array_equal(arrays[name], value)
+    arrays["wrist_position_base_m"][0, 0, 0] += .02
+    with pytest.raises(ValueError, match="wrists disagree"):
+        base_hand_meshes(arrays, report, models)

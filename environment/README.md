@@ -410,7 +410,10 @@ unnecessary for this positional-workspace workflow.
 
 ```bash
 uv venv --python 3.12 .venv-workspace
-uv pip install --python .venv-workspace/bin/python -r environment/workspace-requirements.txt
+uv pip install --python .venv-workspace/bin/python \
+    pip==26.2.1 setuptools==80.10.2 wheel==0.47.0
+uv pip install --python .venv-workspace/bin/python \
+    --no-build-isolation-package chumpy -r environment/workspace-requirements.txt
 uv pip check --python .venv-workspace/bin/python
 git clone --no-checkout https://github.com/PatrizioAcquadro/purdue-alex-assets.git data/models/purdue-alex-assets
 git -C data/models/purdue-alex-assets checkout --detach 9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b
@@ -429,3 +432,10 @@ installed through the viewer dependencies, is declared directly for video labels
 and review figures. Annotation uses the existing system `ffmpeg`/`ffprobe`; no
 OpenCV, simulator or model inference is required. Browser automation used for
 acceptance is local validation tooling, not a production dependency.
+
+Original hand meshes in the Part 3 viewer reuse SMPL-X 0.1.28 and the same pinned
+Chumpy revision as gravity alignment. These evaluate saved MANO poses on CPU;
+they do not rerun HaWoR. Chumpy needs the build tools and package-specific build
+option above when its wheel is not cached. Licensed MANO files remain local:
+the viewer reads their paths from the source alignment report, or accepts
+`--mano-models LEFT RIGHT`. Use `--no-mano` for robot-only review without these assets.
