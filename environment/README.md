@@ -422,3 +422,10 @@ command verifies the revision and unchanged tracked assets. The downloaded
 repository retains its license/provenance files and meshes; it stays ignored.
 Existing HaWoR, annotation and gravity environments remain separate. Setup and
 installed-package evidence is local under `outputs/workspace/part-2-20261015/`.
+
+Part 3 reuses this environment for SciPy optimization, PyTorch distance queries,
+scikit-robot positional IK and interactive playback. Pillow 12.3.0, already
+installed through the viewer dependencies, is declared directly for video labels
+and review figures. Annotation uses the existing system `ffmpeg`/`ffprobe`; no
+OpenCV, simulator or model inference is required. Browser automation used for
+acceptance is local validation tooling, not a production dependency.

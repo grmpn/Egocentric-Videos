@@ -4,11 +4,11 @@ Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../exper
 Part 2 implemented and validated · 2026-10-15 · [Acceptance evidence](../experiments/robot-workspace-purdue.md).
 The user's [spec](../../../Stage-3-Spec.md), updated through Part 3 on 2026-10-16,
 is preserved local input (untracked; unavailable in a fresh clone). This page owns
-implemented contracts; the [Part 3 draft](../plans/milestone-3-part-3-placement-and-segmentation.md)
-captures the new proposed scope and acceptance.
+implemented contracts; the [approved Part 3 plan](../plans/milestone-3-part-3-placement-and-segmentation.md)
+owns placement/segmentation scope and acceptance.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
-not HuRo's numbered stages. The Part 1 and [Part 2 plans](../plans/milestone-3-part-2-robot-workspace.md)
-are approved; Part 3 remains planning only.
+not HuRo's numbered stages. All three part plans are approved; Part 3 implementation
+and numerical/visual verification are complete, with final acceptance recorded separately.
 
 ## Repository role and sequence
 
@@ -28,12 +28,12 @@ The current request does not authorize real-robot execution.
 | --- | --- | --- |
 | 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Implemented; bundled-example acceptance complete. |
 | 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Implemented; numerical and interactive acceptance complete. |
-| 3. Placement and episode export | Camera segmentation → base XYZ/yaw fitting → expanded manipulation intervals, base-frame hands and positional IK playback. | Draft revision 1; awaiting approval. |
+| 3. Placement and episode export | Camera segmentation → base XYZ/yaw fitting → expanded manipulation intervals, base-frame hands and positional IK playback. | Implemented; bundled numerical and interactive checks passed. |
 
 Part 2 can be developed independently of human capture after its own approval.
 Part 3 depends on both previous outputs. Use one fixed base placement throughout
 each accepted episode; never optimize the base independently at every frame.
-The updated spec explicitly requests XYZ translation and yaw. The draft proposes
+The updated spec explicitly requests XYZ translation and yaw. Part 3 uses
 free Z without a calibrated floor constraint; this does not establish physical
 pedestal placement.
 
@@ -49,10 +49,10 @@ not simulation validation. Part 2 now loads the pinned URDF locally and verifies
 batched against ordinary FK; no simulator is installed for this workflow.
 
 Part 2 uses the base/TCP frames and positional sampling below. The
-[Part 3 draft](../plans/milestone-3-part-3-placement-and-segmentation.md) now owns
-proposed segmentation thresholds, validity handling, base optimization, interval
+[Part 3 plan](../plans/milestone-3-part-3-placement-and-segmentation.md) owns
+segmentation thresholds, validity handling, base optimization, interval
 expansion and IK acceptance. Its direct wrist-to-TCP position mapping, missing-hand
-rule and free-height placement are proposals awaiting approval. Positional SDF
+rule and free-height placement were approved on 2026-10-16. Positional SDF
 coverage and joint-limit-valid IK do not establish orientation reachability,
 collision clearance or dynamic executability. Unchecked constraints remain
 unverified. Preserve source timing and task coverage in the review evidence;
@@ -62,6 +62,74 @@ The [activity-mode reference](vlm-annotation-workflow.md#later-fixed-base-filter
 provides a possible semantic input: manipulation cores, optional context expansion
 under one base placement, and semantic task instructions. That hierarchy/mode
 workflow is not implemented; Stage 3 does not implicitly authorize it.
+
+## Part 3 placement and IK contract
+
+Implemented 2026-10-16. [README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
+owns run/view commands. The [configuration](../../../configs/trajectory_retargeting.json)
+owns adjustable numerical thresholds and search effort. The workflow consumes
+completed Part 1 and Part 2 reports/arrays, verifies the prepared RGB/source
+timeline and pinned robot assets, and creates a new output directory.
+
+Frame intervals are zero-based **[start, stop)**. Each frame owns time until the
+next timestamp; the final support interval uses median dt. Camera smoothing is
+Gaussian with default sigma 0.05 s and nearest edge handling; it affects only seed
+segmentation and requires uniform prepared timestamps. Threshold comparisons use
+XY displacement from each seed's first smoothed camera position. Once a crossing
+lasts 0.3 s, its first frame closes that seed, and the following frame starts the
+next. Seeds shorter than 1 s, including tails, remain recorded as discarded.
+
+Placement uses physical aligned wrists and each hand's own sampled SDF.
+SciPy differential evolution searches XYZ/yaw with a reproducible seed, finite
+bounds derived from wrists/workspace extent, and a recorded evaluation budget.
+The integer nonpassing-frame count dominates bounded distance/depth tie breakers.
+Out-of-domain distances guide search only through a positive penalty and never
+pass the actual query test. A stopped iteration budget is a search outcome, not
+a global-optimality claim. Free base Z has no calibrated floor interpretation.
+
+A frame is observed if either hand has `export_valid`; every observed hand must
+meet `distance <= -0.03 m`. Missing hands stay unverified, with all-missing frames
+unknown and excluded from the percentage denominator. Unknown frames count toward
+the nonpassing gap limit. Observation coverage is reported separately; an empty
+denominator cannot pass. All frames are evaluated under each candidate transform.
+Expansion selects the longest qualifying contiguous interval containing the seed,
+with earlier-start tie breaking. Long nonpassing runs bound the endpoint search.
+Overlaps prioritize duration, then observed count, then earlier seed. The longest
+qualifying unassigned remainder intersecting a later seed is retained only after
+all criteria are checked again; rejected alternatives stay in the report.
+
+IK constrains corresponding EZGripper TCP positions only. Each arm starts at zero,
+then uses its previous successful solution, with bounded, seeded random restarts
+on failure. Other joints stay locked at zero. Every stored success passes finite
+URDF position bounds and ordinary-FK error at most 5 mm. Failed or missing joint
+samples remain NaN; no gap interpolation or retiming occurs. Adjacent successful
+joint changes above 0.5 rad are reported, without asserting dynamic feasibility.
+Successive episodes are independent placements; their base/joint changes are not
+an executable transition. SDF, IK and their simultaneous intersection each receive
+separate coverage/gap checks; demonstrated episodes pass all three.
+
+`trajectory_retargeted.npz` preserves every Part 1 array, dtype and byte. For
+`T` frames and `C` fitted candidates, additions include:
+
+| Fields | Contract |
+| --- | --- |
+| `camera_position_smoothed_m` | `[T,3]` aligned-frame seed signal; original cameras unchanged. |
+| `transform_base_from_aligned`, `transform_base_from_world`, `transform_aligned_from_base` | `[C,4,4]` float64 homogeneous transforms acting on column vectors. World transform composes Part 1 rotation; no rescaling. |
+| `candidate_distance_m`, `candidate_query_valid`, `candidate_hand_passed` | `[C,T,2]` signed metres / booleans, left then right. Distances NaN for missing/out-of-domain samples. |
+| `candidate_frame_passed` | `[C,T]` available-hand SDF result for every video frame. |
+| `episode_id` | `[T]` integer; `-1` means unassigned. Report maps episode to candidate and interval. |
+| `wrist_position_base_m`, `tcp_position_base_m` | `[T,2,3]` target / successful FK metres in that episode's fixed base. Missing or unassigned geometry is NaN. |
+| `joint_angles_rad`, `ik_success`, `ik_residual_m`, `ik_attempts` | `[T,2,7]` joints in recorded chain order; `[T,2]` success, metre error and solve counts. Failed joints/residuals are NaN. |
+| `joint_step_rad`, `joint_jump` | `[T,2]` maximum absolute adjacent joint change / threshold flag, computed only within episodes with consecutive successes. |
+
+`retargeting_report.json` records source directories, model/settings/packages,
+transform conventions, all seeds/candidates/episodes, timing and video verification.
+A completed run can have `demo_accepted: false`; CLI exit code 2 preserves its
+diagnostics. Existing outputs are refused. The annotated video preserves prepared
+frame count/FPS and labels missing data, SDF/IK failures and large joint changes.
+The viewer animates only verified arm samples, hides missing/failed arms, and
+shows the fixed base, full wrist/camera paths and current seed/episode boundaries.
+Neither the display nor the workspace heuristic detects semantic manipulation.
 
 ## Part 2 workspace contract
 

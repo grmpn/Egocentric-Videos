@@ -1,0 +1,17 @@
+{
+  "camera_smoothing_sigma_s": 0.05,
+  "camera_displacement_m": 0.3,
+  "camera_sustain_s": 0.3,
+  "minimum_episode_s": 1.0,
+  "workspace_margin_m": 0.03,
+  "minimum_feasible_fraction": 0.95,
+  "maximum_gap_s": 0.2,
+  "seed": 42,
+  "optimizer_iterations": 100,
+  "optimizer_population": 16,
+  "ik_attempts": 4,
+  "ik_iterations": 100,
+  "ik_tolerance_m": 0.005,
+  "joint_jump_report_rad": 0.5,
+  "torch_threads": 1
+}

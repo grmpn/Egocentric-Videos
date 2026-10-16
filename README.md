@@ -318,3 +318,44 @@ hardware acceleration is preferable for large voxel layers; software rendering
 works but is slower. `--asset-root` can relocate the same pinned assets.
 See the [Purdue workspace acceptance](knowledge/wiki/experiments/robot-workspace-purdue.md)
 for the 100k/1m/5m/10m comparison, review images and measured limitations.
+
+## Stage 3 Part 3: Fixed-base placement and positional IK
+
+Reuse completed gravity-alignment and workspace directories. The workflow
+segments camera motion, fits one XYZ/yaw base per seed, expands and resolves
+intervals, checks positional IK, and annotates every prepared video frame.
+Run it in the existing [workspace environment](environment/README.md#robot-workspace-environment):
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
+    --alignment-directory outputs/gravity/part-1-20261014/bundled \
+    --workspace-directory outputs/workspace/density-20261015/10m \
+    --output-directory outputs/retargeting/example
+```
+
+The output directory must be new. Use `--config` to select settings based on
+[trajectory_retargeting.json](configs/trajectory_retargeting.json); `--asset-root`
+can relocate the same pinned model. The default requires a 3 cm workspace margin,
+strictly more than 95% passing observed frames, gaps at most 0.2 s and episodes
+at least 1 s. Missing hands remain unverified. Exit code 2 means processing
+completed but no episode passed demonstration acceptance; inspect the report/video.
+
+Outputs are `trajectory_retargeted.npz` (original fields plus base transforms,
+candidate distances, episode assignments and joint/IK arrays),
+`retargeting_report.json`, `annotated_video.mp4`, `feasibility_timeline.png` and
+representative review frames. The [Part 3 contract](knowledge/wiki/topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+explains array shapes, interval boundaries and failure handling.
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+    outputs/retargeting/example --open-browser
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest \
+    tests/test_retargeting.py tests/test_robot_workspace.py -q
+```
+
+The viewer prints a local URL and supports orbit/pan/zoom, frame scrubbing,
+play/pause and camera/wrist-path toggles. Blue/orange markers show left/right
+wrists; white markers show verified TCPs. Failed/missing arms are hidden.
+The base changes only between separately labeled episodes. Large joint changes
+are flagged; no motion is synthesized across gaps. This is position-only IK,
+without collision, orientation, dynamic-limit, floor or real-robot certification.

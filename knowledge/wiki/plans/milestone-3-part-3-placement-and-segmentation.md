@@ -1,6 +1,6 @@
 # Milestone 3, Part 3 — Manipulation regions and robot-base placement
 
-Draft revision 1 · 2026-10-16 · Awaiting user approval; no implementation authorized.
+Approved revision 1 · 2026-10-16 · User requested implementation; approval: `20261016-part-3-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
@@ -25,7 +25,7 @@ reloadable episode, transform, feasibility and joint-trajectory evidence.
   floor height. Save aligned-to-base and composed original-world-to-base transforms.
   Maximize feasible-frame count using each wrist's corresponding SDF, requiring
   **distance ≤ −0.03 m**. Record initialization/search settings; claim no global optimum.
-- Proposed validity rule: a frame with at least one `export_valid` hand passes
+- Validity rule: a frame with at least one `export_valid` hand passes
   only if every available hand passes. Missing hands remain unverified; all-missing
   frames are unknown. Out-of-domain queries cannot pass. Report observation coverage
   separately. A region requires **>95%** passing observed frames, **≤0.2 s**
@@ -33,7 +33,7 @@ reloadable episode, transform, feasibility and joint-trajectory evidence.
 - Evaluate every video frame under each optimized transform, then extend contiguous
   intervals around their seeds while preserving those criteria. Resolve overlaps
   deterministically; do not join disconnected intervals or change base within one.
-- Proposed IK scope: map physical wrists directly to corresponding EZGripper TCP
+- IK scope: map physical wrists directly to corresponding EZGripper TCP
   positions, orientation unconstrained, using the pinned model/arm chains and
   locked-joint settings. Seed successive solutions from previous successes; verify
   URDF position bounds and FK residual **≤5 mm**. Preserve failures and gaps;
