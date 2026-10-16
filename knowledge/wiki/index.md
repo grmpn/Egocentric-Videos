@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — draft camera segmentation, base fitting, region expansion and positional IK acceptance; awaiting approval.
 - [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
 - [Milestone 2: Video-to-LeRobot pilot](plans/milestone-2-lerobot-pilot.md) — approved scope and acceptance.
@@ -37,7 +38,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Source notes
 
-- [Stage 3 user spec](../../Stage-3-Spec.md) — local-only input updated by the user for Part 2; preserved during planning, with maintained content in the Stage 3 reference above.
+- [Stage 3 user spec](../../Stage-3-Spec.md) — local-only input updated by the user through Part 3; preserved during planning, with Part 3 scope captured in the draft plan above.
 - [HaWoR research notes](../raw/Sources/HaWoR-Review.md) — original source material, preserved.
 - [Eidon and LeRobot](../raw/Sources/Eidon-LeRobot-Review.md) — pilot selection, camera-evidence limits, and the v3.1 annotation choice.
 - [HuRo workflow reference](../raw/Sources/HuRo-Review.md) — related pipeline and pointers for later investigation; not an adopted implementation.

@@ -2,8 +2,10 @@
 
 Part 1 implemented and validated · 2026-10-14 · [Acceptance evidence](../experiments/gravity-alignment-bundled.md).
 Part 2 implemented and validated · 2026-10-15 · [Acceptance evidence](../experiments/robot-workspace-purdue.md).
-The user's [spec](../../../Stage-3-Spec.md), updated for Part 2, is preserved local input
-(untracked; unavailable in a fresh clone). This page preserves its planning content.
+The user's [spec](../../../Stage-3-Spec.md), updated through Part 3 on 2026-10-16,
+is preserved local input (untracked; unavailable in a fresh clone). This page owns
+implemented contracts; the [Part 3 draft](../plans/milestone-3-part-3-placement-and-segmentation.md)
+captures the new proposed scope and acceptance.
 Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
 not HuRo's numbered stages. The Part 1 and [Part 2 plans](../plans/milestone-3-part-2-robot-workspace.md)
 are approved; Part 3 remains planning only.
@@ -26,12 +28,14 @@ The current request does not authorize real-robot execution.
 | --- | --- | --- |
 | 1. Gravity alignment | World hand/camera trajectories → estimated up → one Z-up trajectory frame. | Implemented; bundled-example acceptance complete. |
 | 2. Robot workspace | Separate left/right FK clouds → 2 cm occupancy grids → EDT signed-distance tensors → trilinear queries, with interactive 3D review. | Implemented; numerical and interactive acceptance complete. |
-| 3. Placement and episode export | Gravity-aligned trajectories + workspace → optimized base position/yaw → valid manipulation intervals and base-frame hand trajectories. | Planning only; final feasibility criteria must be agreed. |
+| 3. Placement and episode export | Camera segmentation → base XYZ/yaw fitting → expanded manipulation intervals, base-frame hands and positional IK playback. | Draft revision 1; awaiting approval. |
 
 Part 2 can be developed independently of human capture after its own approval.
 Part 3 depends on both previous outputs. Use one fixed base placement throughout
 each accepted episode; never optimize the base independently at every frame.
-The spec leaves translation dimensionality and pedestal/floor constraints open.
+The updated spec explicitly requests XYZ translation and yaw. The draft proposes
+free Z without a calibrated floor constraint; this does not establish physical
+pedestal placement.
 
 ## Target embodiment and later acceptance decisions
 
@@ -44,23 +48,15 @@ canonical URDF. WSG32/UMI is opt-in. These are source claims from static inspect
 not simulation validation. Part 2 now loads the pinned URDF locally and verifies
 batched against ordinary FK; no simulator is installed for this workflow.
 
-Part 2 uses the base/TCP frames and positional sampling below. Before approving
-Part 3, resolve:
-
-- Base/tool frames, hand-to-tool pose mapping, active arms/joints, locked torso or
-  other joints, and sourced joint bounds. Positional FK coverage alone cannot
-  establish orientation reachability or simultaneous bimanual feasibility.
-- How the Part 2 sampled approximation supports placement and how candidate
-  positions receive actual feasibility checks; voxel membership alone is insufficient.
-- A continuous inverse-kinematics (IK) witness or equivalent verification for
-  accepted trajectories. Agree which position, orientation, joint, velocity,
-  acceleration and collision constraints apply, which limits are available, and
-  whether timing changes are allowed. Pointwise membership cannot certify these.
-  Unchecked limits must remain unverified rather than receiving a blanket pass.
-- Manipulation interval selection, minimum useful task coverage, infeasible-frame
-  handling and the eventual base-frame export contract. Preserve source timing,
-  hand identity, validity and the world/aligned/base transform chain. Do not trim
-  task-essential motion simply to obtain a feasible interval.
+Part 2 uses the base/TCP frames and positional sampling below. The
+[Part 3 draft](../plans/milestone-3-part-3-placement-and-segmentation.md) now owns
+proposed segmentation thresholds, validity handling, base optimization, interval
+expansion and IK acceptance. Its direct wrist-to-TCP position mapping, missing-hand
+rule and free-height placement are proposals awaiting approval. Positional SDF
+coverage and joint-limit-valid IK do not establish orientation reachability,
+collision clearance or dynamic executability. Unchecked constraints remain
+unverified. Preserve source timing and task coverage in the review evidence;
+the bundled walking example does not establish semantic manipulation detection.
 
 The [activity-mode reference](vlm-annotation-workflow.md#later-fixed-base-filtering)
 provides a possible semantic input: manipulation cores, optional context expansion
