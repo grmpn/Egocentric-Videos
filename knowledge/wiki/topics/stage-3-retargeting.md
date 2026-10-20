@@ -68,8 +68,8 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 
 Implemented 2026-10-20 under the [approved extension](../plans/milestone-3-joint-base-optimization.md).
 [README commands](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting)
-select this method or compare it with the existing workspace method. Numerical
-acceptance is recorded in the [joint/base evidence](../experiments/joint-base-bundled.md).
+select this method or compare it with the existing workspace method. Numerical,
+visual and timing acceptance is recorded in the [joint/base evidence](../experiments/joint-base-bundled.md).
 The baseline contract below remains supported.
 
 Both methods can now process only the retained camera-motion seeds, without
