@@ -76,17 +76,18 @@ class PoseModel:
 
 
 def initialize_base(camera_positions, camera_rotations, model, heading_min_norm):
-    """Mean horizontal optical heading; median camera centre minus neutral FK.
+    """Median horizontal optical direction; median camera centre minus neutral FK.
 
-    Mean unit headings handle +/-pi wraparound. A vertical/cancelling heading is
-    an explicit error rather than an arbitrary robot-facing direction.
+    Take component-wise medians of unit forward vectors, not wrapped yaw angles.
+    This handles +/-pi wraparound and reduces outlier influence. A vertical or
+    cancelling median direction is an explicit error.
     """
     directions = np.asarray(camera_rotations)[:, :2, 2]
     lengths = np.linalg.norm(directions, axis=1)
     usable = lengths > heading_min_norm
     if not usable.any():
         raise ValueError("No horizontal camera heading; inspect the camera poses")
-    direction = np.mean(directions[usable] / lengths[usable, None], axis=0)
+    direction = np.median(directions[usable] / lengths[usable, None], axis=0)
     if np.linalg.norm(direction) < heading_min_norm:
         raise ValueError("Camera headings cancel; choose a shorter manipulation region")
     yaw = float(np.arctan2(direction[1], direction[0]))

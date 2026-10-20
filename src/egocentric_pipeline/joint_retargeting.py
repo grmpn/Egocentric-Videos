@@ -59,6 +59,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "limitations": "Kinematic fit only; collision, dynamics, scale, gravity and floor height unverified.",
               "camera_position_use": "segmentation and base initialization only; no position objective",
+              "base_initialization": "yaw from component-wise median of normalized horizontal optical forward vectors; XYZ from median camera position minus rotated neutral camera offset",
               "orientation_mapping": "Neutral MANO wrist-to-middle MCP X; pinky-to-index MCP Y orthogonalized; Z=X cross Y. Match EZGripper palm/TCP axes.",
               "camera_convention": "URDF mount +X forward,+Y left,+Z up to optical +Z forward,+X right,+Y down; nominal mount centre, not calibrated lens centre",
               "invalid_geometry": "Original missing geometry remains NaN. joint_solution_rad contains regularized predictions within seeds; ik_success is observed pose acceptance, not solver convergence."}

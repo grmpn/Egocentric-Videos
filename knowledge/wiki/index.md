@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — approved direct IK/base fitting and fixed-base smoothing, camera rotation alignment, shared viewer and timing comparison; fulfilled.
+- [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — direct IK/base fitting, smoothing, shared viewer and timing comparison fulfilled; median initialization amendment tested with reduced coverage.
 - [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved robot-wrist-to-human-wrist matching, verified with regenerated workspaces and playback; fulfilled.
 - [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — approved camera segmentation, base fitting, region expansion and positional IK acceptance; fulfilled.
 - [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
@@ -23,7 +23,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — accepted bundled wrist-pose gates, smoothing, independent audits, new/legacy viewer checks and three-run timing/quality comparison.
+- [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — accepted original mean-heading run and timing comparison; subsequent median trial, rejected-region evidence and visual review.
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
 - [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — historical TCP runs and current wrist-aligned episodes, independent transform/SDF/IK audits, annotated video and MANO playback with preserved failures/discontinuities.
 - [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.

@@ -1,6 +1,12 @@
 # Milestone 3 — Joint base and trajectory optimization
 
-Approved revision 1 · 2026-10-20 · Approval: `20261020-joint-base-implementation-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 2 · 2026-10-20 · User-requested median initialization amendment: `20261020-median-heading-001` in the [action log](../logs/2026-10.jsonl).
+
+Revision 1 was fulfilled at `985080b`. This amendment changes the yaw statistic
+to median forward direction; camera position already used a median. Verify the
+initializer with outliers/wraparound, rerun the bundled clip and compare its pose,
+head and smoothness results to the preserved mean-heading run. The existing
+three-repeat workflow benchmark remains historical evidence.
 
 ## Objective and deliverable
 
@@ -20,9 +26,9 @@ as the baseline.
   Optimize each independently; do not expand regions or solve outside them.
   Missing observations remain unknown; label regularized joint predictions through
   gaps separately from observed tracking success.
-- Initialize yaw from mean horizontal camera heading, accounting for angular
+- Initialize yaw from median horizontal camera-forward direction, accounting for angular
   wraparound and degenerate headings. Initialize XYZ by aligning the robot camera
-  at neutral posture with a representative human camera position, including the
+  at neutral posture with the median human camera position, including the
   rotated base-to-camera offset. Keep base roll/pitch gravity-aligned.
 - Jointly fit one shared XYZ/yaw base and per-frame arm/neck configurations within
   each region. Match physical human wrists to `WRIST_X` origins and human hand

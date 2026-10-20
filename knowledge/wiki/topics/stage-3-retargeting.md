@@ -78,9 +78,12 @@ per-frame configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
 remain zero. Base roll/pitch stay gravity-aligned; free height is not floor
 calibration. Camera position is used for segmentation and base initialization
 only. Initialization aligns the neutral robot camera-mount centre with the median
-human camera centre, subtracting the rotated base-to-camera offset; yaw uses the
-mean normalized horizontal optical heading. Vertical/cancelling headings fail
-explicitly.
+human camera centre, subtracting the rotated base-to-camera offset. Following the
+user's median-initialization amendment, yaw uses `atan2` of the component-wise
+median of normalized horizontal optical forward vectors. This avoids taking a
+median of wrapped angles; it is a vector-component median, not a circular angular
+median. Vertical/cancelling directions fail explicitly. Saved reports identify
+the initialization rule; earlier mean-heading runs remain unchanged.
 
 Physical wrists match `LEFT/RIGHT_WRIST_X_LINK` origins. Hand orientation matches
 the EZGripper palm/TCP rotation **at those wrist origins**; TCP translation remains

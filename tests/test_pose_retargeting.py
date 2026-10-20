@@ -66,6 +66,21 @@ def test_camera_initialization_wraparound_offset_and_degenerate_heading(model):
         initialize_base(positions, Rotation.from_euler("z", [0, np.pi]).as_matrix() @ m.optical, m, .01)
 
 
+@pytest.mark.parametrize("heading_deg", [25., 179., -179.])
+def test_camera_initialization_medians_resist_heading_and_position_outliers(model, heading_deg):
+    m, _, _ = model
+    yaw = np.deg2rad([heading_deg, heading_deg, heading_deg + 80])
+    cameras = Rotation.from_euler("z", yaw).as_matrix() @ m.optical
+    positions = np.array([[1., 2., 3.], [1., 2., 3.], [90., -50., 80.]])
+    base = initialize_base(positions, cameras, m, .01)
+    rotation = Rotation.from_euler("z", base[3]).as_matrix()
+    np.testing.assert_allclose(rotation, Rotation.from_euler("z", yaw[0]).as_matrix(), atol=1e-12)
+    offset = m.forward(m.neutral[None])[3][0]
+    np.testing.assert_allclose(base[:3] + rotation @ offset, [1., 2., 3.], atol=1e-12)
+    # The same observations in a different temporal order give the same median.
+    np.testing.assert_allclose(initialize_base(positions[::-1], cameras[::-1], m, .01), base)
+
+
 @pytest.mark.parametrize("fixed", [False, True])
 def test_sparse_objective_derivatives_missing_hands_and_irregular_times(model, settings, fixed):
     m, _, _ = model
