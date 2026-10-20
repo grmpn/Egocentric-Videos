@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved switch from TCP-to-human-wrist to robot-wrist-to-human-wrist matching; implementation in progress.
 - [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — approved camera segmentation, base fitting, region expansion and positional IK acceptance; fulfilled.
 - [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.

@@ -109,6 +109,18 @@ Successive episodes are independent placements; their base/joint changes are not
 an executable transition. SDF, IK and their simultaneous intersection each receive
 separate coverage/gap checks; demonstrated episodes pass all three.
 
+The preview replays these saved per-frame joint angles with live viewer IK
+disabled; it performs no new solve or trajectory optimization. A 2026-10-20
+[FK diagnosis](../../../outputs/retargeting/wrist-alignment-20261020/diagnosis.json)
+replayed all 240 successful bundled arm samples: TCP-to-human-wrist error remained
+at most **0.152 mm**, while the `LEFT/RIGHT_WRIST_X_LINK` joint origins were about
+**23.8 cm** from the human wrists. This is the current endpoint convention, not
+a large positional solver residual. Unconstrained tool orientation can also
+make the robot gripper and original hand point differently. The
+[wrist-alignment amendment](../plans/milestone-3-wrist-alignment.md) proposes
+changing both workspace and IK endpoints; it is approved, with implementation pending.
+The diagnostic artifact is local-only.
+
 `trajectory_retargeted.npz` preserves every Part 1 array, dtype and byte. For
 `T` frames and `C` fitted candidates, additions include:
 
