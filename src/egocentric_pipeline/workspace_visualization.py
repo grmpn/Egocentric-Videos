@@ -36,7 +36,9 @@ def view_workspace(directory, *, asset_root=None, open_browser=False):
         viewer.add(link)
     server.scene.add_frame("/base", axes_length=.2, axes_radius=.004)
     server.scene.add_label("/base/label", settings["base_frame"], position=(0, 0, .05))
-    server.gui.add_markdown("## Purdue Alex workspace\nBlue: left · Orange: right\n\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\nSampled position coverage; collisions and tool orientations are unchecked.")
+    server.gui.add_markdown("## Purdue Alex workspace\nBlue: left · Orange: right\n\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
+                           f"Endpoints: {', '.join(settings.get('target_frames', settings['tool_frames']))}\n\n"
+                           "Sampled position coverage; collisions and tool orientations are unchecked.")
     colors = [(60, 150, 245), (245, 145, 55)]
     box = trimesh.creation.box(extents=[grid.spacing_m] * 3)
     for hand, name in enumerate(HAND_ORDER):

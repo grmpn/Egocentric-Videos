@@ -66,7 +66,8 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 
 ## Part 3 placement and IK contract
 
-Implemented 2026-10-16. [README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
+Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.
+[README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
 owns run/view commands. The [configuration](../../../configs/trajectory_retargeting.json)
 owns adjustable numerical thresholds and search effort. The workflow consumes
 completed Part 1 and Part 2 reports/arrays, verifies the prepared RGB/source
@@ -99,7 +100,13 @@ Overlaps prioritize duration, then observed count, then earlier seed. The longes
 qualifying unassigned remainder intersecting a later seed is retained only after
 all criteria are checked again; rejected alternatives stay in the report.
 
-IK constrains corresponding EZGripper TCP positions only. Each arm starts at zero,
+IK matches the workspace's recorded `target_frames` to physical human wrists.
+The default targets are `LEFT_WRIST_X_LINK` and `RIGHT_WRIST_X_LINK`: the distal
+wrist flexion joint origins. Their positions depend on the first five arm joints;
+`WRIST_X` and downstream `GRIPPER_Y` stay at zero. All seven angles are exported.
+The same targets define workspace sampling, SDF placement and IK residuals.
+Settings without `target_frames` retain the historical EZGripper TCP convention.
+Each arm starts at zero,
 then uses its previous successful solution, with bounded, seeded random restarts
 on failure. Other joints stay locked at zero. Every stored success passes finite
 URDF position bounds and ordinary-FK error at most 5 mm. Failed or missing joint
@@ -114,11 +121,12 @@ disabled; it performs no new solve or trajectory optimization. A 2026-10-20
 [FK diagnosis](../../../outputs/retargeting/wrist-alignment-20261020/diagnosis.json)
 replayed all 240 successful bundled arm samples: TCP-to-human-wrist error remained
 at most **0.152 mm**, while the `LEFT/RIGHT_WRIST_X_LINK` joint origins were about
-**23.8 cm** from the human wrists. This is the current endpoint convention, not
-a large positional solver residual. Unconstrained tool orientation can also
+**23.8 cm** from the human wrists. This measured the historical TCP convention,
+not a large positional solver residual. Unconstrained tool orientation can also
 make the robot gripper and original hand point differently. The
-[wrist-alignment amendment](../plans/milestone-3-wrist-alignment.md) proposes
-changing both workspace and IK endpoints; it is approved, with implementation pending.
+[wrist-alignment amendment](../plans/milestone-3-wrist-alignment.md) changes both
+workspace and IK endpoints. Existing TCP outputs remain readable and unchanged;
+new wrist runs require regenerated wrist workspaces and placement/IK.
 The diagnostic artifact is local-only.
 
 `trajectory_retargeted.npz` preserves every Part 1 array, dtype and byte. For
@@ -131,11 +139,13 @@ The diagnostic artifact is local-only.
 | `candidate_distance_m`, `candidate_query_valid`, `candidate_hand_passed` | `[C,T,2]` signed metres / booleans, left then right. Distances NaN for missing/out-of-domain samples. |
 | `candidate_frame_passed` | `[C,T]` available-hand SDF result for every video frame. |
 | `episode_id` | `[T]` integer; `-1` means unassigned. Report maps episode to candidate and interval. |
-| `wrist_position_base_m`, `tcp_position_base_m` | `[T,2,3]` target / successful FK metres in that episode's fixed base. Missing or unassigned geometry is NaN. |
+| `wrist_position_base_m` | `[T,2,3]` physical human wrist targets in episode-base metres. Missing/unassigned geometry is NaN. |
+| `target_position_base_m`, `tcp_position_base_m` | `[T,2,3]` successful FK of configured robot endpoint / actual gripper TCP, in episode-base metres. Failed/missing/unassigned samples are NaN. Only the first is compared with human wrists for IK residuals. |
 | `joint_angles_rad`, `ik_success`, `ik_residual_m`, `ik_attempts` | `[T,2,7]` joints in recorded chain order; `[T,2]` success, metre error and solve counts. Failed joints/residuals are NaN. |
 | `joint_step_rad`, `joint_jump` | `[T,2]` maximum absolute adjacent joint change / threshold flag, computed only within episodes with consecutive successes. |
 
-`retargeting_report.json` records source directories, model/settings/packages,
+`retargeting_report.json` schema 2 records target frames, locked zero joints,
+source directories, model/settings/packages,
 transform conventions, all seeds/candidates/episodes, timing and video verification.
 A completed run can have `demo_accepted: false`; CLI exit code 2 preserves its
 diagnostics. Existing outputs are refused. The annotated video preserves prepared
@@ -143,6 +153,9 @@ frame count/FPS and labels missing data, SDF/IK failures and large joint changes
 The viewer animates only verified arm samples, hides missing/failed arms, and
 shows the fixed base, full wrist/camera paths and current seed/episode boundaries.
 Neither the display nor the workspace heuristic detects semantic manipulation.
+Schema 1 TCP runs remain readable: they have no separate target-position array,
+so the viewer uses their original TCP array as the target and labels it accordingly.
+New wrist runs missing target positions are rejected.
 
 The MANO comparison reconstructs the **original world-frame** translation,
 orientation, articulation and shape with the same SMPL-X evaluator and left-hand
@@ -155,7 +168,9 @@ saved base-frame targets within **10 µm** (float32 geometry consistency, not an
 accuracy claim). Meshes are reconstructed in memory; saved trajectories stay intact.
 
 Blue/orange means left/right. The **MANO meshes** toggle and **MANO opacity**
-slider control the overlay. A valid original mesh survives IK failure; missing
+slider control the overlay. White markers show verified robot wrist positions;
+cyan markers show actual gripper TCPs. Legacy runs show white TCP targets.
+A valid original mesh survives IK failure; missing
 hands and frames without a retained base are hidden. Original hand orientations
 can differ from robot tools because IK constrains only position. Asset paths
 default to the alignment report; `--mano-models LEFT RIGHT` relocates licensed
@@ -167,7 +182,8 @@ owns geometry and visual checks.
 ## Part 2 workspace contract
 
 **Implemented and validated.** The
-[approved plan](../plans/milestone-3-part-2-robot-workspace.md) owns scope and acceptance.
+[approved plan](../plans/milestone-3-part-2-robot-workspace.md) and
+[wrist amendment](../plans/milestone-3-wrist-alignment.md) own scope and acceptance.
 The original Part 2 user spec requests 100,000–1,000,000 FK samples; the user
 authorized extending the comparison to 5 million and 10 million per arm on
 2026-10-15 (plan revision 2), then selected **10 million samples per arm as the
@@ -182,10 +198,16 @@ Static inspection on 2026-10-15 of the [canonical URDF at `9ac4bd45`](https://gi
 found root `PEDESTAL_LINK`, a fixed torso attachment, seven bounded revolute joints
 per arm (shoulder Y/X/Z, elbow Y, wrist Z/X, gripper Y), and fixed
 `LEFT_EZGRIPPER_TCP_LINK` / `RIGHT_EZGRIPPER_TCP_LINK` tool frames. The
-workspaces use these TCP origins with the pedestal fixed and other movable joints
-at zero. These are asset-defined tool points, not calibrated human wrists; the
-human-to-tool mapping remains Part 3 work. The actual model and both FK paths
-have been exercised.
+original workspaces used these TCP origins with the pedestal fixed and other
+movable joints at zero. Since 2026-10-20 the default `target_frames` select
+`LEFT/RIGHT_WRIST_X_LINK` origins; `tool_frames` still identify the actual TCPs
+and full arm chains. The first five joints influence these wrist positions;
+the remaining two stay at zero. Sampling draws the same seeded seven-angle
+configurations as before, then zeros those last two entries and evaluates the
+wrist endpoint. Thus upstream sample configurations are preserved. Reports record
+the actual target, active joints and locked joints. Legacy settings lacking
+`target_frames` continue to describe TCP occupancy. The actual model and both FK
+paths have been exercised.
 
 Implemented grid convention: one common lattice aligned to the base axes, with
 separate hand occupancy arrays. Its stored origin is the lower cell corner

@@ -274,7 +274,7 @@ PYTHONPATH=src .venv-gravity/bin/python -m pytest tests/test_gravity_alignment.p
 ## Stage 3 Part 2: Robot workspace
 
 Set up the [workspace environment and pinned robot assets](environment/README.md#robot-workspace-environment),
-then build independent left/right tool-position clouds, 2 cm voxel occupancy and
+then build independent left/right wrist-position clouds, 2 cm voxel occupancy and
 signed-distance tensors in `PEDESTAL_LINK` coordinates:
 
 ```bash
@@ -289,6 +289,12 @@ source assets and refuses to overwrite a run. It saves `samples_left.npz`,
 `samples_right.npz`, `workspace_grid.npz` and `workspace_report.json`, including
 FK comparisons, coordinate/reload checks, held-out coverage, settings and resources.
 Only consume runs whose report has `status: completed`.
+
+The default endpoints are `LEFT_WRIST_X_LINK` and `RIGHT_WRIST_X_LINK`, matching
+the human wrists used by retargeting. The final wrist/gripper rotations stay at
+zero; each sample still exports all seven arm angles. Older workspace settings
+without `target_frames` describe TCPs and retain that meaning. Build a new wrist
+workspace to use wrist alignment; changing the viewer cannot convert old runs.
 
 The [workspace contract](knowledge/wiki/topics/stage-3-retargeting.md#part-2-workspace-contract)
 defines frames, array order, query validity and limitations. Grid occupancy is
@@ -329,7 +335,7 @@ Run it in the existing [workspace environment](environment/README.md#robot-works
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
     --alignment-directory outputs/gravity/part-1-20261014/bundled \
-    --workspace-directory outputs/workspace/density-20261015/10m \
+    --workspace-directory outputs/workspace/example-10m \
     --output-directory outputs/retargeting/example
 ```
 
@@ -345,6 +351,9 @@ candidate distances, episode assignments and joint/IK arrays),
 `retargeting_report.json`, `annotated_video.mp4`, `feasibility_timeline.png` and
 representative review frames. The [Part 3 contract](knowledge/wiki/topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
 explains array shapes, interval boundaries and failure handling.
+The workspace's recorded `target_frames` select the robot points matched to the
+human wrists. New runs save their FK in `target_position_base_m`; the separately
+saved `tcp_position_base_m` always contains actual gripper TCP positions.
 
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
@@ -355,14 +364,17 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest \
 
 The viewer prints a local URL and supports orbit/pan/zoom, frame scrubbing,
 play/pause and camera/wrist-path toggles. Blue/orange meshes show the original
-left/right MANO hands in each episode's base frame; matching markers show wrists,
-and white markers show verified TCPs. Toggle **MANO meshes** or adjust **MANO opacity**
+left/right MANO hands in each episode's base frame; matching markers show human
+wrists, white markers show verified robot wrists, and cyan markers show gripper
+TCPs. Legacy runs label the white markers as TCPs. Toggle **MANO meshes** or adjust **MANO opacity**
 to compare with the robot. Original hand orientation and articulation are preserved;
 failed robot IK hides that robot arm while the valid MANO hand remains visible.
 Missing hand estimates are hidden. Meshes use the licensed MANO paths recorded by
 alignment; override with `--mano-models LEFT RIGHT`, or use `--no-mano` without assets.
 Update the [viewer environment](environment/README.md#robot-workspace-environment)
 to install its pinned MANO evaluator dependencies before using the mesh overlay.
+IK is precomputed for each valid hand frame in each retained episode, seeded
+from the previous success. The preview replays saved joint angles without live IK.
 The base changes only between separately labeled episodes. Large joint changes
 are flagged; no motion is synthesized across gaps. This is position-only IK,
 without collision, orientation, dynamic-limit, floor or real-robot certification.

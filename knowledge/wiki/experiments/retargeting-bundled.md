@@ -1,6 +1,9 @@
 # Stage 3 Part 3 — Bundled placement and IK acceptance
 
 Verified 2026-10-16 against the positional scope of [approved revision 2](../plans/milestone-3-part-3-placement-and-segmentation.md).
+The original results below use TCP-to-human-wrist matching. The
+[2026-10-20 wrist amendment](#wrist-alignment-amendment) records the current
+wrist-to-wrist result separately.
 Part 3 is complete within its positional scope. Together with
 [Part 1](gravity-alignment-bundled.md) and [Part 2](robot-workspace-purdue.md),
 this completes the approved fixed-base Stage 3 workflow. It does not establish
@@ -137,3 +140,63 @@ the [base switch](../../../outputs/retargeting/mano-viewer-20261016/viewer-frame
 and [frame 120's missing right hand](../../../outputs/retargeting/mano-viewer-20261016/viewer-frame-0120.png).
 The viewer preserves original hand orientation and articulation; robot tool
 orientation remains unconstrained by positional IK. Artifacts are local-only.
+
+## Wrist alignment amendment
+
+Verified **2026-10-20** against the
+[approved amendment](../plans/milestone-3-wrist-alignment.md).
+The [diagnosis](../../../outputs/retargeting/wrist-alignment-20261020/diagnosis.json)
+confirmed the old run placed TCPs at human wrists within 0.152 mm, leaving robot
+`WRIST_X` origins about 23.8 cm away. The current
+[contract](../topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+uses those wrist joint origins consistently for workspace, placement and IK,
+retains full arm configurations with the last two rotations at zero, and
+exports actual TCP positions separately. Original inputs and TCP runs remain intact.
+
+All linked generated evidence is ignored and local-only:
+
+- [Wrist workspace report](../../../outputs/retargeting/wrist-alignment-20261020/workspace/workspace_report.json)
+  and [log](../../../outputs/retargeting/wrist-alignment-20261020/workspace.log):
+  10 million samples per arm at 2 cm, using the same seeded upstream
+  configurations as the old run. Maximum ordinary/batched FK difference
+  **3.18e-10 m** across 70 checks; held-out occupancy **99.98%** per hand.
+  Build time **25.51 s**, without new dependencies or inference.
+- [Trajectory report](../../../outputs/retargeting/wrist-alignment-20261020/trajectory/retargeting_report.json),
+  [arrays](../../../outputs/retargeting/wrist-alignment-20261020/trajectory/trajectory_retargeted.npz),
+  [annotated video](../../../outputs/retargeting/wrist-alignment-20261020/trajectory/annotated_video.mp4)
+  and [timeline](../../../outputs/retargeting/wrist-alignment-20261020/trajectory/feasibility_timeline.png).
+  Production runtime **5.14 s**; all baseline thresholds retained.
+
+| Episode | Frames | Duration | SDF pass | IK pass | Both pass | Longest combined gap |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | `[0,58)` | 1.933 s | 56/58 | 56/58 | 96.55% | 0.067 s |
+| 1 | `[71,121)` | 1.667 s | 48/50 | 49/50 | 96.00% | 0.067 s |
+
+The [independent audit](../../../outputs/retargeting/wrist-alignment-20261020/independent-audit.json)
+and [saved code](../../../outputs/retargeting/wrist-alignment-20261020/audit.py)
+verified all **212 successful arm poses**: maximum wrist residual **2.493 mm**
+(limit 5 mm), correct actual TCP positions, URDF bounds and locked joints.
+It also checked all 24 unchanged source arrays, transforms, independent SDF
+interpolation, episode criteria and 215 assigned valid MANO hand reconstructions.
+The video retains all 121 frames at 30 FPS.
+
+[28 final focused tests](../../../outputs/retargeting/wrist-alignment-20261020/tests-final.log)
+passed, including wrist/legacy TCP workflows, rotated bases, seeded sampling,
+joint bounds, zero downstream angles and missing/unreachable cases.
+[Browser checks](../../../outputs/retargeting/wrist-alignment-20261020/browser.json)
+and [visual review](../../../outputs/retargeting/wrist-alignment-20261020/visual-review.json)
+passed for both new and preserved runs: playback, episode/gap scrubbing,
+camera controls, MANO opacity/visibility and endpoint labels.
+[Frame 0](../../../outputs/retargeting/wrist-alignment-20261020/viewer-frame-0000.png)
+shows wrist matching; cyan markers identify displaced TCPs.
+Review caught and corrected an existing case-sensitive visibility bug affecting
+lowercase gripper link names. Failed/missing arms now hide those meshes too;
+the valid [frame-56 MANO hand](../../../outputs/retargeting/wrist-alignment-20261020/viewer-frame-0056.png)
+remains visible. Initial evidence is preserved in `browser-initial/`.
+
+Frames **58–70** are unassigned (0.433 s); wrist reachability yields shorter
+episodes than TCP reachability. Right-hand IK failures at **56, 57, 71** remain
+explicit. The right-arm change at **73** is **2.282 rad**, flagged for review.
+Right-hand source data is missing at **120**. Wrist alignment does not match
+orientation or certify collision/dynamic feasibility. Focused repository cleanup
+remains due before the next milestone.

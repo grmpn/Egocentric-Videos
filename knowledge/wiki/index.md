@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved switch from TCP-to-human-wrist to robot-wrist-to-human-wrist matching; implementation in progress.
+- [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved robot-wrist-to-human-wrist matching, verified with regenerated workspaces and playback; fulfilled.
 - [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — approved camera segmentation, base fitting, region expansion and positional IK acceptance; fulfilled.
 - [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
 - [Milestone 3, Part 1: Gravity alignment](plans/milestone-3-part-1-gravity-alignment.md) — approved Part 1 scope and acceptance.
@@ -23,7 +23,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 ## Topics and evidence
 
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
-- [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — bundled episodes, independent transform/SDF/IK audit, annotated video, interactive playback with original MANO comparison and preserved failures/discontinuities.
+- [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — historical TCP runs and current wrist-aligned episodes, independent transform/SDF/IK audits, annotated video and MANO playback with preserved failures/discontinuities.
 - [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.

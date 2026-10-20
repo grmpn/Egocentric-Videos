@@ -30,6 +30,9 @@ def validate_settings(settings):
             raise ValueError(f"{key} must be positive and finite")
     if len(settings["tool_frames"]) != 2 or len(set(settings["tool_frames"])) != 2:
         raise ValueError("Specify distinct left/right tool frames")
+    targets = settings.get("target_frames", settings["tool_frames"])
+    if len(targets) != 2 or len(set(targets)) != 2:
+        raise ValueError("Specify distinct left/right target frames")
     if len(settings["arm_joints"]) != 2 or any(len(j) != 7 for j in settings["arm_joints"]):
         raise ValueError("Specify seven joints in base-to-tool order for each arm")
 
@@ -89,7 +92,29 @@ def arm_parameters(robot, tool_frame, joint_names):
     return chain, tool, parameters
 
 
-def sample_arm(robot, parameters, sample_count, seed, batch_size):
+def position_target(chain, tool, target_frame):
+    """Select a positional endpoint on the full arm and its influencing joints.
+
+    The joint at a link's origin cannot move that origin. Exclude it and all
+    downstream joints from position-only solving/sampling; keep their angles zero.
+    A fixed TCP retains the complete original arm chain.
+    """
+    ancestry = []
+    link = tool
+    while link is not None:
+        ancestry.append(link)
+        link = link.joint.parent_link if link.joint is not None else None
+    names = [link.name for link in ancestry]
+    if target_frame not in names:
+        raise ValueError(f"Target {target_frame} is not on the arm ending at {tool.name}")
+    index = names.index(target_frame)
+    active = [link for link in chain if link in ancestry[index + 1:]]
+    if not active or chain[:len(active)] != active:
+        raise ValueError("Position target must have an actuated prefix of the configured arm")
+    return active, ancestry[index]
+
+
+def sample_arm(robot, parameters, sample_count, seed, batch_size, *, target_parameters=None):
     """Uniform joint-space samples → [N,J] radians and [N,3] base-frame metres.
 
     Use the library's position-only batched FK. Its ReachabilityMap computes
@@ -101,10 +126,16 @@ def sample_arm(robot, parameters, sample_count, seed, batch_size):
     rng = np.random.default_rng(seed)
     angles = rng.uniform(parameters["joint_limits_lower"], parameters["joint_limits_upper"],
                          (sample_count, parameters["n_joints"]))
+    target_parameters = parameters if target_parameters is None else target_parameters
+    active_count = target_parameters["n_joints"]
+    # Draw the same full-arm seeded samples as legacy runs, then lock rotations
+    # that cannot move this endpoint. Upstream configurations stay reproducible.
+    angles[:, active_count:] = 0.
     positions = np.empty((sample_count, 3), dtype=np.float64)
     base = robot.root_link
     for start in range(0, sample_count, batch_size):
-        world, _ = forward_kinematics_ee_batched_numpy(angles[start:start + batch_size], parameters)
+        world, _ = forward_kinematics_ee_batched_numpy(
+            angles[start:start + batch_size, :active_count], target_parameters)
         positions[start:start + batch_size] = (world - base.worldpos()) @ base.worldrot()
     if not np.isfinite(positions).all():
         raise ValueError("FK returned nonfinite positions; no workspace can be accepted")
@@ -136,6 +167,7 @@ def verify_fk(robot, chain, tool, parameters, angles, tolerance_m):
 def build_workspace(asset_root, output_directory, settings):
     """Run FK → occupancy → EDT, validate/reload, and save independent artifacts."""
     import torch
+    from skrobot.kinematics.differentiable import extract_fk_parameters
 
     validate_settings(settings)
     asset_root, output = Path(asset_root).resolve(), Path(output_directory).resolve()
@@ -151,18 +183,23 @@ def build_workspace(asset_root, output_directory, settings):
         urdf = verify_asset_source(asset_root, settings)
         report["asset_root"], report["asset_revision"], report["urdf"] = str(asset_root), settings["asset_revision"], str(urdf)
         robot = load_robot(urdf, settings["base_frame"])
-        report["locked_joint_positions_rad"] = {j.name: 0. for j in robot.joint_list
-                                               if j.name not in sum(settings["arm_joints"], [])}
+        report["locked_joint_positions_rad"] = {j.name: 0. for j in robot.joint_list}
         clouds, held_out, arm_reports = [], [], []
         for hand, name in enumerate(HAND_ORDER):
             chain, tool, parameters = arm_parameters(robot, settings["tool_frames"][hand], settings["arm_joints"][hand])
+            active, target = position_target(chain, tool, settings.get("target_frames", settings["tool_frames"])[hand])
+            target_parameters = extract_fk_parameters(robot, active, target)
+            for link in active:
+                report["locked_joint_positions_rad"].pop(link.joint.name)
             arm_started = time.perf_counter()
             q, points = sample_arm(robot, parameters, settings["samples_per_arm"],
-                                   np.random.SeedSequence([settings["seed"], hand, 0]), settings["fk_batch_size"])
+                                   np.random.SeedSequence([settings["seed"], hand, 0]), settings["fk_batch_size"],
+                                   target_parameters=target_parameters)
             hq, hp = sample_arm(robot, parameters, settings["held_out_samples_per_arm"],
-                               np.random.SeedSequence([settings["seed"], hand, 1]), settings["fk_batch_size"])
+                               np.random.SeedSequence([settings["seed"], hand, 1]), settings["fk_batch_size"],
+                               target_parameters=target_parameters)
             ids = np.linspace(0, len(q) - 1, min(len(q), settings["fk_check_samples_per_arm"]), dtype=int)
-            check = verify_fk(robot, chain, tool, parameters, q[ids], settings["fk_tolerance_m"])
+            check = verify_fk(robot, active, target, target_parameters, q[ids, :len(active)], settings["fk_tolerance_m"])
             arrays = {"positions_base_m": points, "joint_angles_rad": q,
                       "held_out_positions_base_m": hp, "held_out_joint_angles_rad": hq,
                       "joint_names": np.array(settings["arm_joints"][hand])}
@@ -171,7 +208,9 @@ def build_workspace(asset_root, output_directory, settings):
             with np.load(output / f"samples_{name}.npz", allow_pickle=False) as reloaded:
                 if any(not np.array_equal(value, reloaded[key]) for key, value in arrays.items()):
                     raise ValueError(f"{name} sample export failed exact reload verification")
-            arm_reports.append({"hand": name, "tool_frame": tool.name, "joint_names": settings["arm_joints"][hand],
+            arm_reports.append({"hand": name, "tool_frame": tool.name, "target_frame": target.name,
+                                "active_joint_names": [link.joint.name for link in active],
+                                "joint_names": settings["arm_joints"][hand],
                                 "lower_rad": parameters["joint_limits_lower"].tolist(),
                                 "upper_rad": parameters["joint_limits_upper"].tolist(),
                                 "samples": len(q), "held_out_samples": len(hp), "fk_check": check,

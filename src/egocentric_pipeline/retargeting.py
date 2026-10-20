@@ -10,7 +10,7 @@ import numpy as np
 from .base_placement import evaluate_placement, optimize_base
 from .manipulation_regions import camera_segments, expand_region, frame_edges, interval_metrics, select_disjoint_regions
 from .positional_ik import solve_trajectory
-from .robot_workspace import load_robot, verify_asset_source
+from .robot_workspace import arm_parameters, load_robot, position_target, verify_asset_source
 from .run_metadata import read_json, utc_now, write_json
 from .workspace import WorkspaceGrid
 
@@ -72,7 +72,7 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 1, "status": "running", "started_at": utc_now(),
+    report = {"schema_version": 2, "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "workspace_directory": str(Path(workspace_directory).resolve()),
@@ -92,10 +92,21 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
         robot_settings = workspace_report["settings"]
         assets = Path(asset_root or workspace_report["asset_root"]).resolve()
         robot = load_robot(verify_asset_source(assets, robot_settings), robot_settings["base_frame"])
+        target_frames = robot_settings.get("target_frames", robot_settings["tool_frames"])
+        for hand, arm in enumerate(workspace_report["arms"]):
+            if arm.get("target_frame", arm["tool_frame"]) != target_frames[hand]:
+                raise ValueError("Workspace endpoint disagrees with its settings; rebuild the workspace")
+        locked = {joint.name: 0. for joint in robot.joint_list}
+        for hand in range(2):
+            chain, tool, _ = arm_parameters(robot, robot_settings["tool_frames"][hand], robot_settings["arm_joints"][hand])
+            active, _ = position_target(chain, tool, target_frames[hand])
+            for link in active:
+                locked.pop(link.joint.name)
         grid = WorkspaceGrid.load(Path(workspace_directory) / "workspace_grid.npz")
         if grid.spacing_m != robot_settings["voxel_size_m"]:
             raise ValueError("Workspace grid spacing disagrees with its recorded settings")
-        report.update(asset_root=str(assets), robot_settings=robot_settings,
+        report.update(asset_root=str(assets), robot_settings=robot_settings, target_frames=target_frames,
+                      locked_joint_positions_rad=locked,
                       source_run_id=alignment_report["source_run_id"],
                       prepared_video=alignment_report["inputs"]["prepared_video"]["path"],
                       packages={p: importlib.metadata.version(p) for p in ("scikit-robot", "numpy", "scipy", "torch", "viser", "Pillow")})
@@ -125,6 +136,7 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
         derived = {"camera_position_smoothed_m": smooth,
                    "episode_id": np.full(n, -1, np.int32), "wrist_position_base_m": np.full((n, 2, 3), np.nan),
                    "joint_angles_rad": np.full((n, 2, joints), np.nan), "tcp_position_base_m": np.full((n, 2, 3), np.nan),
+                   "target_position_base_m": np.full((n, 2, 3), np.nan),
                    "ik_residual_m": np.full((n, 2), np.nan), "ik_success": np.zeros((n, 2), bool),
                    "ik_attempts": np.zeros((n, 2), np.int32), "joint_step_rad": np.full((n, 2), np.nan),
                    "joint_jump": np.zeros((n, 2), bool)}

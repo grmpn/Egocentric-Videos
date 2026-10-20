@@ -121,7 +121,8 @@ def test_fk_known_rotated_base_fixed_tool_offset_and_seeded_prefix(tmp_path):
     np.testing.assert_allclose(moved_points, expected, atol=1e-9)
 
 
-def test_cli_build_and_reload_actual_purdue_assets(tmp_path):
+@pytest.mark.parametrize("legacy_tcp", [False, True])
+def test_cli_build_and_reload_actual_purdue_assets(tmp_path, legacy_tcp):
     pytest.importorskip("skrobot")
     pytest.importorskip("torch")
     root = Path(__file__).resolve().parents[1]
@@ -129,6 +130,8 @@ def test_cli_build_and_reload_actual_purdue_assets(tmp_path):
     if not assets.exists():
         pytest.skip("Requires the pinned Purdue Alex assets; see environment/README.md")
     settings = json.loads((root / "configs/robot_workspace.json").read_text())
+    if legacy_tcp:
+        settings.pop("target_frames")
     settings.update(samples_per_arm=64, held_out_samples_per_arm=16, fk_check_samples_per_arm=4)
     config = tmp_path / "settings.json"
     config.write_text(json.dumps(settings))
@@ -140,12 +143,33 @@ def test_cli_build_and_reload_actual_purdue_assets(tmp_path):
     report = json.loads((output / "workspace_report.json").read_text())
     assert report["status"] == "completed" and report["grid"]["reload_exact"]
     grid = WorkspaceGrid.load(output / "workspace_grid.npz")
+    from egocentric_pipeline.robot_workspace import arm_parameters, load_robot, position_target, verify_asset_source
+    robot = load_robot(verify_asset_source(assets, settings), settings["base_frame"])
     for hand, name in enumerate(("left", "right")):
         with np.load(output / f"samples_{name}.npz", allow_pickle=False) as data:
             points, q = data["positions_base_m"], data["joint_angles_rad"]
             assert points.shape == (64, 3) and q.shape == (64, 7)
             assert np.all(q >= report["arms"][hand]["lower_rad"])
             assert np.all(q <= report["arms"][hand]["upper_rad"])
+            chain, tool, _ = arm_parameters(robot, settings["tool_frames"][hand], settings["arm_joints"][hand])
+            endpoint_name = settings.get("target_frames", settings["tool_frames"])[hand]
+            active, endpoint = position_target(chain, tool, endpoint_name)
+            assert report["arms"][hand]["target_frame"] == endpoint_name
+            assert len(active) == (7 if legacy_tcp else 5)
+            if not legacy_tcp:
+                assert np.all(q[:, -2:] == 0)
+                assert all(report["locked_joint_positions_rad"][joint] == 0 for joint in settings["arm_joints"][hand][-2:])
+            # Full-arm samples retain legacy random prefixes; downstream angles
+            # can be locked without changing the sampled wrist positions.
+            expected = np.random.default_rng(np.random.SeedSequence([settings["seed"], hand, 0])).uniform(
+                report["arms"][hand]["lower_rad"], report["arms"][hand]["upper_rad"], (64, 7))
+            np.testing.assert_array_equal(q[:, :len(active)], expected[:, :len(active)])
+            for frame in (0, 31, 63):
+                for link, angle in zip(chain, q[frame]):
+                    link.joint.joint_angle(float(angle))
+                np.testing.assert_allclose(endpoint.worldpos(), points[frame], atol=1e-8, rtol=0)
+            with pytest.raises(ValueError, match="not on the arm"):
+                position_target(chain, tool, settings["tool_frames"][1 - hand])
             hits, valid = grid.contains(points)
             assert valid.all() and hits[:, hand].all()
     second = subprocess.run(command, env=environment, capture_output=True, text=True)

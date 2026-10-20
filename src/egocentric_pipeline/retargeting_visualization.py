@@ -190,6 +190,11 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             mano_models = [alignment["inputs"][f"mano_{name}"]["path"] for name in ("left", "right")]
         meshes = base_hand_meshes(arrays, report, mano_models)
     settings = report["robot_settings"]
+    target_frames = settings.get("target_frames", settings["tool_frames"])
+    wrist_matching = target_frames != settings["tool_frames"]
+    endpoint_positions = arrays.get("target_position_base_m", arrays["tcp_position_base_m"])
+    if wrist_matching and "target_position_base_m" not in arrays:
+        raise ValueError("Wrist-target run has no saved target positions; regenerate the retargeting output")
     robot = load_robot(verify_asset_source(asset_root or report["asset_root"], settings), settings["base_frame"])
     viewer = ViserViewer(draw_grid=False, enable_ik=False, enable_motion_planning=False)
     server = viewer._server
@@ -209,14 +214,22 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     camera = arrays["camera_position_aligned_m"]
     camera_points = server.scene.add_point_cloud("/camera", points=camera.astype(np.float32), colors=(160, 165, 178), point_size=.012)
     wrists = arrays["wrist_position_aligned_m"]
-    targets, tcp_markers, paths = [], [], []
+    targets, endpoint_markers, tcp_markers, paths = [], [], [], []
     for hand, name in enumerate(("left", "right")):
         valid = arrays["export_valid"][:, hand]
         colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(valid)], np.uint8)
         paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[valid, hand].astype(np.float32), colors=colors, point_size=.018))
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
-        tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.012, color=(245, 245, 245)))
-    server.gui.add_markdown("## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\nBlue/orange: original left/right hand and wrist · White: verified TCP\nPath: green pass, red workspace failure, purple IK failure, gray unassigned.\n\nPosition-only IK. Missing/failed robot arms are hidden; MANO retains the original hand orientation and articulation. Collisions and dynamic limits are unchecked.")
+        endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
+        tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
+    endpoint_label = "robot wrist" if wrist_matching else "TCP (legacy alignment)"
+    server.gui.add_markdown(
+        "## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
+        f"Blue/orange: original left/right hand and wrist · White: verified {endpoint_label}"
+        + (" · Cyan: gripper TCP" if wrist_matching else "")
+        + "\nPath: green pass, red workspace failure, purple IK failure, gray unassigned.\n\n"
+        "Saved per-frame position-only IK; no live solve. Missing/failed robot arms are hidden; MANO retains "
+        "the original hand orientation and articulation. Collisions and dynamic limits are unchecked.")
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
     play = server.gui.add_checkbox("Play", initial_value=False)
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
@@ -259,7 +272,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
                     for name, angle in zip(settings["arm_joints"][hand], arrays["joint_angles_rad"][frame, hand]):
                         robot.__dict__[name].joint_angle(float(angle))
         for link in robot.link_list:
-            hand = 0 if link.name.startswith("LEFT_") else 1 if link.name.startswith("RIGHT_") else None
+            # The URDF uses uppercase arm names and lowercase gripper names.
+            name = link.name.upper()
+            hand = 0 if name.startswith("LEFT_") else 1 if name.startswith("RIGHT_") else None
             handle = viewer._linkid_to_handle.get(str(id(link)))
             if handle is not None:
                 handle.visible = eid >= 0 and (hand is None or bool(arrays["ik_success"][frame, hand]))
@@ -272,7 +287,10 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             targets[hand].visible = bool(arrays["export_valid"][frame, hand])
             if targets[hand].visible:
                 targets[hand].position = wrists[frame, hand]
-            tcp_markers[hand].visible = eid >= 0 and bool(arrays["ik_success"][frame, hand])
+            endpoint_markers[hand].visible = eid >= 0 and bool(arrays["ik_success"][frame, hand])
+            if endpoint_markers[hand].visible:
+                endpoint_markers[hand].position = transform_points(endpoint_positions[frame, hand], transform)
+            tcp_markers[hand].visible = wrist_matching and endpoint_markers[hand].visible
             if tcp_markers[hand].visible:
                 tcp_markers[hand].position = transform_points(arrays["tcp_position_base_m"][frame, hand], transform)
         seed_id, seed = next((i, s) for i, s in enumerate(report["seeds"]) if s["start"] <= frame < s["stop"])
@@ -282,7 +300,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         if arrays["joint_jump"][frame].any():
             label += " · **Large joint change flagged**"
         status.content = (f"**Frame {frame} · {arrays['timestamp_s'][frame]:.3f} s**\n\n{label}\n\n{detail}\n\n"
-                          f"Observed L/R: {arrays['export_valid'][frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}")
+                          f"Observed L/R: {arrays['export_valid'][frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}\n\n"
+                          f"Robot targets: {', '.join(target_frames)}")
         viewer.redraw()
 
     @slider.on_update

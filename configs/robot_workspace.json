@@ -3,6 +3,7 @@
   "urdf": "assets/robots/alex_purdue/urdf/baseline/alex_purdue_full_convex.urdf",
   "base_frame": "PEDESTAL_LINK",
   "tool_frames": ["LEFT_EZGRIPPER_TCP_LINK", "RIGHT_EZGRIPPER_TCP_LINK"],
+  "target_frames": ["LEFT_WRIST_X_LINK", "RIGHT_WRIST_X_LINK"],
   "arm_joints": [
     ["LEFT_SHOULDER_Y", "LEFT_SHOULDER_X", "LEFT_SHOULDER_Z", "LEFT_ELBOW_Y", "LEFT_WRIST_Z", "LEFT_WRIST_X", "LEFT_GRIPPER_Y"],
     ["RIGHT_SHOULDER_Y", "RIGHT_SHOULDER_X", "RIGHT_SHOULDER_Z", "RIGHT_ELBOW_Y", "RIGHT_WRIST_Z", "RIGHT_WRIST_X", "RIGHT_GRIPPER_Y"]
