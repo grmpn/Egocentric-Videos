@@ -6,7 +6,9 @@ Numerical, source-preservation, browser/legacy and three-run comparison checks p
 The [median-initialization trial](#median-initialization-trial) below records the
 user's subsequent amendment; the original benchmark results remain unchanged.
 The [camera-position/posture experiment](#camera-position-and-posture-weight-sweep)
-adds per-frame position alignment under revision 3.
+adds per-frame position alignment under revision 3. The latest
+[gripper-offset/hand-weight experiment](#gripper-offset-and-hand-weight-sweep)
+removes it and changes the wrist match point and base-frame sampling under revision 4.
 [README](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting) owns
 commands; the [contract](../topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
 owns conventions. All linked run artifacts are ignored, local-only evidence.
@@ -193,7 +195,7 @@ and wrist coverage relative to the rotation-only control. Errors remain far
 above the 5 cm residual scale: it is not an achieved tolerance. Increasing
 posture weight moves the joints closer to neutral. **0.5 is the strongest tested
 weight retaining an accepted region**; it does not improve all metrics. At 2.0,
-neither region qualifies. The default remains 0.02.
+neither region qualifies. The revision 3 default remained 0.02; revision 4 below adopts posture 0.5.
 
 | Weight | Passing frames, region 0 / region 1 | Acceleration before → after, region 0 / region 1 (rad/s²) | Solve time (s) |
 | --- | --- | --- | --- |
@@ -253,12 +255,120 @@ feasibility timelines. Representative evidence:
 Weight 0.1 received the full numerical audit but no separate browser inspection.
 The old control artifacts were not edited.
 
+## Gripper offset and hand-weight sweep
+
+Revision 4, implemented at `903b435` on 2026-10-20, moves the wrist match point
+**5 cm along gripper-local +X toward the fingers**, as confirmed by the user.
+It fits the shared base on alternate region frames (26/52 and 16/31), then
+interpolates joint seeds and refines every original frame. Posture is fixed at
+**0.5**; camera translation is removed from both losses, while camera rotation,
+median initialization and segmentation remain. Original MANO geometry is unchanged.
+
+The four sequential production trials vary only paired hand-position/orientation
+residual multipliers. Squared-cost factors are 1, 0.25, 0.04 and 0.01.
+[Settings, attempts, timing and metrics](../../../outputs/retargeting/gripper-offset-20261020/sweep_report.json)
+and the [reproduction script](../../../outputs/retargeting/gripper-offset-20261020/run-sweep.py)
+are saved locally. These are single-run times, with no concurrent tests/browser
+rendering during the solves; they do not establish a repeated speed benchmark.
+
+| Hand weight | Pose-passing frames | Position RMS (mm) | Orientation RMS (°) | Posture RMS (rad) | Acceleration RMS (rad/s²) | Solve (s) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 79/83 | 0.113 | 4.50 | 0.744 | 257.90 | 72.15 |
+| 0.5 | 78/83 | 0.117 | 4.99 | 0.719 | 240.27 | 33.08 |
+| 0.2 | 60/83 | 0.199 | 7.20 | 0.649 | 67.40 | 32.79 |
+| 0.1 | 0/83 | 0.689 | 15.88 | 0.574 | 62.64 | 14.92 |
+
+Lower weights bring joints closer to neutral and reduce acceleration, but degrade
+orientation coverage. Weight **0.5** is a modest tradeoff: 3.3% less posture
+deviation and 6.8% less acceleration RMS than the revised control, with one fewer
+passing frame. Weight **0.2** cuts acceleration by 73.9%, but loses 19 passing
+frames. Weight **0.1** leaves no pose-passing frame. Keep hand defaults at 1.0
+pending user review; the requested posture default is 0.5.
+
+| Hand weight | Passing frames, regions 0 / 1 | Region 0 acceleration before → after | Region 1 acceleration before → after |
+| --- | --- | --- | --- |
+| 1 | 48/52 / 31/31 | 156.14 → 317.03 | 60.93 → 88.87 |
+| 0.5 | 47/52 / 31/31 | 151.49 → 294.87 | 60.80 → 85.72 |
+| 0.2 | 29/52 / 31/31 | 100.46 → 60.95 | 57.84 → 77.27 |
+| 0.1 | 0/52 / 0/31 | 40.59 → 58.08 | 52.62 → 69.82 |
+
+**No trial passes the full demonstration gate.** Region 0 fails pose coverage in
+every trial. Region 1 passes all poses through weight 0.2, but refinement raises
+its acceleration relative to the interpolated seed. The before value now measures
+source-time interpolation of alternate-frame solutions; interpolation itself
+removes motion detail. It is not comparable to the historical full-frame
+unsmoothed fit. The acceleration gate was preserved and its failures are explicit.
+All trials use three attempts per region and select attempt 0. The 1.0 control
+hits the selected trajectory budget in region 0 and base budget in region 1;
+selected stages at lower weights converge, without establishing global optimality.
+
+At weights 1/0.5/0.2, all position errors stay below 5 mm (maxima
+0.952/0.967/1.447 mm); 4/5/23 hand samples fail orientation. At 0.1, 132 hand
+samples fail orientation and one position error reaches 5.409 mm. Camera position
+RMS is 36.14/36.26/32.29/34.73 cm and head RMS is about 40.3–40.4°. These camera
+translation errors are diagnostic, with no fitted position objective. Compared
+with the historical camera-position/posture-0.5 run, the revised control has
+better pose coverage (72→79/83), lower posture deviation (0.874→0.744 rad) and
+lower acceleration (286.13→257.90 rad/s²), but worse camera translation and no
+qualifying demonstration. Multiple requested settings differ, so this does not
+isolate the effect of the 5 cm shift or sampling.
+
+| Hand weight | Saved configuration | Production report | Annotated video |
+| --- | --- | --- | --- |
+| 1 | [config](../../../outputs/retargeting/gripper-offset-20261020/configs/hand-1p0.json) | [report](../../../outputs/retargeting/gripper-offset-20261020/hand-1p0/retargeting_report.json) | [video](../../../outputs/retargeting/gripper-offset-20261020/hand-1p0/annotated_video.mp4) |
+| 0.5 | [config](../../../outputs/retargeting/gripper-offset-20261020/configs/hand-0p5.json) | [report](../../../outputs/retargeting/gripper-offset-20261020/hand-0p5/retargeting_report.json) | [video](../../../outputs/retargeting/gripper-offset-20261020/hand-0p5/annotated_video.mp4) |
+| 0.2 | [config](../../../outputs/retargeting/gripper-offset-20261020/configs/hand-0p2.json) | [report](../../../outputs/retargeting/gripper-offset-20261020/hand-0p2/retargeting_report.json) | [video](../../../outputs/retargeting/gripper-offset-20261020/hand-0p2/annotated_video.mp4) |
+| 0.1 | [config](../../../outputs/retargeting/gripper-offset-20261020/configs/hand-0p1.json) | [report](../../../outputs/retargeting/gripper-offset-20261020/hand-0p1/retargeting_report.json) | [video](../../../outputs/retargeting/gripper-offset-20261020/hand-0p1/annotated_video.mp4) |
+
+[54 focused tests](../../../outputs/retargeting/gripper-offset-20261020/tests.log)
+pass, covering offset FK/Jacobians, both stages, missing observations,
+translation-loss removal, independent residual weights, alternate-frame seeds
+and full-frame fit. The [initial test failure](../../../outputs/retargeting/gripper-offset-20261020/tests-initial.log)
+exposed the changed meaning of the interpolated before-smoothing trajectory;
+the test now checks its actual acceleration and retains the stride-1 improvement
+check. No production acceptance threshold changed.
+
+Independent ordinary-FK audits passed for
+[1.0](../../../outputs/retargeting/gripper-offset-20261020/audit-hand-1p0.json),
+[0.5](../../../outputs/retargeting/gripper-offset-20261020/audit-hand-0p5.json),
+[0.2](../../../outputs/retargeting/gripper-offset-20261020/audit-hand-0p2.json) and
+[0.1](../../../outputs/retargeting/gripper-offset-20261020/audit-hand-0p1.json).
+Each verifies all 166 observed hand poses, separate physical wrist/match/TCP
+positions, the rotating 5 cm offset, hard bounds, fixed fingers/base, sampled
+indices, interpolated seeds, full-frame acceptance and 24 preserved source arrays.
+[Cross-trial checks](../../../outputs/retargeting/gripper-offset-20261020/cross-trial-checks.json)
+confirm identical remaining settings/initial bases and 121-frame, 30 FPS videos.
+
+
+[Browser checks](../../../outputs/retargeting/gripper-offset-20261020/browser/browser.json)
+passed for hand weights 1.0, 0.2 and 0.1 plus the preserved revision 3 posture-0.5
+run, with no page errors. Checked playback/scrubbing, boundaries, failure hiding,
+unverified-pose display, MANO, axes and camera diagnostics. Inspected representative
+annotated frames and timeline as well as both hands in closeup. The initial left
+closeup was occluded by the other gripper; an alternate orbit exposes that hand.
+The user-confirmed shift is visible relative to the legacy wrist-origin mapping;
+this is a geometric placement change, not calibrated fingertip contact. Weaker
+orientation weights visibly tilt the gripper relative to the hand.
+
+Representative review images:
+[shifted right hand](../../../outputs/retargeting/gripper-offset-20261020/browser/control-right-gripper-closeup.png),
+[shifted left hand](../../../outputs/retargeting/gripper-offset-20261020/browser/control-left-gripper-side.png),
+[0.2 right hand](../../../outputs/retargeting/gripper-offset-20261020/browser/mid-right-gripper-closeup.png),
+[0.1 failed pose shown](../../../outputs/retargeting/gripper-offset-20261020/browser/low-right-gripper-closeup.png),
+[legacy right hand](../../../outputs/retargeting/gripper-offset-20261020/browser/legacy-right-gripper-closeup.png),
+[failure hidden](../../../outputs/retargeting/gripper-offset-20261020/browser/control-failed-hidden.png),
+[unassigned boundary](../../../outputs/retargeting/gripper-offset-20261020/browser/control-frame-0052.png).
+Weight 0.5 received the full numerical audit but no separate browser inspection.
+The experiment is complete; no full demonstration qualifies under the unchanged
+gates. Review the tradeoff before selecting another objective change. Focused
+repository cleanup remains due before moving to another milestone.
+
 ## Validation limits
 
 This is kinematic pose fitting. Large joint changes, head rotation residuals,
 collision clearance, dynamic limits, physical scale, gravity and floor height
 remain review items, not execution certification. Camera translation was absent
-from the original objectives and is included in the latest sweep.
+from the original objectives, fitted in revision 3, and removed again in revision 4.
 The nominal camera mount centre is not a calibrated
 lens centre; gripper orientation uses the documented neutral anatomical mapping.
 Some playback views show apparent arm/body overlap; no collision check resolves
