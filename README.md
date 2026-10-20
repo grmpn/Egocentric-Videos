@@ -381,3 +381,48 @@ without collision, orientation, dynamic-limit, floor or real-robot certification
 See [bundled Part 3 acceptance](knowledge/wiki/experiments/retargeting-bundled.md)
 for the two retained episodes, independent audit, visual evidence and remaining
 IK failure/joint discontinuities.
+
+## Joint base and wrist-pose trajectory fitting
+
+Use the existing workspace environment and gravity-aligned input. This method
+fits wrist positions/orientations and head rotation with a shared base, then
+freezes the base and smooths the joint trajectory within each camera-motion
+region. Camera position is used only for segmentation and initialization.
+No workspace build is required for this method.
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
+    --method joint \
+    --alignment-directory outputs/gravity/part-1-20261014/bundled \
+    --asset-root data/models/purdue-alex-assets \
+    --output-directory outputs/retargeting/joint-example
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+    outputs/retargeting/joint-example --open-browser
+```
+
+The new directory receives the same trajectory/report/video review artifacts.
+The viewer adds neck motion, target/fitted orientation axes, angular residuals
+and **Show unverified robot poses**. Missing source observations stay unknown.
+`--config` selects alternative solver settings; defaults are in
+[joint_retargeting.json](configs/joint_retargeting.json). Success is measured
+from saved FK residuals separately from optimizer termination.
+
+Compare three sequential runs of each method on the same unexpanded regions:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/compare_retargeting.py \
+    --alignment-directory outputs/gravity/part-1-20261014/bundled \
+    --workspace-directory outputs/retargeting/wrist-alignment-20261020/workspace \
+    --asset-root data/models/purdue-alex-assets \
+    --output-directory outputs/retargeting/joint-comparison
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest \
+    tests/test_pose_retargeting.py tests/test_retargeting.py tests/test_robot_workspace.py -q
+```
+
+`comparison_report.json` separates solve time from loading/export/rendering and
+reports common pose errors, failures and smoothness. First runs also include
+annotated videos; each saved run can be opened in the existing viewer. The baseline
+command still defaults to its original expanded workspace workflow; use
+`--regions-only` for an individual baseline comparison run. See the
+[contract and limitations](knowledge/wiki/topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
+and [bundled evidence](knowledge/wiki/experiments/joint-base-bundled.md).

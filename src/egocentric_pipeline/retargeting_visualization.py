@@ -19,6 +19,10 @@ COLORS = {"feasible": (70, 195, 130), "infeasible": (240, 95, 90),
           "unknown": (150, 155, 168), "ik_failed": (205, 115, 240)}
 
 
+def episode_region(episode):
+    return episode["region"] if "region" in episode else episode["sdf"]
+
+
 def frame_state(frame, arrays, report):
     """Classification under the selected interval; unassigned is not infeasible."""
     eid = int(arrays["episode_id"][frame])
@@ -28,6 +32,10 @@ def frame_state(frame, arrays, report):
         return "unknown", "No retained episode"
     episode = report["episodes"][eid]
     cid = episode["candidate_id"]
+    if report.get("method") == "joint_base":
+        if not (arrays["ik_success"][frame] | ~arrays["export_valid"][frame]).all():
+            return "ik_failed", f"Region {eid}: wrist position/orientation gate failed"
+        return "feasible", f"Region {eid}: available wrists pass position and orientation"
     if not (arrays["ik_success"][frame] | ~arrays["export_valid"][frame]).all():
         suffix = "; workspace margin failed" if not arrays["candidate_frame_passed"][cid, frame] else ""
         return "ik_failed", f"Episode {eid}: IK unverified{suffix}"
@@ -54,7 +62,7 @@ def draw_timeline(image, arrays, report, top, current_frame=None):
         a, b = x0 + width * frame / n, x0 + width * (frame + 1) / n
         draw.rectangle((a, top + 28, b, top + 48), fill=COLORS[state])
     for episode in report["episodes"]:
-        a = x0 + width * episode["sdf"]["start"] / n
+        a = x0 + width * episode_region(episode)["start"] / n
         draw.line((a, top + 24, a, top + 50), fill="white", width=2)
         draw.text((a + 3, top + 49), f"E{episode['episode_id']}", fill="white", font=font)
     if current_frame is not None:
@@ -65,6 +73,7 @@ def draw_timeline(image, arrays, report, top, current_frame=None):
 def annotate_video(output, arrays, report, clip):
     """Use existing ffmpeg/Pillow; retain every prepared frame at source cadence."""
     output = Path(output)
+    pose_fitting = report.get("method") == "joint_base"
     n, fps = len(arrays["timestamp_s"]), Fraction(clip["prepared"]["fps"])
     if not np.allclose(np.diff(arrays["timestamp_s"]), float(1 / fps), atol=1e-7, rtol=0):
         raise ValueError("Annotated video requires uniform prepared timestamps matching its FPS")
@@ -73,7 +82,7 @@ def annotate_video(output, arrays, report, clip):
     height = int(round(clip["prepared"]["height"] * width / clip["prepared"]["width"] / 2)) * 2
     font = ImageFont.load_default(size=17)
     review_frames = {0, n // 2, n - 1}
-    review_frames.update(e["sdf"]["start"] for e in report["episodes"])
+    review_frames.update(episode_region(e)["start"] for e in report["episodes"])
     for mask in ((arrays["export_valid"] & ~arrays["ik_success"]).any(axis=1), arrays["joint_jump"].any(axis=1)):
         indices = np.flatnonzero(mask)
         if len(indices):
@@ -101,9 +110,12 @@ def annotate_video(output, arrays, report, clip):
                 draw.text((12, height + 32), label, fill=COLORS[state], font=font)
                 missing = [name for hand, name in enumerate(("left", "right")) if not arrays["export_valid"][frame, hand]]
                 detail = "Missing/unverified: " + ", ".join(missing) if missing else "Both hand estimates available"
-                draw.text((12, height + 55), detail + " | Position-only; collisions/dynamics unchecked", fill=(200, 205, 218), font=font)
+                mode = "Pose fitting" if pose_fitting else "Position-only"
+                draw.text((12, height + 55), detail + f" | {mode}; collisions/dynamics unchecked", fill=(200, 205, 218), font=font)
                 draw_timeline(image, arrays, report, height + 86, frame)
-                draw.text((12, height + 164), "Green: pass   Red: SDF fail   Purple: IK fail   Gray: unknown/unassigned", fill=(210, 215, 228), font=font)
+                legend = ("Green: pose pass   Purple: pose fail   Gray: unknown/outside regions" if pose_fitting
+                          else "Green: pass   Red: SDF fail   Purple: IK fail   Gray: unknown/unassigned")
+                draw.text((12, height + 164), legend, fill=(210, 215, 228), font=font)
                 encoder.stdin.write(image.tobytes())
                 if frame in review_frames:
                     image.save(output / f"review-frame-{frame:04d}.png")
@@ -128,9 +140,11 @@ def annotate_video(output, arrays, report, clip):
     draw = ImageDraw.Draw(timeline)
     for cid in range(len(report["candidates"])):
         y = 90 + cid * 32
-        draw.text((12, y), f"Base {cid} SDF", fill="white", font=font)
+        draw.text((12, y), f"Base {cid} {'pose' if pose_fitting else 'SDF'}", fill="white", font=font)
         for frame in range(n):
-            state = "unknown" if not arrays["export_valid"][frame].any() else ("feasible" if arrays["candidate_frame_passed"][cid, frame] else "infeasible")
+            outside = pose_fitting and arrays["episode_id"][frame] != cid
+            state = "unknown" if outside or not arrays["export_valid"][frame].any() else (
+                "feasible" if arrays["candidate_frame_passed"][cid, frame] else "ik_failed" if pose_fitting else "infeasible")
             draw.rectangle((140 + 942 * frame / n, y, 140 + 942 * (frame + 1) / n, y + 20), fill=COLORS[state])
     timeline.save(output / "feasibility_timeline.png")
     report["video"] = {"decode_command": decode_command, "encode_command": encode_command, "probe": probe,
@@ -190,6 +204,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             mano_models = [alignment["inputs"][f"mano_{name}"]["path"] for name in ("left", "right")]
         meshes = base_hand_meshes(arrays, report, mano_models)
     settings = report["robot_settings"]
+    pose_fitting = report.get("method") == "joint_base"
     target_frames = settings.get("target_frames", settings["tool_frames"])
     wrist_matching = target_frames != settings["tool_frames"]
     endpoint_positions = arrays.get("target_position_base_m", arrays["tcp_position_base_m"])
@@ -223,17 +238,40 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
     endpoint_label = "robot wrist" if wrist_matching else "TCP (legacy alignment)"
+    explanation = (
+        "Saved joint/base pose fit and fixed-base smoothing; no live solve. Camera position was used only "
+        "for initialization. Axes compare target and fitted orientations. Unverified poses are hidden unless enabled."
+        if pose_fitting else
+        "Saved per-frame position-only IK; no live solve. Missing/failed robot arms are hidden; MANO retains "
+        "the original hand orientation and articulation.")
     server.gui.add_markdown(
         "## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
         f"Blue/orange: original left/right hand and wrist · White: verified {endpoint_label}"
         + (" · Cyan: gripper TCP" if wrist_matching else "")
-        + "\nPath: green pass, red workspace failure, purple IK failure, gray unassigned.\n\n"
-        "Saved per-frame position-only IK; no live solve. Missing/failed robot arms are hidden; MANO retains "
-        "the original hand orientation and articulation. Collisions and dynamic limits are unchecked.")
+        + "\nPath: green pass, purple pose/IK failure, gray unassigned; red is a baseline workspace failure.\n\n"
+        + explanation + " Collisions and dynamic limits are unchecked.")
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
     play = server.gui.add_checkbox("Play", initial_value=False)
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
     path_control = server.gui.add_checkbox("Wrist paths", initial_value=True)
+    orientation_handles = []
+    if pose_fitting:
+        predicted_control = server.gui.add_checkbox("Show unverified robot poses", initial_value=False)
+        axes_control = server.gui.add_checkbox("Orientation axes", initial_value=True)
+        for name in ("left_target", "left_robot", "right_target", "right_robot", "camera_target", "camera_robot"):
+            target = name.endswith("_target")
+            handle = server.scene.add_frame(f"/orientations/{name}", axes_length=.10 if target else .075, axes_radius=.002)
+            server.scene.add_label(f"/orientations/{name}/label", name.replace("_", " "),
+                                   position=(0, 0, .12 if target else -.10))
+            orientation_handles.append(handle)
+
+        @predicted_control.on_update
+        def toggle_predictions(event):
+            update(int(slider.value))
+
+        @axes_control.on_update
+        def toggle_axes(event):
+            update(int(slider.value))
     if meshes:
         mesh_control = server.gui.add_checkbox("MANO meshes", initial_value=True)
         opacity_control = server.gui.add_slider("MANO opacity", min=.1, max=1., step=.05, initial_value=.65)
@@ -267,8 +305,11 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             robot.newcoords(Coordinates(pos=transform[:3, 3], rot=transform[:3, :3]))
             base_axes.position = transform[:3, 3]
             base_axes.wxyz = Rotation.from_matrix(transform[:3, :3]).as_quat(scalar_first=True)
+            if pose_fitting:
+                for name, angle in zip(report["settings"]["neck_joints"], arrays["neck_joint_angles_rad"][frame]):
+                    robot.__dict__[name].joint_angle(float(angle))
             for hand in range(2):
-                if arrays["ik_success"][frame, hand]:
+                if arrays["ik_success"][frame, hand] or pose_fitting:
                     for name, angle in zip(settings["arm_joints"][hand], arrays["joint_angles_rad"][frame, hand]):
                         robot.__dict__[name].joint_angle(float(angle))
         for link in robot.link_list:
@@ -277,7 +318,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             hand = 0 if name.startswith("LEFT_") else 1 if name.startswith("RIGHT_") else None
             handle = viewer._linkid_to_handle.get(str(id(link)))
             if handle is not None:
-                handle.visible = eid >= 0 and (hand is None or bool(arrays["ik_success"][frame, hand]))
+                handle.visible = eid >= 0 and (hand is None or bool(arrays["ik_success"][frame, hand])
+                                               or (pose_fitting and predicted_control.value))
         for hand in range(2):
             if meshes:
                 handle = mesh_handles[hand]
@@ -293,10 +335,35 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             tcp_markers[hand].visible = wrist_matching and endpoint_markers[hand].visible
             if tcp_markers[hand].visible:
                 tcp_markers[hand].position = transform_points(arrays["tcp_position_base_m"][frame, hand], transform)
+        if pose_fitting:
+            for i, handle in enumerate(orientation_handles):
+                hand = i // 2
+                observed = hand == 2 or bool(arrays["export_valid"][frame, hand])
+                show_robot = hand == 2 or bool(arrays["ik_success"][frame, hand]) or predicted_control.value
+                handle.visible = axes_control.value and eid >= 0 and (observed if i % 2 == 0 else show_robot)
+                if not handle.visible:
+                    continue
+                if hand < 2:
+                    position = wrists[frame, hand] if i % 2 == 0 else transform_points(endpoint_positions[frame, hand], transform)
+                    rotation = (arrays["wrist_orientation_target_aligned"][frame, hand] if i % 2 == 0
+                                else transform[:3, :3] @ arrays["tool_orientation_base"][frame, hand])
+                else:
+                    position = (camera[frame] if i % 2 == 0 else transform_points(arrays["camera_position_base_m"][frame], transform))
+                    rotation = (arrays["camera_rotation_aligned_from_camera"][frame] if i % 2 == 0
+                                else transform[:3, :3] @ arrays["camera_rotation_base_from_optical"][frame])
+                handle.position = position
+                handle.wxyz = Rotation.from_matrix(rotation).as_quat(scalar_first=True)
         seed_id, seed = next((i, s) for i, s in enumerate(report["seeds"]) if s["start"] <= frame < s["stop"])
         detail = f"Seed {seed_id}: [{seed['start']}, {seed['stop']})" + ("" if seed["retained"] else " (short, discarded)")
         if eid >= 0:
-            detail += f" · Episode {eid}: [{episode['sdf']['start']}, {episode['sdf']['stop']})"
+            region = episode_region(episode)
+            detail += f" · Episode {eid}: [{region['start']}, {region['stop']})"
+        if pose_fitting and eid >= 0:
+            degrees = np.rad2deg(arrays["orientation_residual_rad"][frame])
+            detail += (f"\n\nWrist L/R: {np.round(arrays['ik_residual_m'][frame] * 1000, 2).tolist()} mm · "
+                       f"{np.round(degrees, 2).tolist()}° · Head: {np.rad2deg(arrays['camera_rotation_error_rad'][frame]):.2f}°")
+            if predicted_control.value and not arrays["ik_success"][frame].all():
+                detail += "\n\n**Unverified robot poses shown; missing observations remain unknown.**"
         if arrays["joint_jump"][frame].any():
             label += " · **Large joint change flagged**"
         status.content = (f"**Frame {frame} · {arrays['timestamp_s'][frame]:.3f} s**\n\n{label}\n\n{detail}\n\n"

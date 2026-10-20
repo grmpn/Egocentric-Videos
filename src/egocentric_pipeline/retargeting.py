@@ -63,16 +63,37 @@ def load_alignment(directory):
     return arrays, report, clip
 
 
-def retarget_trajectory(alignment_directory, workspace_directory, output_directory, settings, asset_root=None):
+def save_retargeting(output, arrays, report, clip, *, render_video=True):
+    """Shared lossless export and optional source-synchronized review artifacts."""
+    from .retargeting_visualization import annotate_video
+
+    started = time.perf_counter()
+    with (Path(output) / "trajectory_retargeted.npz").open("xb") as stream:
+        np.savez_compressed(stream, **arrays)
+    with np.load(Path(output) / "trajectory_retargeted.npz", allow_pickle=False) as restored:
+        if any(restored[key].dtype != value.dtype or restored[key].tobytes() != value.tobytes()
+               for key, value in arrays.items()):
+            raise ValueError("Retargeted export failed exact reload verification")
+    report["export_reload_exact"] = True
+    report.setdefault("timing", {})["export_s"] = time.perf_counter() - started
+    started = time.perf_counter()
+    if render_video:
+        annotate_video(output, arrays, report, clip)
+    report["timing"]["visualization_s"] = time.perf_counter() - started
+    report["video_rendered"] = render_video
+
+
+def retarget_trajectory(alignment_directory, workspace_directory, output_directory, settings, asset_root=None,
+                       *, regions_only=False, render_video=True):
     """Save all candidate evidence plus disjoint retained regions and IK witnesses."""
     import torch
-    from .retargeting_visualization import annotate_video
 
     validate_settings(settings)
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 2, "status": "running", "started_at": utc_now(),
+    report = {"schema_version": 2, "method": "workspace", "regions_only": regions_only,
+              "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "workspace_directory": str(Path(workspace_directory).resolve()),
@@ -113,6 +134,8 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
         times, valid = arrays["timestamp_s"], arrays["export_valid"]
         observed, edges, wrists = valid.any(axis=1), frame_edges(times), arrays["wrist_position_aligned_m"]
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
+        report["timing"] = {"loading_s": time.perf_counter() - started}
+        solve_started = time.perf_counter()
         candidates, evaluations, transforms = [], [], []
         for seed_index, seed in enumerate(seeds):
             if not seed["retained"]:
@@ -123,7 +146,8 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
             sl = slice(seed["start"], seed["stop"])
             transform, optimization = optimize_base(wrists[sl], valid[sl], grid, settings, seed_index)
             evaluation = evaluate_placement(wrists, valid, transform, grid, settings["workspace_margin_m"])
-            expanded = expand_region(seed, evaluation["frame_passed"], observed, edges, settings)
+            expanded = (interval_metrics(seed["start"], seed["stop"], evaluation["frame_passed"], observed, edges, settings)
+                        if regions_only else expand_region(seed, evaluation["frame_passed"], observed, edges, settings))
             candidate = {"candidate_id": len(candidates), "seed_index": seed_index, "seed": seed,
                          "optimization": optimization, "expanded": expanded,
                          "selection": "no_qualifying_expansion" if expanded is None else "pending"}
@@ -131,7 +155,14 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
             evaluations.append(evaluation)
             transforms.append(transform)
             print(f"Seed {seed_index} [{seed['start']}, {seed['stop']}): expanded {expanded}", flush=True)
-        selected = select_disjoint_regions(candidates, evaluations, observed, edges, settings)
+        report["timing"]["placement_s"] = time.perf_counter() - solve_started
+        if regions_only:
+            selected = candidates
+            for candidate in selected:
+                candidate.update(retained=candidate["expanded"], selection="heuristic_region")
+        else:
+            selected = select_disjoint_regions(candidates, evaluations, observed, edges, settings)
+        ik_started = time.perf_counter()
         n, joints = len(times), len(robot_settings["arm_joints"][0])
         derived = {"camera_position_smoothed_m": smooth,
                    "episode_id": np.full(n, -1, np.int32), "wrist_position_base_m": np.full((n, 2, 3), np.nan),
@@ -174,16 +205,11 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
                        candidate_query_valid=np.array([e["query_valid"] for e in evaluations], dtype=bool).reshape(-1, n, 2),
                        candidate_hand_passed=np.array([e["hand_passed"] for e in evaluations], dtype=bool).reshape(-1, n, 2),
                        candidate_frame_passed=np.array([e["frame_passed"] for e in evaluations], dtype=bool).reshape(-1, n))
-        exported = dict(arrays, **derived)
-        with (output / "trajectory_retargeted.npz").open("xb") as stream:
-            np.savez_compressed(stream, **exported)
-        with np.load(output / "trajectory_retargeted.npz", allow_pickle=False) as restored:
-            if any(restored[key].dtype != value.dtype or restored[key].tobytes() != value.tobytes() for key, value in exported.items()):
-                raise ValueError("Retargeted export failed exact reload verification")
+        report["timing"].update(ik_s=time.perf_counter() - ik_started, solve_s=time.perf_counter() - solve_started)
         report.update(seeds=seeds, candidates=candidates, episodes=episodes,
-                      demo_accepted=any(e["demonstrated"] for e in episodes), export_reload_exact=True,
+                      demo_accepted=any(e["demonstrated"] for e in episodes),
                       source_fields_preserved=list(arrays), frame_count=n)
-        annotate_video(output, exported, report, clip)
+        save_retargeting(output, dict(arrays, **derived), report, clip, render_video=render_video)
         report.update(status="completed", finished_at=utc_now(), wall_time_s=time.perf_counter() - started)
         write_json(output / "retargeting_report.json", report, overwrite=True)
         return report

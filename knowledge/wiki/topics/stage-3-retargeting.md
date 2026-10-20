@@ -64,6 +64,89 @@ provides a possible semantic input: manipulation cores, optional context expansi
 under one base placement, and semantic task instructions. That hierarchy/mode
 workflow is not implemented; Stage 3 does not implicitly authorize it.
 
+## Joint base and pose trajectory contract
+
+Implemented 2026-10-20 under the [approved extension](../plans/milestone-3-joint-base-optimization.md).
+[README commands](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting)
+select this method or compare it with the existing workspace method. Numerical
+acceptance is recorded in the [joint/base evidence](../experiments/joint-base-bundled.md).
+The baseline contract below remains supported.
+
+Both methods can now process only the retained camera-motion seeds, without
+expansion. Joint fitting always uses these regions: one shared base XYZ/yaw and
+per-frame configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
+remain zero. Base roll/pitch stay gravity-aligned; free height is not floor
+calibration. Camera position is used for segmentation and base initialization
+only. Initialization aligns the neutral robot camera-mount centre with the median
+human camera centre, subtracting the rotated base-to-camera offset; yaw uses the
+mean normalized horizontal optical heading. Vertical/cancelling headings fail
+explicitly.
+
+Physical wrists match `LEFT/RIGHT_WRIST_X_LINK` origins. Hand orientation matches
+the EZGripper palm/TCP rotation **at those wrist origins**; TCP translation remains
+separate. This lets `WRIST_X` and `GRIPPER_Y` contribute to orientation without
+moving the position target downstream. Fixed MANO-root-from-palm rotations use
+the zero-shape, neutral licensed models: X points wrist→middle MCP; Y points
+pinky→index MCP after orthogonalization; Z is their cross product. Target tool
+rotation is `R_aligned_from_MANO @ R_MANO_from_palm`. Left/right offsets differ;
+finger articulation and observed geometry are never changed. This defines an
+embodiment mapping, not a calibrated human/tool attachment.
+
+`HEAD_ZED_X_MINI_LINK` is the nominal camera mount. Its X-forward/Y-left/Z-up axes
+are converted to optical Z-forward/X-right/Y-down with
+`R_mount_from_optical = [[0,0,1],[-1,0,0],[0,-1,0]]`, consistent with
+[REP 103](https://github.com/ros-infrastructure/rep/blob/master/rep-0103.rst)
+and the [ZED image convention](https://docs.stereolabs.com/docs/development/zed-sdk/modules/positional-tracking/coordinate-frames).
+Tests verify these directions against ordinary URDF FK, including the mount's
+0.3633-radian pitch. The optical origin uses the mount centre; lens-centre
+calibration is unverified. The objective contains **camera rotation only**.
+The two neck joints cannot exactly track an arbitrary 3D camera rotation.
+
+The installed scikit-robot supplies batched FK and geometric Jacobians; SciPy
+bounded `least_squares` fits the combined residual. Position residuals are in
+metres; orientation residuals are rotation-matrix differences divided by
+sqrt(2), with configurable radian scales. Acceptance uses geodesic angular
+error, not the matrix residual. URDF bounds are hard constraints; neutral posture
+is a soft cost. After joint/base fitting, the base freezes and source-timed
+velocity/acceleration costs couple all frames. No retiming occurs.
+The [configuration](../../../configs/joint_retargeting.json) owns weights,
+tolerances and finite evaluation budgets. Failed region fits can retry up to
+three seeded starting postures. All attempts, termination messages and selection
+are recorded; budget termination does not imply either pose failure or optimality.
+IKPy and Robotics Toolbox were considered; their target-pose APIs do not remove
+this shared-base/multiple-target/temporal objective. No dependency was added.
+
+Version 3 reports identify `method: joint_base`; baseline reports remain version
+2, and historical version 1 TCP runs remain readable. Original source arrays
+retain their dtype and bytes. New arrays include:
+
+| Field | Contract |
+| --- | --- |
+| `joint_solution_rad`, `joint_solution_before_smoothing_rad` | `[T,16]`, recorded left-arm/right-arm/neck order; NaN outside solved regions. |
+| `joint_angles_rad`, `neck_joint_angles_rad` | `[T,2,7]` arms and `[T,2]` neck, including explicit failed/missing-hand predictions inside regions. |
+| `joint_prediction`, `ik_success` | `[T,2]`: missing-observation prediction label / observed position **and** orientation acceptance. A prediction never establishes observed success. |
+| `wrist_orientation_target_aligned`, `wrist_orientation_target_base`, `tool_orientation_base` | `[T,2,3,3]` proper rotations; target matrices are NaN for missing observations. |
+| `rotation_mano_from_palm` | `[2,3,3]` fixed left/right orientation mappings. |
+| `target_position_base_m`, `tcp_position_base_m` | `[T,2,3]` predicted physical wrist / actual TCP; acceptance is separate. |
+| `ik_residual_m`, `orientation_residual_rad` | `[T,2]` observed position/geodesic orientation error, NaN for missing observations. |
+| `camera_position_base_m`, `camera_rotation_base_from_optical`, `camera_rotation_error_rad` | `[T,3]`, `[T,3,3]`, `[T]` saved head FK and angular residual. |
+
+Each report episode owns its unexpanded `region`, `pose` metrics and smoothing
+result. Every available hand must pass 5 mm and 10°; unknown frames count toward
+the gap limit and do not enter the observed denominator. Demonstration requires
+**>95%** observed-frame coverage, ≤0.2 s gaps, ≥1 s duration and reduced acceleration
+RMS. Rejected regions remain inspectable. The viewer displays head motion,
+orientation axes/residuals, MANO and optional explicitly labeled unverified
+robot poses; it never solves IK during playback.
+
+The comparison alternates three sequential runs of each production method using
+identical seeds. Solver times include retries and both optimization stages;
+loading, export and video generation are timed separately. Workspace construction
+is reported from its historical build and is not rerun. Common pose errors,
+failures and finite consecutive joint-motion statistics accompany timing; the
+baseline has no orientation/head/smoothness objective, so this is a workflow
+comparison rather than an isolated solver benchmark.
+
 ## Part 3 placement and IK contract
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.

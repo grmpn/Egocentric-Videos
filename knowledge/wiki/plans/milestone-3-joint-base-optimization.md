@@ -1,6 +1,6 @@
 # Milestone 3 — Joint base and trajectory optimization
 
-Draft revision 1 · 2026-10-20 · Awaiting explicit approval.
+Approved revision 1 · 2026-10-20 · Approval: `20261020-joint-base-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
@@ -31,7 +31,7 @@ as the baseline.
   convention. Camera position has **no optimization loss**.
 - Freeze that base, then optimize the region's full joint trajectory with
   timestamp-aware temporal smoothness. Enforce URDF joint bounds and regularize
-  toward a documented neutral posture in both stages. Proposed joint scope is
+  toward a documented neutral posture in both stages. Joint scope is
   all fourteen arm joints and two neck joints; gripper fingers remain fixed.
   Record weights, stopping budgets, convergence and failures.
 - Retain the baseline command and old-run readability. Extend shared exports and
@@ -46,7 +46,7 @@ as the baseline.
   replay FK; verify bases, transform direction, left/right orientation
   mappings, joint bounds, timestamps, missing-data labels and export reload.
   With regions/initialization fixed, verify camera translations cannot affect fitting.
-- Proposed new-method pose gate: **≤5 mm** wrist-position and **≤10°**
+- New-method pose gate: **≤5 mm** wrist-position and **≤10°**
   orientation error for every observed hand in a passing frame, **>95%**
   passing observed frames, **≤0.2 s** nonpassing/unknown gaps, **≥1 s** duration,
   and a nonempty denominator. At least one region must qualify.

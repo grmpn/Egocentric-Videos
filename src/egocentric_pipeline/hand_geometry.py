@@ -40,6 +40,29 @@ def reconstruct_mano(model, translation, orientation, hand_pose, betas):
     return result.joints.numpy(), result.vertices.numpy()
 
 
+def mano_palm_frames(model_paths):
+    """Fixed MANO-root-from-palm rotations, left then right, from neutral hands.
+
+    +X points wrist→middle MCP; +Y points pinky→index MCP after orthogonalization.
+    +Z completes the right-handed basis. Map these axes to EZGripper palm/TCP
+    +X (toward fingers), +Y (across fingers), +Z. This is an embodiment mapping,
+    not an estimate of missing hand motion or a calibrated human/tool attachment.
+    """
+    frames = []
+    for hand, path in enumerate(model_paths):
+        model = load_mano_model(path, hand)
+        zero = np.zeros((1, 3), np.float32)
+        joints, _ = reconstruct_mano(model, zero, zero, np.zeros((1, 45), np.float32),
+                                    np.zeros((1, 10), np.float32))
+        x = (joints[0, 4] - joints[0, 0]).astype(float)
+        x /= np.linalg.norm(x)
+        y = (joints[0, 1] - joints[0, 7]).astype(float)
+        y -= x * np.dot(x, y)
+        y /= np.linalg.norm(y)
+        frames.append(np.stack((x, y, np.cross(x, y)), axis=1))
+    return np.array(frames)
+
+
 def align_hand_geometry(world, rotation, model_paths):
     """Return corrected MANO poses, physical wrists, rest roots and error evidence.
 
