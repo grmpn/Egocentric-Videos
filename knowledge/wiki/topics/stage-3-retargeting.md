@@ -74,10 +74,10 @@ The baseline contract below remains supported.
 
 Both methods can now process only the retained camera-motion seeds, without
 expansion. Joint fitting always uses these regions: one shared base XYZ/yaw and
-per-frame configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
+sampled configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
 remain zero. Base roll/pitch stay gravity-aligned; free height is not floor
 calibration. Camera position is used for segmentation, base initialization and
-per-frame alignment in both fitting stages. Initialization aligns the neutral robot camera-mount centre with the median
+diagnostic errors, with no translation loss. Initialization aligns the neutral robot camera-mount centre with the median
 human camera centre, subtracting the rotated base-to-camera offset. Following the
 user's median-initialization amendment, yaw uses `atan2` of the component-wise
 median of normalized horizontal optical forward vectors. This avoids taking a
@@ -85,10 +85,16 @@ median of wrapped angles; it is a vector-component median, not a circular angula
 median. Vertical/cancelling directions fail explicitly. Saved reports identify
 the initialization rule; earlier mean-heading runs remain unchanged.
 
-Physical wrists match `LEFT/RIGHT_WRIST_X_LINK` origins. Hand orientation matches
-the EZGripper palm/TCP rotation **at those wrist origins**; TCP translation remains
-separate. This lets `WRIST_X` and `GRIPPER_Y` contribute to orientation without
-moving the position target downstream. Fixed MANO-root-from-palm rotations use
+The human wrist matches `p_robot_wrist + R_base_from_tool @ [0.05, 0, 0]`:
+5 cm toward the extended gripper fingers from `LEFT/RIGHT_WRIST_X_LINK`.
+The offset is in tool coordinates and rotates with the gripper. It does not
+translate the source hand geometry. The linear Jacobian includes the wrist
+Jacobian plus angular velocity crossed with the rotated offset; all seven arm
+joints can contribute. Physical robot wrist, shifted match point and actual TCP
+are separately saved and labeled. Hand orientation matches the EZGripper
+palm/TCP rotation at the shifted point. Earlier joint runs and the workspace
+method retain their physical-wrist endpoint.
+Fixed MANO-root-from-palm rotations use
 the zero-shape, neutral licensed models: X points wrist→middle MCP; Y points
 pinky→index MCP after orthogonalization; Z is their cross product. Target tool
 rotation is `R_aligned_from_MANO @ R_MANO_from_palm`. Left/right offsets differ;
@@ -102,25 +108,31 @@ are converted to optical Z-forward/X-right/Y-down with
 and the [ZED image convention](https://docs.stereolabs.com/docs/development/zed-sdk/modules/positional-tracking/coordinate-frames).
 Tests verify these directions against ordinary URDF FK, including the mount's
 0.3633-radian pitch. The optical origin uses the mount centre; lens-centre
-calibration is unverified. Following the user's camera-position amendment, both
-camera position and rotation enter the objective. The two neck joints cannot
-exactly track an arbitrary camera pose under a fixed base.
+calibration is unverified. Revision 4 removes the camera-position objective from
+both stages; camera rotation remains fitted. Camera translation error remains
+available as a diagnostic. Saved revision 3 runs retain their original objective
+and viewer explanation.
 
 The installed scikit-robot supplies batched FK and geometric Jacobians; SciPy
 bounded `least_squares` fits the combined residual. Position residuals are in
 metres; orientation residuals are rotation-matrix differences divided by
 sqrt(2), with configurable radian scales. Acceptance uses geodesic angular
 error, not the matrix residual. URDF bounds are hard constraints; neutral posture
-is a soft cost. After joint/base fitting, the base freezes and source-timed
-velocity/acceleration costs couple all frames. No retiming occurs.
-Camera position contributes `(R_aligned_from_base @ p_camera_base + t - p_camera_aligned)
-/ camera_position_scale_m` in both stages, including frames with no observed
-wrists. The default 0.05 m scale controls objective strength; it is not a hard
-alignment tolerance. The camera uses the same library positional Jacobian and
-shared-base translation/yaw derivatives as wrist alignment.
-`neutral_weight` multiplies all 16 joint deviations from the configured neutral
-posture. Its squared-cost coefficient is the weight squared; reported posture
-RMS is the unweighted deviation in radians.
+is a soft cost. Shared-base fitting uses region-relative indices `0, 2, 4, ...`
+(`base_frame_stride=2`), including 26 of 52 and 16 of 31 bundled frames. The
+base then freezes. Source-time linear interpolation initializes all joint poses,
+with endpoint hold when the final frame was unsampled; every original frame
+enters the fixed-base velocity/acceleration and pose optimization. No source
+observation is interpolated, and no retiming occurs. Reports save sampled indices
+and full-resolution frame counts. `joint_solution_before_smoothing_rad` now
+contains the interpolated seed: it can already be smoother than the final fit,
+so acceleration improvement is not guaranteed and remains an acceptance gate.
+
+`hand_position_weight` and `hand_orientation_weight` multiply the respective
+scaled residuals, defaulting to 1.0. `neutral_weight` is 0.5 for all 16 joint
+deviations. Squared-cost coefficients are the squares of these multipliers;
+reported posture RMS is the unweighted deviation in radians. Acceptance uses
+unweighted physical errors and is unchanged by these weights.
 The [configuration](../../../configs/joint_retargeting.json) owns weights,
 tolerances and finite evaluation budgets. Failed region fits can retry up to
 three seeded starting postures. All attempts, termination messages and selection
@@ -128,8 +140,9 @@ are recorded; budget termination does not imply either pose failure or optimalit
 IKPy and Robotics Toolbox were considered; their target-pose APIs do not remove
 this shared-base/multiple-target/temporal objective. No dependency was added.
 
-Version 3 reports identify `method: joint_base`; baseline reports remain version
-2, and historical version 1 TCP runs remain readable. Original source arrays
+Version 4 reports identify `method: joint_base`, the shifted endpoint and explicit
+`camera_position_objective: false`. Version 3 wrist-origin joint runs, version 2
+workspace reports and historical version 1 TCP runs remain readable. Original source arrays
 retain their dtype and bytes. New arrays include:
 
 | Field | Contract |
@@ -139,10 +152,10 @@ retain their dtype and bytes. New arrays include:
 | `joint_prediction`, `ik_success` | `[T,2]`: missing-observation prediction label / observed position **and** orientation acceptance. A prediction never establishes observed success. |
 | `wrist_orientation_target_aligned`, `wrist_orientation_target_base`, `tool_orientation_base` | `[T,2,3,3]` proper rotations; target matrices are NaN for missing observations. |
 | `rotation_mano_from_palm` | `[2,3,3]` fixed left/right orientation mappings. |
-| `target_position_base_m`, `tcp_position_base_m` | `[T,2,3]` predicted physical wrist / actual TCP; acceptance is separate. |
+| `target_position_base_m`, `robot_wrist_position_base_m`, `tcp_position_base_m` | `[T,2,3]` shifted match point / physical robot wrist / actual TCP. Version 3 target positions remain physical wrists; the separate robot-wrist field is new in version 4. |
 | `ik_residual_m`, `orientation_residual_rad` | `[T,2]` observed position/geodesic orientation error, NaN for missing observations. |
 | `camera_position_base_m`, `camera_rotation_base_from_optical`, `camera_rotation_error_rad` | `[T,3]`, `[T,3,3]`, `[T]` saved head FK and angular residual. |
-| `camera_position_error_m` | `[T]` Euclidean camera-centre error; NaN outside solved regions. Added for position-aligned runs; absent in legacy rotation-only runs. |
+| `camera_position_error_m` | `[T]` Euclidean camera-centre error; NaN outside solved regions. Diagnostic in version 4, fitted in revision 3, absent in original rotation-only runs. |
 
 Each report episode owns its unexpanded `region`, `pose` metrics and smoothing
 result. Every available hand must pass 5 mm and 10°; unknown frames count toward
@@ -150,7 +163,8 @@ the gap limit and do not enter the observed denominator. Demonstration requires
 **>95%** observed-frame coverage, ≤0.2 s gaps, ≥1 s duration and reduced acceleration
 RMS. Rejected regions remain inspectable. The viewer displays head motion,
 orientation axes/residuals, MANO and optional explicitly labeled unverified
-robot poses; it never solves IK during playback. Camera position error is reported
+robot poses; it never solves IK during playback. White marks the shifted match
+point, pink the physical robot wrist and cyan the TCP in new runs. Camera position error is reported
 separately from the wrist gate. Legacy rotation-only runs keep their original
 viewer explanation and remain readable.
 

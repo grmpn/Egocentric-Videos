@@ -207,6 +207,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     pose_fitting = report.get("method") == "joint_base"
     target_frames = settings.get("target_frames", settings["tool_frames"])
     wrist_matching = target_frames != settings["tool_frames"]
+    shifted_matching = pose_fitting and np.any(report["settings"].get("wrist_offset_tool_m", [0, 0, 0]))
     endpoint_positions = arrays.get("target_position_base_m", arrays["tcp_position_base_m"])
     if wrist_matching and "target_position_base_m" not in arrays:
         raise ValueError("Wrist-target run has no saved target positions; regenerate the retargeting output")
@@ -229,7 +230,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     camera = arrays["camera_position_aligned_m"]
     camera_points = server.scene.add_point_cloud("/camera", points=camera.astype(np.float32), colors=(160, 165, 178), point_size=.012)
     wrists = arrays["wrist_position_aligned_m"]
-    targets, endpoint_markers, tcp_markers, paths = [], [], [], []
+    targets, endpoint_markers, tcp_markers, wrist_markers, paths = [], [], [], [], []
     for hand, name in enumerate(("left", "right")):
         valid = arrays["export_valid"][:, hand]
         colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(valid)], np.uint8)
@@ -237,8 +238,11 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
-    endpoint_label = "robot wrist" if wrist_matching else "TCP (legacy alignment)"
+        wrist_markers.append(server.scene.add_icosphere(f"/{name}/robot_wrist", radius=.008, color=(235, 115, 220), visible=False))
+    endpoint_label = "shifted wrist match point" if shifted_matching else "robot wrist" if wrist_matching else "TCP (legacy alignment)"
     camera_explanation = ("Camera position and rotation are fitted in both stages."
+                          if report.get("camera_position_objective", "camera_position_error_m" in arrays)
+                          else "Camera rotation is fitted; position error is diagnostic only."
                           if "camera_position_error_m" in arrays
                           else "Camera position was used only for initialization.")
     explanation = (
@@ -251,6 +255,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         "## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
         f"Blue/orange: original left/right hand and wrist · White: verified {endpoint_label}"
         + (" · Cyan: gripper TCP" if wrist_matching else "")
+        + (" · Pink: physical robot wrist" if shifted_matching else "")
         + "\nPath: green pass, purple pose/IK failure, gray unassigned; red is a baseline workspace failure.\n\n"
         + explanation + " Collisions and dynamic limits are unchecked.")
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
@@ -338,6 +343,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             tcp_markers[hand].visible = wrist_matching and endpoint_markers[hand].visible
             if tcp_markers[hand].visible:
                 tcp_markers[hand].position = transform_points(arrays["tcp_position_base_m"][frame, hand], transform)
+            wrist_markers[hand].visible = shifted_matching and endpoint_markers[hand].visible
+            if wrist_markers[hand].visible:
+                wrist_markers[hand].position = transform_points(arrays["robot_wrist_position_base_m"][frame, hand], transform)
         if pose_fitting:
             for i, handle in enumerate(orientation_handles):
                 hand = i // 2
@@ -373,7 +381,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             label += " · **Large joint change flagged**"
         status.content = (f"**Frame {frame} · {arrays['timestamp_s'][frame]:.3f} s**\n\n{label}\n\n{detail}\n\n"
                           f"Observed L/R: {arrays['export_valid'][frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}\n\n"
-                          f"Robot targets: {', '.join(target_frames)}")
+                          f"Robot wrist frames: {', '.join(target_frames)}"
+                          + (f" · Match offset in tool metres: {report['settings']['wrist_offset_tool_m']}" if shifted_matching else ""))
         viewer.redraw()
 
     @slider.on_update

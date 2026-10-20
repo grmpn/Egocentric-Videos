@@ -2,7 +2,7 @@
 
 All transforms act on column vectors. FK uses metres/radians in the pedestal
 frame; observations use the gravity-aligned frame. Joint order is left arm (7),
-right arm (7), neck (2). Both camera position and optical rotation are fitted.
+right arm (7), neck (2). Camera optical rotation is fitted; translation is not.
 """
 
 import time
@@ -30,6 +30,7 @@ class PoseModel:
                 or np.any(self.neutral < self.lower) or np.any(self.neutral > self.upper)):
             raise ValueError("Neutral posture must contain 16 finite, joint-limit-valid angles")
         self.wrists, self.tools = [], []
+        self.wrist_offset = np.asarray(settings.get("wrist_offset_tool_m", [0., 0., 0.]))
         for hand in range(2):
             names = robot_settings["arm_joints"][hand]
             self.wrists.append(arm_parameters(robot, robot_settings["target_frames"][hand], names[:6])[2])
@@ -42,11 +43,11 @@ class PoseModel:
             raise ValueError("Camera mount-from-optical must be a proper rotation")
 
     def forward(self, angles, jacobian=False):
-        """Return wrist positions, tool rotations/positions and optical poses.
+        """Return wrist match points, tool rotations/positions and optical poses.
 
         With jacobian=True, append three lists of geometric [T,6,J] Jacobians.
-        A tool's orientation is used at the physical wrist origin, independently
-        of its TCP translation, so all seven arm rotations contribute.
+        Match point = physical wrist + R_base_from_tool @ wrist_offset_tool_m.
+        Its linear Jacobian includes the rotating offset for all seven joints.
         """
         from skrobot.kinematics.differentiable import (
             compute_geometric_jacobian_batched_numpy, forward_kinematics_ee_batched_numpy)
@@ -64,10 +65,17 @@ class PoseModel:
             q = angles[:, hand * 7:hand * 7 + 7]
             p, _, j = fk(q[:, :6], self.wrists[hand])
             tp, r, tj = fk(q, self.tools[hand])
-            positions.append(p)
+            offset = r @ self.wrist_offset
+            positions.append(p + offset)
             rotations.append(r)
             tools.append(tp)
-            wrist_j.append(j)
+            if jacobian:
+                shifted_j = np.zeros_like(tj)
+                shifted_j[:, :3, :6] = j[:, :3]
+                shifted_j[:, :3] += np.cross(tj[:, 3:].transpose(0, 2, 1),
+                                             offset[:, None, :]).transpose(0, 2, 1)
+                shifted_j[:, 3:] = tj[:, 3:]
+                wrist_j.append(shifted_j)
             tool_j.append(tj)
         hp, hr, hj = fk(angles[:, 14:], self.head)
         result = (np.stack(positions, axis=1), np.stack(rotations, axis=1),
@@ -128,17 +136,15 @@ class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
     def __init__(self, model, wrists, orientations, cameras, valid, times, settings,
-                 *, camera_positions, fixed_base=None, smooth=False):
+                 *, fixed_base=None, smooth=False):
         self.model, self.settings = model, settings
         self.wrists, self.orientations, self.cameras = wrists, orientations, cameras
         self.valid, self.n = valid, len(times)
-        self.camera_positions = np.asarray(camera_positions)
-        if self.camera_positions.shape != (self.n, 3) or not np.isfinite(self.camera_positions).all():
-            raise ValueError("Camera positions must be finite [T,3] aligned-frame metres")
         self.fixed_base = fixed_base
         self.base_variables = 4 if fixed_base is None else 0
         self.width = self.n * 16 + self.base_variables
-        velocity, acceleration = temporal_operators(times)
+        if smooth:
+            velocity, acceleration = temporal_operators(times)
         self.regularizer = sparse.vstack([
             settings["neutral_weight"] * sparse.eye(self.n * 16),
             settings["velocity_weight"] * velocity if smooth else sparse.csr_matrix((0, self.n * 16)),
@@ -158,7 +164,7 @@ class PoseProblem:
             return self.cached_result
         base, q = self.unpack(x)
         rotation = base_transform(base)[:3, :3].T
-        p, r, _, hp, hr, pj, rj, hj = self.model.forward(q, jacobian=True)
+        p, r, _, _, hr, pj, rj, hj = self.model.forward(q, jacobian=True)
         residuals, rows, cols, values = [], [], [], []
         row_start = 0
 
@@ -205,11 +211,10 @@ class PoseProblem:
             if not len(frames):
                 continue
             position_term(p[frames, hand], self.wrists[frames, hand], pj[hand][frames, :3],
-                          hand * 7, frames, self.settings["position_scale_m"])
+                          hand * 7, frames, self.settings["position_scale_m"] / self.settings["hand_position_weight"])
             rotation_term(r[frames, hand], self.orientations[frames, hand], rj[hand][frames, 3:],
-                          hand * 7, frames, np.sqrt(2) * self.settings["orientation_scale_rad"])
-        position_term(hp, self.camera_positions, hj[:, :3], 14, np.arange(self.n),
-                      self.settings["camera_position_scale_m"])
+                          hand * 7, frames, np.sqrt(2) * self.settings["orientation_scale_rad"]
+                          / self.settings["hand_orientation_weight"])
         rotation_term(hr, self.cameras, hj[:, 3:], 14, np.arange(self.n),
                       np.sqrt(2) * self.settings["camera_rotation_scale_rad"])
         reg = self.regularizer
@@ -249,19 +254,24 @@ class PoseProblem:
 
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
-               *, camera_positions, seed_index=0):
-    """Fit shared base + joint poses, freeze base, then smooth those same poses."""
+               *, seed_index=0):
+    """Fit alternate frames, freeze base, interpolate seeds and refine all frames."""
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
+    sampled = np.arange(0, len(timestamps), settings["base_frame_stride"])
     attempts, best, best_rank = [], None, None
     for attempt in range(settings["fit_attempts"]):
         # One posture per region avoids independent random branches at every frame.
         initial_q = model.neutral if attempt == 0 else rng.uniform(.8 * model.lower, .8 * model.upper)
-        q0 = np.tile(initial_q, (len(timestamps), 1))
+        q0 = np.tile(initial_q, (len(sampled), 1))
+        problem = PoseProblem(model, wrists[sampled], orientations[sampled], cameras[sampled],
+                              valid[sampled], timestamps[sampled], settings)
+        base, sampled_q, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
+        # Interpolation preserves bounds. An unsampled final frame holds the
+        # last pose until the full-resolution solve; no source data is filled.
+        before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])
+                                  for j in range(16)])
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
-                              camera_positions=camera_positions)
-        base, before, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
-        problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
-                              camera_positions=camera_positions, fixed_base=base, smooth=True)
+                              fixed_base=base, smooth=True)
         _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
         p, r, *_ = model.forward(after)
         rotation = base_transform(base)[:3, :3].T
@@ -272,6 +282,9 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
                                       & (oe <= settings["orientation_tolerance_rad"])) | ~valid).all(axis=1)
         metrics = interval_metrics(0, len(timestamps), passed, valid.any(axis=1), frame_edges(timestamps), settings)
         info = {"attempt": attempt, "initial_joint_angles_rad": initial_q.tolist(),
+                "base_sample_indices": sampled.tolist(),
+                "trajectory_frame_count": len(timestamps),
+                "trajectory_initialization": "source-time linear joint interpolation; endpoint hold",
                 "joint_base": first, "fixed_base_trajectory": second, "pose": metrics,
                 "before_smoothing": motion_metrics(before, timestamps),
                 "after_smoothing": motion_metrics(after, timestamps)}

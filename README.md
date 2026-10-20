@@ -385,9 +385,11 @@ IK failure/joint discontinuities.
 ## Joint base and wrist-pose trajectory fitting
 
 Use the existing workspace environment and gravity-aligned input. This method
-fits wrist positions/orientations and camera position/rotation with a shared base, then
-freezes the base and smooths the joint trajectory within each camera-motion
-region. Camera position also guides segmentation and median initialization.
+fits hand positions/orientations and camera rotation with a shared base on every
+other frame, then freezes the base and refines all original frames within each
+camera-motion region. Camera position guides segmentation and median initialization;
+its error is diagnostic only. Human wrists match a point 5 cm toward the gripper
+fingers from each robot wrist, in rotating tool coordinates.
 No workspace build is required for this method.
 
 ```bash
@@ -406,9 +408,12 @@ and **Show unverified robot poses**. Missing source observations stay unknown.
 `--config` selects alternative solver settings; defaults are in
 [joint_retargeting.json](configs/joint_retargeting.json). Success is measured
 from saved FK residuals separately from optimizer termination.
-`camera_position_scale_m` divides the camera-position residual (default 0.05 m,
-not a hard error tolerance). `neutral_weight` multiplies posture residuals;
-increasing it fivefold increases their squared-cost coefficient 25-fold.
+`neutral_weight` is 0.5. `hand_position_weight` and `hand_orientation_weight`
+multiply the scaled hand residuals (defaults 1.0); halving a weight quarters its
+squared-cost coefficient without changing acceptance tolerances.
+`wrist_offset_tool_m` is `[0.05, 0, 0]` and `base_frame_stride` is 2. Unsampled
+joint seeds use source-time linear interpolation with endpoint hold; full-frame
+refinement and validation include every omitted frame.
 
 Compare three sequential runs of each method on the same unexpanded regions:
 

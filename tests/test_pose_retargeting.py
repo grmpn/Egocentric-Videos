@@ -40,7 +40,9 @@ def test_library_fk_matches_ordinary_model_and_optical_axes(model):
         for name, angle in zip(m.joint_names, angles):
             robot.__dict__[name].joint_angle(float(angle))
         for h in range(2):
-            np.testing.assert_allclose(p[i, h], links[rs["target_frames"][h]].worldpos(), atol=1e-6)
+            np.testing.assert_allclose(p[i, h], links[rs["target_frames"][h]].worldpos()
+                                       + links[rs["tool_frames"][h]].worldrot() @ m.wrist_offset, atol=1e-6)
+            assert np.linalg.norm(p[i, h] - links[rs["target_frames"][h]].worldpos()) == pytest.approx(.05)
             np.testing.assert_allclose(tcp[i, h], links[rs["tool_frames"][h]].worldpos(), atol=1e-6)
             assert rotation_error(r[i, h], links[rs["tool_frames"][h]].worldrot()) < 1e-6
         head = links["HEAD_ZED_X_MINI_LINK"]
@@ -86,15 +88,13 @@ def test_sparse_objective_derivatives_missing_hands_and_irregular_times(model, s
     m, _, _ = model
     times = np.array([0., .03, .07, .10])
     q = np.tile(m.neutral, (4, 1)) + .01
-    p, r, _, camera_positions, cameras = m.forward(q)
+    p, r, _, _, cameras = m.forward(q)
     base = np.array([.3, -.2, .1, .4])
     rot = base_transform(base)[:3, :3].T
     wrists, rotations, cameras = p @ rot.T + base[:3], rot @ r, rot @ cameras
-    camera_positions = camera_positions @ rot.T + base[:3]
     valid = np.array([[True, True], [False, True], [False, False], [True, True]])
     wrists[~valid], rotations[~valid] = np.nan, np.nan
     problem = PoseProblem(m, wrists, rotations, cameras, valid, times, settings,
-                          camera_positions=camera_positions,
                           fixed_base=base if fixed else None, smooth=fixed)
     x = q.ravel() if fixed else np.r_[base, q.ravel()]
     residual, jac = problem.evaluate(x)
@@ -106,22 +106,23 @@ def test_sparse_objective_derivatives_missing_hands_and_irregular_times(model, s
         numerical = (problem.evaluate(x + eps * direction)[0] - problem.evaluate(x - eps * direction)[0]) / (2 * eps)
         np.testing.assert_allclose(jac @ direction, numerical, atol=2e-6, rtol=1e-6)
     # Missing wrist geometry contributes no pose residual, including wholly
-    # missing frames; camera position still constrains those frames.
+    # missing frames; only camera rotation and regularization constrain them.
     perturbed = wrists.copy()
     perturbed[~valid] = 1e6
     other = PoseProblem(m, perturbed, rotations, cameras, valid, times, settings,
-                        camera_positions=camera_positions,
                         fixed_base=base if fixed else None, smooth=fixed)
     np.testing.assert_array_equal(other.evaluate(x)[0], residual)
-    shift = np.array([.02, -.01, .03])
-    translated = PoseProblem(m, wrists, rotations, cameras, valid, times, settings,
-                             camera_positions=camera_positions + shift,
-                             fixed_base=base if fixed else None, smooth=fixed)
-    changed, changed_jac = translated.evaluate(x)
-    difference = changed - residual
-    assert np.count_nonzero(np.abs(difference) > 1e-10) == len(times) * 3
-    assert difference @ difference == pytest.approx(
-        len(times) * (shift @ shift) / settings["camera_position_scale_m"]**2)
+    # Alter nominal camera translation without changing rotations/Jacobians.
+    # Neither stage may acquire a camera-position objective through FK.
+    original_forward = m.forward
+    def translated_head(*args, **kwargs):
+        result = list(original_forward(*args, **kwargs))
+        result[3] = result[3] + np.array([2., -1., 3.])
+        return tuple(result)
+    m.forward = translated_head
+    other.cached_x = None
+    changed, changed_jac = other.evaluate(x)
+    np.testing.assert_array_equal(changed, residual)
     np.testing.assert_array_equal(changed_jac.toarray(), jac.toarray())
 
 
@@ -164,37 +165,75 @@ def test_pose_viewer_distinguishes_failure_missing_and_unassigned():
     assert [frame_state(i, arrays, report)[0] for i in range(4)] == ["ik_failed", "feasible", "unknown", "unknown"]
 
 
-def test_known_pose_region_fit_with_missing_observation(model, settings):
+@pytest.mark.parametrize("stride", [1, 2])
+def test_known_pose_region_fit_with_missing_observation(model, settings, stride):
     m, _, _ = model
     times = np.arange(8) / 6
     q = np.tile(m.neutral, (8, 1))
     q[:, 3] -= .025 * np.sin(np.arange(8))
-    p, r, _, camera_positions, cameras = m.forward(q)
+    p, r, _, _, cameras = m.forward(q)
     base = np.array([.2, .1, -.4, .3])
     rot = base_transform(base)[:3, :3].T
     wrists, rotations = p @ rot.T + base[:3], rot @ r
     valid = np.ones((8, 2), bool)
     valid[2, 0] = False
     wrists[~valid], rotations[~valid] = np.nan, np.nan
-    settings.update(base_max_evaluations=60, trajectory_max_evaluations=60, fit_attempts=1)
-    camera_positions = camera_positions @ rot.T + base[:3]
-    b, before, after, info = fit_region(m, wrists, rotations, rot @ cameras, valid, times, base, settings,
-                                      camera_positions=camera_positions)
+    settings.update(base_max_evaluations=60, trajectory_max_evaluations=60, fit_attempts=1,
+                    base_frame_stride=stride)
+    b, before, after, info = fit_region(m, wrists, rotations, rot @ cameras, valid, times, base, settings)
     assert np.isfinite(after).all()
     assert np.all(after >= m.lower) and np.all(after <= m.upper)
-    p, r, _, fitted_camera, _ = m.forward(after)
+    p, r, *_ = m.forward(after)
     rb = base_transform(b)[:3, :3].T
     assert np.max(np.linalg.norm((p @ rb.T + b[:3] - wrists)[valid], axis=-1)) <= .005
     assert np.max(rotation_error((rb @ r)[valid], rotations[valid])) <= np.deg2rad(10)
-    assert np.max(np.linalg.norm(fitted_camera @ rb.T + b[:3] - camera_positions, axis=-1)) < .005
-    assert info["after_smoothing"]["acceleration_rms_rad_s2"] < info["before_smoothing"]["acceleration_rms_rad_s2"]
+    assert info["base_sample_indices"] == list(range(0, 8, stride))
+    assert before.shape == after.shape == (8, 16)
+    if stride == 2:
+        np.testing.assert_array_equal(before[-1], before[-2])
+        np.testing.assert_allclose(before[1], (before[0] + before[2]) / 2)
+    else:
+        assert info["after_smoothing"]["acceleration_rms_rad_s2"] < info["before_smoothing"]["acceleration_rms_rad_s2"]
+    # Interpolated alternate-frame poses can be smoother than observations.
+    # Refinement must report, rather than conceal, that acceleration increase.
+    _, acceleration = temporal_operators(times)
+    for key, angles in [("before_smoothing", before), ("after_smoothing", after)]:
+        assert info[key]["acceleration_rms_rad_s2"] == pytest.approx(
+            np.sqrt(np.mean((acceleration @ angles.ravel())**2)))
 
 
 @pytest.mark.parametrize("key,value", [("ik_tolerance_m", .01), ("orientation_tolerance_rad", .2),
                                       ("maximum_gap_s", .3), ("minimum_feasible_fraction", .9),
                                       ("fit_attempts", 0), ("position_scale_m", 0),
-                                      ("camera_position_scale_m", 0), ("camera_position_scale_m", np.nan)])
+                                      ("hand_position_weight", 0), ("hand_orientation_weight", np.nan),
+                                      ("base_frame_stride", 0), ("base_frame_stride", 1.5),
+                                      ("wrist_offset_tool_m", [0, 0]), ("wrist_offset_tool_m", [np.nan, 0, 0])])
 def test_reject_weakened_acceptance_and_invalid_solver_settings(settings, key, value):
     settings[key] = value
     with pytest.raises(ValueError):
         validate_settings(settings)
+
+
+@pytest.mark.parametrize("fixed", [False, True])
+def test_hand_weights_scale_only_matching_residuals(model, settings, fixed):
+    m, _, _ = model
+    q = np.tile(m.neutral, (3, 1)) + .01
+    p, r, _, _, cameras = m.forward(q)
+    wrists = p + .03
+    orientations = Rotation.from_euler("z", .2).as_matrix() @ r
+    valid = np.ones((3, 2), bool)
+    times = np.array([0., .03, .08])
+    base = np.zeros(4)
+    x = q.ravel() if fixed else np.r_[base, q.ravel()]
+    kwargs = dict(fixed_base=base if fixed else None, smooth=fixed)
+    original = PoseProblem(m, wrists, orientations, cameras, valid, times, settings, **kwargs)
+    reduced = PoseProblem(m, wrists, orientations, cameras, valid, times,
+                          dict(settings, hand_position_weight=.2, hand_orientation_weight=.5), **kwargs)
+    residual, jac = original.evaluate(x)
+    weaker, weaker_jac = reduced.evaluate(x)
+    factors = np.ones(len(residual))
+    for start in (0, 36):
+        factors[start:start + 9] = .2
+        factors[start + 9:start + 36] = .5
+    np.testing.assert_allclose(weaker, residual * factors, atol=1e-12)
+    np.testing.assert_allclose(weaker_jac.toarray(), jac.toarray() * factors[:, None], atol=1e-12)

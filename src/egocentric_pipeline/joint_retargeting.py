@@ -21,13 +21,15 @@ def validate_settings(settings):
     for key in ("camera_displacement_m", "camera_sustain_s", "minimum_episode_s", "ik_tolerance_m",
                 "orientation_tolerance_rad", "joint_jump_report_rad", "heading_min_norm",
                 "base_translation_radius_m", "position_scale_m", "orientation_scale_rad",
-                "camera_rotation_scale_rad", "camera_position_scale_m", "neutral_weight", "solver_tolerance"):
+                "camera_rotation_scale_rad", "hand_position_weight", "hand_orientation_weight",
+                "neutral_weight", "solver_tolerance"):
         if key not in settings or not np.isfinite(settings[key]) or settings[key] <= 0:
             raise ValueError(f"{key} must be positive finite")
     for key in ("camera_smoothing_sigma_s", "maximum_gap_s", "velocity_weight", "acceleration_weight"):
         if not np.isfinite(settings[key]) or settings[key] < 0:
             raise ValueError(f"{key} must be nonnegative finite")
-    for key in ("base_max_evaluations", "trajectory_max_evaluations", "torch_threads", "fit_attempts"):
+    for key in ("base_max_evaluations", "trajectory_max_evaluations", "torch_threads", "fit_attempts",
+                "base_frame_stride"):
         if type(settings[key]) is not int or settings[key] < 1:
             raise ValueError(f"{key} must be a positive integer")
     if (settings["ik_tolerance_m"] > .005 or settings["orientation_tolerance_rad"] > np.deg2rad(10)
@@ -38,6 +40,9 @@ def validate_settings(settings):
         raise ValueError("Specify two neck joints in base-to-camera order")
     if type(settings["seed"]) is not int or settings["seed"] < 0:
         raise ValueError("seed must be a nonnegative integer")
+    offset = np.asarray(settings["wrist_offset_tool_m"])
+    if offset.shape != (3,) or not np.isfinite(offset).all():
+        raise ValueError("wrist_offset_tool_m must contain three finite tool-frame metres")
 
 
 def joint_retarget_trajectory(alignment_directory, output_directory, settings, robot_settings,
@@ -49,7 +54,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 3, "method": "joint_base", "status": "running", "started_at": utc_now(),
+    report = {"schema_version": 4, "method": "joint_base", "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings, "robot_settings": robot_settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "asset_root": str(Path(asset_root).resolve()), "hand_order": ["left", "right"],
@@ -58,8 +63,9 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "limitations": "Kinematic fit only; collision, dynamics, scale, gravity and floor height unverified.",
-              "camera_position_use": "segmentation, initialization and per-frame weighted alignment in both fitting stages",
-              "camera_position_objective": "Euclidean nominal camera-mount position residual divided by camera_position_scale_m; a soft objective, not a hard tolerance",
+              "camera_position_use": "segmentation, initialization and diagnostic errors only",
+              "camera_position_objective": False,
+              "position_mapping": "human wrist matches robot wrist origin + tool rotation @ wrist_offset_tool_m; physical wrist and TCP saved separately",
               "base_initialization": "yaw from component-wise median of normalized horizontal optical forward vectors; XYZ from median camera position minus rotated neutral camera offset",
               "orientation_mapping": "Neutral MANO wrist-to-middle MCP X; pinky-to-index MCP Y orthogonalized; Z=X cross Y. Match EZGripper palm/TCP axes.",
               "camera_convention": "URDF mount +X forward,+Y left,+Z up to optical +Z forward,+X right,+Y down; nominal mount centre, not calibrated lens centre",
@@ -97,6 +103,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             "wrist_position_base_m": np.full((n, 2, 3), np.nan),
             "wrist_orientation_target_base": np.full((n, 2, 3, 3), np.nan),
             "target_position_base_m": np.full((n, 2, 3), np.nan),
+            "robot_wrist_position_base_m": np.full((n, 2, 3), np.nan),
             "tcp_position_base_m": np.full((n, 2, 3), np.nan),
             "tool_orientation_base": np.full((n, 2, 3, 3), np.nan),
             "camera_position_base_m": np.full((n, 3), np.nan),
@@ -128,7 +135,6 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                                       settings["heading_min_norm"])
             pose, before, q, info = fit_region(model, arrays["wrist_position_aligned_m"][sl],
                                                orientations[sl], cameras[sl], v, times[sl], initial, settings,
-                                               camera_positions=arrays["camera_position_aligned_m"][sl],
                                                seed_index=seed_index)
             transform = base_transform(pose)
             wrists = transform_points(arrays["wrist_position_aligned_m"][sl], transform)
@@ -166,6 +172,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             derived["wrist_position_base_m"][sl] = wrists
             derived["wrist_orientation_target_base"][sl] = target_rotations
             derived["target_position_base_m"][sl] = p
+            derived["robot_wrist_position_base_m"][sl] = p - r @ model.wrist_offset
             derived["tcp_position_base_m"][sl] = tcp
             derived["tool_orientation_base"][sl] = r
             derived["camera_position_base_m"][sl] = hp
