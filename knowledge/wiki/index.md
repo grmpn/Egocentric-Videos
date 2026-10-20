@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — draft direct IK/base fitting and fixed-base smoothing, camera rotation alignment, shared viewer and timing comparison; approval pending.
 - [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved robot-wrist-to-human-wrist matching, verified with regenerated workspaces and playback; fulfilled.
 - [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — approved camera segmentation, base fitting, region expansion and positional IK acceptance; fulfilled.
 - [Milestone 3, Part 2: Robot workspace](plans/milestone-3-part-2-robot-workspace.md) — approved FK sampling, voxel distance queries and interactive review, including the 5m/10m density comparison; fulfilled.
@@ -40,6 +41,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Source notes
 
+- [Milestone 3 update](../../Milestone3-Update.md) — local user input for the joint/base optimization draft; preserved untracked. The plan incorporates the subsequent clarification that camera position is used only for initialization.
 - [Stage 3 user spec](../../Stage-3-Spec.md) — local-only input updated by the user through Part 3; preserved during planning, with Part 3 scope captured in the approved plan above.
 - [HaWoR research notes](../raw/Sources/HaWoR-Review.md) — original source material, preserved.
 - [Eidon and LeRobot](../raw/Sources/Eidon-LeRobot-Review.md) — pilot selection, camera-evidence limits, and the v3.1 annotation choice.
