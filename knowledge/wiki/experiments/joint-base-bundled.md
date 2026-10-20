@@ -5,6 +5,8 @@ Initial **mean-heading** acceptance completed 2026-10-20 under revision 1 of the
 Numerical, source-preservation, browser/legacy and three-run comparison checks passed.
 The [median-initialization trial](#median-initialization-trial) below records the
 user's subsequent amendment; the original benchmark results remain unchanged.
+The [camera-position/posture experiment](#camera-position-and-posture-weight-sweep)
+adds per-frame position alignment under revision 3.
 [README](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting) owns
 commands; the [contract](../topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
 owns conventions. All linked run artifacts are ignored, local-only evidence.
@@ -74,7 +76,8 @@ The [camera-translation audit](../../../outputs/retargeting/joint-base-20261020/
 perturbed every camera position with 5 m standard-deviation noise while fixing
 segmentation and initialization. Every input to the production fitter stayed
 identical. Saved fits were reused for this boundary audit; it did not repeat
-optimization. The fitting residual accepts camera rotations only.
+optimization. That historical fitting residual accepted camera rotations only;
+revision 3 below adds camera positions.
 
 ## Tests and visual review
 
@@ -113,8 +116,8 @@ then used successfully.
 On 2026-10-20 the user requested median forward camera heading and median position.
 Position already used a component-wise median. Revision 2 replaces the mean of
 normalized horizontal camera-forward vectors with their component-wise median,
-then applies `atan2`. This is now the initializer; source camera positions still
-have no per-frame fitting loss. The neutral camera offset rotates with the new
+then applies `atan2`. This remains the initializer; that trial did not include
+a per-frame camera-position loss. The neutral camera offset rotates with the new
 yaw, so initial base XY also changes even though the camera-position median does not.
 
 One [production rerun](../../../outputs/retargeting/median-heading-20261020/trajectory/retargeting_report.json)
@@ -159,12 +162,104 @@ and [annotated video](../../../outputs/retargeting/median-heading-20261020/traje
 Earlier mean-heading runs are preserved. No solver weights or acceptance
 thresholds were changed to compensate for the poorer result.
 
+## Camera position and posture-weight sweep
+
+The user subsequently requested camera position alignment and higher
+neutral-posture weights. The implementation adds a camera-centre position
+residual to both fitting stages, divided by a fixed 0.05 m scale. The scale is
+an objective weight, not a hard alignment tolerance. The median initializer,
+hand/camera rotations, source timing, region selection, solver budgets and seeds
+remain unchanged.
+
+Four sequential production trials use posture residual weights 0.02, 0.1, 0.5
+and 2.0 (squared-cost strengths 1×, 25×, 625× and 10,000×). The preserved
+rotation-only median result is the control. The
+[completed sweep report](../../../outputs/retargeting/camera-posture-20261020/sweep_report.json)
+records all 83 assigned frames and 166 observed hands, including failures.
+Posture RMS is the unweighted deviation from neutral across all sixteen joints.
+These are single trials, not a repeated runtime benchmark; no tests or browser
+rendering ran during the solves.
+
+| Camera-position objective / posture weight | Camera position RMS (cm) | Head angle RMS (°) | Posture RMS (rad) | Wrist-passing frames | Acceleration RMS (rad/s²) |
+| --- | --- | --- | --- | --- | --- |
+| Absent / 0.02 — control | 30.69 | 39.50 | 0.923 | 75/83 | 295.87 |
+| Present / 0.02 | 26.91 | 67.83 | 0.947 | 72/83 | 282.83 |
+| Present / 0.1 | 26.93 | 67.80 | 0.915 | 72/83 | 282.82 |
+| Present / 0.5 | 26.91 | 66.77 | 0.874 | 72/83 | 286.13 |
+| Present / 2.0 | 27.47 | 56.42 | 0.746 | 70/83 | 265.68 |
+
+Adding camera position improves translation modestly, but worsens head rotation
+and wrist coverage relative to the rotation-only control. Errors remain far
+above the 5 cm residual scale: it is not an achieved tolerance. Increasing
+posture weight moves the joints closer to neutral. **0.5 is the strongest tested
+weight retaining an accepted region**; it does not improve all metrics. At 2.0,
+neither region qualifies. The default remains 0.02.
+
+| Weight | Passing frames, region 0 / region 1 | Acceleration before → after, region 0 / region 1 (rad/s²) | Solve time (s) |
+| --- | --- | --- | --- |
+| 0.02 | 41/52 rejected / 31/31 accepted | 150.83 → 272.21 / 323.90 → 300.25 | 115.980 |
+| 0.1 | 41/52 rejected / 31/31 accepted | 149.71 → 272.49 / 313.34 → 299.78 | 126.579 |
+| 0.5 | 41/52 rejected / 31/31 accepted | 146.05 → 276.25 / 311.84 → 302.39 | 105.046 |
+| 2.0 | 42/52 rejected / 28/31 rejected | 210.41 → 270.98 / 289.43 → 256.28 | 84.268 |
+
+The fixed-base stage increases region 0's acceleration for every weight despite
+its temporal objective. All region 0 runs exhaust three attempts and reach both
+stage budgets. Region 1 takes two attempts for weights through 0.5 and three at
+2.0; its final trajectory stage reaches the budget through 0.5. At 2.0 both
+selected region 1 stages converge, but the wrist gate still rejects it.
+Convergence and acceptance are different checks; no optimum is established.
+Loading/export/rendering timings and every retry are retained in the reports.
+
+Per-trial configs and results are local, reproducible artifacts:
+
+| Weight | Config | Production report | Annotated video |
+| --- | --- | --- | --- |
+| 0.02 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-0p02.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-0p02/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-0p02/annotated_video.mp4) |
+| 0.1 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-0p1.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-0p1/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-0p1/annotated_video.mp4) |
+| 0.5 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-0p5.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-0p5/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-0p5/annotated_video.mp4) |
+| 2.0 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-2p0.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-2p0/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-2p0/annotated_video.mp4) |
+
+Use a selected config with the existing [production command](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting)
+and a fresh output directory to reproduce a trial.
+The [orchestration script](../../../outputs/retargeting/camera-posture-20261020/run-sweep.py)
+records the entire sweep from implementation commit `35e14ae`.
+
+[47 focused tests](../../../outputs/retargeting/camera-posture-20261020/tests.log)
+passed before the sweep. They include analytic versus finite-difference
+camera/base/neck derivatives in both stages, camera target-translation influence
+with regions/initialization fixed, missing wrists and a known-pose fit.
+Independent ordinary-FK audits passed for
+[0.02](../../../outputs/retargeting/camera-posture-20261020/audit-posture-0p02.json),
+[0.1](../../../outputs/retargeting/camera-posture-20261020/audit-posture-0p1.json),
+[0.5](../../../outputs/retargeting/camera-posture-20261020/audit-posture-0p5.json) and
+[2.0](../../../outputs/retargeting/camera-posture-20261020/audit-posture-2p0.json):
+all observed wrist/camera poses, bounds, fixed fingers/bases, transforms,
+24 unchanged source arrays and acceptance labels agree. Audit success includes
+correctly labeled failed poses. [Cross-trial checks](../../../outputs/retargeting/camera-posture-20261020/cross-trial-checks.json)
+confirm that only posture weight varies, initial bases are identical and each
+video retains 121 frames at 30 FPS.
+
+[Browser checks](../../../outputs/retargeting/camera-posture-20261020/browser/browser.json)
+passed for weights 0.02, 0.5 and 2.0 plus the preserved rotation-only run, using
+current viewer code. No page errors occurred. Agent inspection covered camera
+offsets, actual failed-arm hiding and the unverified-pose toggle, MANO/head
+playback, both region boundaries, controls, annotated frames and low/high
+feasibility timelines. Representative evidence:
+[low-weight failure hidden](../../../outputs/retargeting/camera-posture-20261020/browser/low-failed-hidden.png),
+[high-weight failure shown](../../../outputs/retargeting/camera-posture-20261020/browser/high-failed-shown.png),
+[0.5 second region](../../../outputs/retargeting/camera-posture-20261020/browser/mid-frame-0074.png),
+[unassigned frame](../../../outputs/retargeting/camera-posture-20261020/browser/low-frame-0052.png),
+[legacy explanation](../../../outputs/retargeting/camera-posture-20261020/browser/legacy-frame-0000.png).
+Weight 0.1 received the full numerical audit but no separate browser inspection.
+The old control artifacts were not edited.
+
 ## Validation limits
 
 This is kinematic pose fitting. Large joint changes, head rotation residuals,
 collision clearance, dynamic limits, physical scale, gravity and floor height
-remain review items, not execution certification. Camera translation is absent
-from the fitting objective. The nominal camera mount centre is not a calibrated
+remain review items, not execution certification. Camera translation was absent
+from the original objectives and is included in the latest sweep.
+The nominal camera mount centre is not a calibrated
 lens centre; gripper orientation uses the documented neutral anatomical mapping.
 Some playback views show apparent arm/body overlap; no collision check resolves
 that appearance. The original mean run's peak joint acceleration is 3451.856
