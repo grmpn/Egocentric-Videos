@@ -385,9 +385,9 @@ IK failure/joint discontinuities.
 ## Joint base and wrist-pose trajectory fitting
 
 Use the existing workspace environment and gravity-aligned input. This method
-fits wrist positions/orientations and head rotation with a shared base, then
+fits wrist positions/orientations and camera position/rotation with a shared base, then
 freezes the base and smooths the joint trajectory within each camera-motion
-region. Camera position is used only for segmentation and initialization.
+region. Camera position also guides segmentation and median initialization.
 No workspace build is required for this method.
 
 ```bash
@@ -401,11 +401,14 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_re
 ```
 
 The new directory receives the same trajectory/report/video review artifacts.
-The viewer adds neck motion, target/fitted orientation axes, angular residuals
+The viewer adds neck motion, target/fitted orientation axes, camera-position and angular residuals
 and **Show unverified robot poses**. Missing source observations stay unknown.
 `--config` selects alternative solver settings; defaults are in
 [joint_retargeting.json](configs/joint_retargeting.json). Success is measured
 from saved FK residuals separately from optimizer termination.
+`camera_position_scale_m` divides the camera-position residual (default 0.05 m,
+not a hard error tolerance). `neutral_weight` multiplies posture residuals;
+increasing it fivefold increases their squared-cost coefficient 25-fold.
 
 Compare three sequential runs of each method on the same unexpanded regions:
 

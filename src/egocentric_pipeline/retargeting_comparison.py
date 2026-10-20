@@ -32,6 +32,7 @@ def compare_quality(directory, model, palm_offsets, settings):
     solved = np.isfinite(a["joint_angles_rad"]).all(axis=-1) & observed
     orientation_error = np.full(observed.shape, np.nan)
     camera_error = np.full(len(observed), np.nan)
+    camera_position_error = np.full(len(observed), np.nan)
     q = np.full((len(observed), 16), np.nan)
     q[:, :14] = a["joint_angles_rad"].reshape(-1, 14)
     for e in report["episodes"]:
@@ -41,13 +42,16 @@ def compare_quality(directory, model, palm_offsets, settings):
         q[frames, 14:] = a["neck_joint_angles_rad"][frames] if "neck_joint_angles_rad" in a else 0.
         # Fill only for FK evaluation. Missing/failed samples remain excluded
         # from pose evidence and from derivative statistics below.
-        _, actual, _, _, head = model.forward(np.nan_to_num(q[frames]))
+        _, actual, _, head_position, head = model.forward(np.nan_to_num(q[frames]))
         for h in range(2):
             mask = solved[frames, h]
             target = rotation @ Rotation.from_rotvec(
                 a["root_orientation_aligned_axis_angle"][frames[mask], h]).as_matrix() @ palm_offsets[h]
             orientation_error[frames[mask], h] = rotation_error(actual[mask, h], target)
         camera_error[frames] = rotation_error(head, rotation @ a["camera_rotation_aligned_from_camera"][frames])
+        target_position = (a["camera_position_aligned_m"][frames] @ rotation.T
+                           + a["transform_base_from_aligned"][cid, :3, 3])
+        camera_position_error[frames] = np.linalg.norm(head_position - target_position, axis=-1)
     passing = solved & (a["ik_residual_m"] <= settings["ik_tolerance_m"]) & (
         orientation_error <= settings["orientation_tolerance_rad"])
     frame_passed = observed.any(axis=1) & (passing | ~observed).all(axis=1)
@@ -62,6 +66,8 @@ def compare_quality(directory, model, palm_offsets, settings):
             "position_m": finite_summary(a["ik_residual_m"][solved]),
             "orientation_deg": finite_summary(np.rad2deg(orientation_error)),
             "head_orientation_deg": finite_summary(np.rad2deg(camera_error)),
+            "camera_position_m": finite_summary(camera_position_error),
+            "posture_deviation_rad": finite_summary(np.abs(q - model.neutral)),
             "joint_velocity_rad_s": finite_summary(velocity),
             "joint_acceleration_rad_s2": finite_summary(acceleration),
             "motion_samples": "finite consecutive joint samples within regions; predictions included for joint method"}
@@ -87,7 +93,7 @@ def compare_retargeting(alignment, workspace, output_directory, joint_settings, 
               "runs": [], "workspace_construction_s": workspace_report["wall_time_s"],
               "workspace_construction_source": str(Path(workspace).resolve() / "workspace_report.json"),
               "workspace_construction_note": "Historical one-time build on this machine; reused, not timed again.",
-              "comparison_boundary": "Same heuristic regions and input; different objectives: baseline position-only SDF+IK versus wrist pose/head rotation and temporal optimization. Not an optimizer-only speed benchmark."}
+              "comparison_boundary": "Same heuristic regions and input; different objectives: baseline position-only SDF+IK versus wrist/camera pose and temporal optimization. Not an optimizer-only speed benchmark."}
     write_json(output / "comparison_report.json", report)
     try:
         expected_regions = None

@@ -76,8 +76,8 @@ Both methods can now process only the retained camera-motion seeds, without
 expansion. Joint fitting always uses these regions: one shared base XYZ/yaw and
 per-frame configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
 remain zero. Base roll/pitch stay gravity-aligned; free height is not floor
-calibration. Camera position is used for segmentation and base initialization
-only. Initialization aligns the neutral robot camera-mount centre with the median
+calibration. Camera position is used for segmentation, base initialization and
+per-frame alignment in both fitting stages. Initialization aligns the neutral robot camera-mount centre with the median
 human camera centre, subtracting the rotated base-to-camera offset. Following the
 user's median-initialization amendment, yaw uses `atan2` of the component-wise
 median of normalized horizontal optical forward vectors. This avoids taking a
@@ -102,8 +102,9 @@ are converted to optical Z-forward/X-right/Y-down with
 and the [ZED image convention](https://docs.stereolabs.com/docs/development/zed-sdk/modules/positional-tracking/coordinate-frames).
 Tests verify these directions against ordinary URDF FK, including the mount's
 0.3633-radian pitch. The optical origin uses the mount centre; lens-centre
-calibration is unverified. The objective contains **camera rotation only**.
-The two neck joints cannot exactly track an arbitrary 3D camera rotation.
+calibration is unverified. Following the user's camera-position amendment, both
+camera position and rotation enter the objective. The two neck joints cannot
+exactly track an arbitrary camera pose under a fixed base.
 
 The installed scikit-robot supplies batched FK and geometric Jacobians; SciPy
 bounded `least_squares` fits the combined residual. Position residuals are in
@@ -112,6 +113,14 @@ sqrt(2), with configurable radian scales. Acceptance uses geodesic angular
 error, not the matrix residual. URDF bounds are hard constraints; neutral posture
 is a soft cost. After joint/base fitting, the base freezes and source-timed
 velocity/acceleration costs couple all frames. No retiming occurs.
+Camera position contributes `(R_aligned_from_base @ p_camera_base + t - p_camera_aligned)
+/ camera_position_scale_m` in both stages, including frames with no observed
+wrists. The default 0.05 m scale controls objective strength; it is not a hard
+alignment tolerance. The camera uses the same library positional Jacobian and
+shared-base translation/yaw derivatives as wrist alignment.
+`neutral_weight` multiplies all 16 joint deviations from the configured neutral
+posture. Its squared-cost coefficient is the weight squared; reported posture
+RMS is the unweighted deviation in radians.
 The [configuration](../../../configs/joint_retargeting.json) owns weights,
 tolerances and finite evaluation budgets. Failed region fits can retry up to
 three seeded starting postures. All attempts, termination messages and selection
@@ -133,6 +142,7 @@ retain their dtype and bytes. New arrays include:
 | `target_position_base_m`, `tcp_position_base_m` | `[T,2,3]` predicted physical wrist / actual TCP; acceptance is separate. |
 | `ik_residual_m`, `orientation_residual_rad` | `[T,2]` observed position/geodesic orientation error, NaN for missing observations. |
 | `camera_position_base_m`, `camera_rotation_base_from_optical`, `camera_rotation_error_rad` | `[T,3]`, `[T,3,3]`, `[T]` saved head FK and angular residual. |
+| `camera_position_error_m` | `[T]` Euclidean camera-centre error; NaN outside solved regions. Added for position-aligned runs; absent in legacy rotation-only runs. |
 
 Each report episode owns its unexpanded `region`, `pose` metrics and smoothing
 result. Every available hand must pass 5 mm and 10°; unknown frames count toward
@@ -140,13 +150,16 @@ the gap limit and do not enter the observed denominator. Demonstration requires
 **>95%** observed-frame coverage, ≤0.2 s gaps, ≥1 s duration and reduced acceleration
 RMS. Rejected regions remain inspectable. The viewer displays head motion,
 orientation axes/residuals, MANO and optional explicitly labeled unverified
-robot poses; it never solves IK during playback.
+robot poses; it never solves IK during playback. Camera position error is reported
+separately from the wrist gate. Legacy rotation-only runs keep their original
+viewer explanation and remain readable.
 
 The comparison alternates three sequential runs of each production method using
 identical seeds. Solver times include retries and both optimization stages;
 loading, export and video generation are timed separately. Workspace construction
 is reported from its historical build and is not rerun. Common pose errors,
-failures and finite consecutive joint-motion statistics accompany timing; the
+failures, camera position/angle errors, unweighted posture deviation and finite
+consecutive joint-motion statistics accompany timing; the
 baseline has no orientation/head/smoothness objective, so this is a workflow
 comparison rather than an isolated solver benchmark.
 

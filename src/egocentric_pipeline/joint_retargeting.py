@@ -21,8 +21,8 @@ def validate_settings(settings):
     for key in ("camera_displacement_m", "camera_sustain_s", "minimum_episode_s", "ik_tolerance_m",
                 "orientation_tolerance_rad", "joint_jump_report_rad", "heading_min_norm",
                 "base_translation_radius_m", "position_scale_m", "orientation_scale_rad",
-                "camera_rotation_scale_rad", "neutral_weight", "solver_tolerance"):
-        if not np.isfinite(settings[key]) or settings[key] <= 0:
+                "camera_rotation_scale_rad", "camera_position_scale_m", "neutral_weight", "solver_tolerance"):
+        if key not in settings or not np.isfinite(settings[key]) or settings[key] <= 0:
             raise ValueError(f"{key} must be positive finite")
     for key in ("camera_smoothing_sigma_s", "maximum_gap_s", "velocity_weight", "acceleration_weight"):
         if not np.isfinite(settings[key]) or settings[key] < 0:
@@ -58,7 +58,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "limitations": "Kinematic fit only; collision, dynamics, scale, gravity and floor height unverified.",
-              "camera_position_use": "segmentation and base initialization only; no position objective",
+              "camera_position_use": "segmentation, initialization and per-frame weighted alignment in both fitting stages",
+              "camera_position_objective": "Euclidean nominal camera-mount position residual divided by camera_position_scale_m; a soft objective, not a hard tolerance",
               "base_initialization": "yaw from component-wise median of normalized horizontal optical forward vectors; XYZ from median camera position minus rotated neutral camera offset",
               "orientation_mapping": "Neutral MANO wrist-to-middle MCP X; pinky-to-index MCP Y orthogonalized; Z=X cross Y. Match EZGripper palm/TCP axes.",
               "camera_convention": "URDF mount +X forward,+Y left,+Z up to optical +Z forward,+X right,+Y down; nominal mount centre, not calibrated lens centre",
@@ -99,6 +100,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             "tcp_position_base_m": np.full((n, 2, 3), np.nan),
             "tool_orientation_base": np.full((n, 2, 3, 3), np.nan),
             "camera_position_base_m": np.full((n, 3), np.nan),
+            "camera_position_error_m": np.full(n, np.nan),
             "camera_rotation_base_from_optical": np.full((n, 3, 3), np.nan),
             "camera_rotation_error_rad": np.full(n, np.nan),
             "ik_residual_m": np.full((n, 2), np.nan),
@@ -126,6 +128,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                                       settings["heading_min_norm"])
             pose, before, q, info = fit_region(model, arrays["wrist_position_aligned_m"][sl],
                                                orientations[sl], cameras[sl], v, times[sl], initial, settings,
+                                               camera_positions=arrays["camera_position_aligned_m"][sl],
                                                seed_index=seed_index)
             transform = base_transform(pose)
             wrists = transform_points(arrays["wrist_position_aligned_m"][sl], transform)
@@ -166,6 +169,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             derived["tcp_position_base_m"][sl] = tcp
             derived["tool_orientation_base"][sl] = r
             derived["camera_position_base_m"][sl] = hp
+            derived["camera_position_error_m"][sl] = np.linalg.norm(
+                hp - transform_points(arrays["camera_position_aligned_m"][sl], transform), axis=-1)
             derived["camera_rotation_base_from_optical"][sl] = hr
             derived["camera_rotation_error_rad"][sl] = rotation_error(hr, transform[:3, :3] @ cameras[sl])
             derived["ik_residual_m"][sl], derived["orientation_residual_rad"][sl] = errors, angles

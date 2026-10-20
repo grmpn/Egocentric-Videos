@@ -86,13 +86,15 @@ def test_sparse_objective_derivatives_missing_hands_and_irregular_times(model, s
     m, _, _ = model
     times = np.array([0., .03, .07, .10])
     q = np.tile(m.neutral, (4, 1)) + .01
-    p, r, _, _, cameras = m.forward(q)
+    p, r, _, camera_positions, cameras = m.forward(q)
     base = np.array([.3, -.2, .1, .4])
     rot = base_transform(base)[:3, :3].T
     wrists, rotations, cameras = p @ rot.T + base[:3], rot @ r, rot @ cameras
+    camera_positions = camera_positions @ rot.T + base[:3]
     valid = np.array([[True, True], [False, True], [False, False], [True, True]])
     wrists[~valid], rotations[~valid] = np.nan, np.nan
     problem = PoseProblem(m, wrists, rotations, cameras, valid, times, settings,
+                          camera_positions=camera_positions,
                           fixed_base=base if fixed else None, smooth=fixed)
     x = q.ravel() if fixed else np.r_[base, q.ravel()]
     residual, jac = problem.evaluate(x)
@@ -103,13 +105,24 @@ def test_sparse_objective_derivatives_missing_hands_and_irregular_times(model, s
         eps = 1e-5
         numerical = (problem.evaluate(x + eps * direction)[0] - problem.evaluate(x - eps * direction)[0]) / (2 * eps)
         np.testing.assert_allclose(jac @ direction, numerical, atol=2e-6, rtol=1e-6)
-    # No camera translations are accepted by the objective at all. Missing
-    # wrist geometry contributes no pose residual, including wholly missing frames.
+    # Missing wrist geometry contributes no pose residual, including wholly
+    # missing frames; camera position still constrains those frames.
     perturbed = wrists.copy()
     perturbed[~valid] = 1e6
     other = PoseProblem(m, perturbed, rotations, cameras, valid, times, settings,
+                        camera_positions=camera_positions,
                         fixed_base=base if fixed else None, smooth=fixed)
     np.testing.assert_array_equal(other.evaluate(x)[0], residual)
+    shift = np.array([.02, -.01, .03])
+    translated = PoseProblem(m, wrists, rotations, cameras, valid, times, settings,
+                             camera_positions=camera_positions + shift,
+                             fixed_base=base if fixed else None, smooth=fixed)
+    changed, changed_jac = translated.evaluate(x)
+    difference = changed - residual
+    assert np.count_nonzero(np.abs(difference) > 1e-10) == len(times) * 3
+    assert difference @ difference == pytest.approx(
+        len(times) * (shift @ shift) / settings["camera_position_scale_m"]**2)
+    np.testing.assert_array_equal(changed_jac.toarray(), jac.toarray())
 
 
 def test_source_timed_derivatives_and_rotations_near_pi():
@@ -156,7 +169,7 @@ def test_known_pose_region_fit_with_missing_observation(model, settings):
     times = np.arange(8) / 6
     q = np.tile(m.neutral, (8, 1))
     q[:, 3] -= .025 * np.sin(np.arange(8))
-    p, r, _, _, cameras = m.forward(q)
+    p, r, _, camera_positions, cameras = m.forward(q)
     base = np.array([.2, .1, -.4, .3])
     rot = base_transform(base)[:3, :3].T
     wrists, rotations = p @ rot.T + base[:3], rot @ r
@@ -164,19 +177,23 @@ def test_known_pose_region_fit_with_missing_observation(model, settings):
     valid[2, 0] = False
     wrists[~valid], rotations[~valid] = np.nan, np.nan
     settings.update(base_max_evaluations=60, trajectory_max_evaluations=60, fit_attempts=1)
-    b, before, after, info = fit_region(m, wrists, rotations, rot @ cameras, valid, times, base, settings)
+    camera_positions = camera_positions @ rot.T + base[:3]
+    b, before, after, info = fit_region(m, wrists, rotations, rot @ cameras, valid, times, base, settings,
+                                      camera_positions=camera_positions)
     assert np.isfinite(after).all()
     assert np.all(after >= m.lower) and np.all(after <= m.upper)
-    p, r, *_ = m.forward(after)
+    p, r, _, fitted_camera, _ = m.forward(after)
     rb = base_transform(b)[:3, :3].T
     assert np.max(np.linalg.norm((p @ rb.T + b[:3] - wrists)[valid], axis=-1)) <= .005
     assert np.max(rotation_error((rb @ r)[valid], rotations[valid])) <= np.deg2rad(10)
+    assert np.max(np.linalg.norm(fitted_camera @ rb.T + b[:3] - camera_positions, axis=-1)) < .005
     assert info["after_smoothing"]["acceleration_rms_rad_s2"] < info["before_smoothing"]["acceleration_rms_rad_s2"]
 
 
 @pytest.mark.parametrize("key,value", [("ik_tolerance_m", .01), ("orientation_tolerance_rad", .2),
                                       ("maximum_gap_s", .3), ("minimum_feasible_fraction", .9),
-                                      ("fit_attempts", 0), ("position_scale_m", 0)])
+                                      ("fit_attempts", 0), ("position_scale_m", 0),
+                                      ("camera_position_scale_m", 0), ("camera_position_scale_m", np.nan)])
 def test_reject_weakened_acceptance_and_invalid_solver_settings(settings, key, value):
     settings[key] = value
     with pytest.raises(ValueError):

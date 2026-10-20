@@ -2,7 +2,7 @@
 
 All transforms act on column vectors. FK uses metres/radians in the pedestal
 frame; observations use the gravity-aligned frame. Joint order is left arm (7),
-right arm (7), neck (2). Camera positions never enter the fitting objective.
+right arm (7), neck (2). Both camera position and optical rotation are fitted.
 """
 
 import time
@@ -128,10 +128,13 @@ class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
     def __init__(self, model, wrists, orientations, cameras, valid, times, settings,
-                 *, fixed_base=None, smooth=False):
+                 *, camera_positions, fixed_base=None, smooth=False):
         self.model, self.settings = model, settings
         self.wrists, self.orientations, self.cameras = wrists, orientations, cameras
         self.valid, self.n = valid, len(times)
+        self.camera_positions = np.asarray(camera_positions)
+        if self.camera_positions.shape != (self.n, 3) or not np.isfinite(self.camera_positions).all():
+            raise ValueError("Camera positions must be finite [T,3] aligned-frame metres")
         self.fixed_base = fixed_base
         self.base_variables = 4 if fixed_base is None else 0
         self.width = self.n * 16 + self.base_variables
@@ -155,7 +158,7 @@ class PoseProblem:
             return self.cached_result
         base, q = self.unpack(x)
         rotation = base_transform(base)[:3, :3].T
-        p, r, _, _, hr, pj, rj, hj = self.model.forward(q, jacobian=True)
+        p, r, _, hp, hr, pj, rj, hj = self.model.forward(q, jacobian=True)
         residuals, rows, cols, values = [], [], [], []
         row_start = 0
 
@@ -174,6 +177,16 @@ class PoseProblem:
                 values.append(base_derivative.ravel())
             row_start += error.size
 
+        def position_term(pred, target, linear_j, joint_start, frames, scale):
+            aligned = pred @ rotation.T
+            derivative = np.zeros((len(frames), 3, 16))
+            derivative[:, :, joint_start:joint_start + linear_j.shape[-1]] = (
+                np.einsum("ij,tjk->tik", rotation, linear_j) / scale)
+            bd = np.zeros((len(frames), 3, 4))
+            bd[:, :, :3] = np.eye(3) / scale
+            bd[:, :, 3] = np.cross([0., 0., 1.], aligned) / scale
+            append((aligned + base[:3] - target) / scale, derivative, bd, frames)
+
         def rotation_term(pred, target, angular_j, joint_start, frames, scale):
             aligned = rotation @ pred
             # For spatial angular velocity w, dR[:,k] = w cross R[:,k].
@@ -191,16 +204,12 @@ class PoseProblem:
             frames = np.flatnonzero(self.valid[:, hand])
             if not len(frames):
                 continue
-            aligned = p[frames, hand] @ rotation.T
-            derivative = np.zeros((len(frames), 3, 16))
-            scale = self.settings["position_scale_m"]
-            derivative[:, :, hand * 7:hand * 7 + 6] = np.einsum("ij,tjk->tik", rotation, pj[hand][frames, :3]) / scale
-            bd = np.zeros((len(frames), 3, 4))
-            bd[:, :, :3] = np.eye(3) / scale
-            bd[:, :, 3] = np.cross([0., 0., 1.], aligned) / scale
-            append((aligned + base[:3] - self.wrists[frames, hand]) / scale, derivative, bd, frames)
+            position_term(p[frames, hand], self.wrists[frames, hand], pj[hand][frames, :3],
+                          hand * 7, frames, self.settings["position_scale_m"])
             rotation_term(r[frames, hand], self.orientations[frames, hand], rj[hand][frames, 3:],
                           hand * 7, frames, np.sqrt(2) * self.settings["orientation_scale_rad"])
+        position_term(hp, self.camera_positions, hj[:, :3], 14, np.arange(self.n),
+                      self.settings["camera_position_scale_m"])
         rotation_term(hr, self.cameras, hj[:, 3:], 14, np.arange(self.n),
                       np.sqrt(2) * self.settings["camera_rotation_scale_rad"])
         reg = self.regularizer
@@ -239,7 +248,8 @@ class PoseProblem:
                         "message": str(result.message), "global_optimum_claimed": False}
 
 
-def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings, *, seed_index=0):
+def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
+               *, camera_positions, seed_index=0):
     """Fit shared base + joint poses, freeze base, then smooth those same poses."""
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
     attempts, best, best_rank = [], None, None
@@ -247,10 +257,11 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         # One posture per region avoids independent random branches at every frame.
         initial_q = model.neutral if attempt == 0 else rng.uniform(.8 * model.lower, .8 * model.upper)
         q0 = np.tile(initial_q, (len(timestamps), 1))
-        problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings)
+        problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
+                              camera_positions=camera_positions)
         base, before, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
-                              fixed_base=base, smooth=True)
+                              camera_positions=camera_positions, fixed_base=base, smooth=True)
         _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
         p, r, *_ = model.forward(after)
         rotation = base_transform(base)[:3, :3].T

@@ -238,9 +238,12 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
     endpoint_label = "robot wrist" if wrist_matching else "TCP (legacy alignment)"
+    camera_explanation = ("Camera position and rotation are fitted in both stages."
+                          if "camera_position_error_m" in arrays
+                          else "Camera position was used only for initialization.")
     explanation = (
-        "Saved joint/base pose fit and fixed-base smoothing; no live solve. Camera position was used only "
-        "for initialization. Axes compare target and fitted orientations. Unverified poses are hidden unless enabled."
+        "Saved joint/base pose fit and fixed-base smoothing; no live solve. " + camera_explanation
+        + " Axes compare target and fitted orientations. Unverified poses are hidden unless enabled."
         if pose_fitting else
         "Saved per-frame position-only IK; no live solve. Missing/failed robot arms are hidden; MANO retains "
         "the original hand orientation and articulation.")
@@ -362,6 +365,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             degrees = np.rad2deg(arrays["orientation_residual_rad"][frame])
             detail += (f"\n\nWrist L/R: {np.round(arrays['ik_residual_m'][frame] * 1000, 2).tolist()} mm · "
                        f"{np.round(degrees, 2).tolist()}° · Head: {np.rad2deg(arrays['camera_rotation_error_rad'][frame]):.2f}°")
+            if "camera_position_error_m" in arrays:
+                detail += f" · Camera position: {arrays['camera_position_error_m'][frame] * 1000:.1f} mm"
             if predicted_control.value and not arrays["ik_success"][frame].all():
                 detail += "\n\n**Unverified robot poses shown; missing observations remain unknown.**"
         if arrays["joint_jump"][frame].any():
