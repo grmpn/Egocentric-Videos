@@ -267,6 +267,28 @@ def test_entirely_infilled_region_has_no_fit(tmp_path, aligned_input, settings):
         assert np.isnan(arrays["joint_solution_rad"]).all()
 
 
+@pytest.mark.parametrize("missing_hand", [0, 1])
+def test_entirely_infilled_hand_still_allows_opposite_hand_fit_and_viewer(tmp_path, aligned_input, settings, model, missing_hand):
+    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.retargeting_comparison import compare_quality
+    from egocentric_pipeline.retargeting_visualization import view_retargeting
+
+    directory, source, offsets, rs = aligned_input
+    source["motion_infilled"][:, missing_hand] = True
+    np.savez(directory / "trajectory_aligned.npz", **source)
+    settings.update(base_max_evaluations=5, trajectory_max_evaluations=5, fit_attempts=1)
+    output = tmp_path / "one-hand"
+    report = joint_retarget_trajectory(directory, output, settings, rs,
+                                      ROOT / "data/models/purdue-alex-assets", render_video=False)
+    assert report["episodes"][0]["observed_hand_frames"][missing_hand] == 0
+    quality = compare_quality(output, model[0], offsets, settings)
+    assert quality["observed_hand_frames"] == int((source["export_valid"] & ~source["motion_infilled"]).sum())
+    # Exercise actual scene creation: Viser requires [N,3] path colors even
+    # when one entire hand has no observations and its path is empty.
+    viewer = view_retargeting(output, show_mano=False)
+    viewer.close()
+
+
 def test_workspace_workflow_ignores_infilled_geometry(tmp_path, aligned_input):
     from egocentric_pipeline.retargeting import retarget_trajectory
     from egocentric_pipeline.workspace import WorkspaceGrid

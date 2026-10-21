@@ -237,7 +237,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     targets, endpoint_markers, tcp_markers, wrist_markers, paths = [], [], [], [], []
     for hand, name in enumerate(("left", "right")):
         hand_valid = valid[:, hand]
-        colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(hand_valid)], np.uint8)
+        colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(hand_valid)], np.uint8).reshape(-1, 3)
         paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[hand_valid, hand].astype(np.float32), colors=colors, point_size=.018))
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))

@@ -197,12 +197,15 @@ Review the [solver report](../../../outputs/retargeting/iphone-no-infill-2026102
 [annotated video](../../../outputs/retargeting/iphone-no-infill-20261021/trajectory/annotated_video.mp4),
 and [timeline](../../../outputs/retargeting/iphone-no-infill-20261021/trajectory/feasibility_timeline.png).
 
-All **60 focused tests pass** in the
-[test log](../../../outputs/retargeting/iphone-no-infill-20261021/tests.log).
+All **62 focused tests pass** in the
+[test log](../../../outputs/retargeting/iphone-no-infill-20261021/tests-final.log).
 They exercise both production workflows with mixed/all-infilled observations,
 excluded NaN/extreme geometry, acceptance gaps and prediction labels, malformed
 provenance, comparison metrics and original MANO rendering. Changing excluded
-geometry leaves the fitted outputs unchanged. Only existing dependency
+geometry leaves the fitted outputs unchanged. A final viewer check also covers
+an entirely infilled left or right hand: fitting/metrics retain the opposite
+hand and the empty wrist path has the required `[0,3]` color shape. This display
+fix leaves the completed iPhone fit unchanged. Only existing dependency
 deprecation warnings remain. The
 [historical browser check](../../../outputs/retargeting/iphone-no-infill-20261021/legacy-browser.json)
 loads the preserved fit, keeps its original mask and shows the historical-policy
