@@ -46,15 +46,85 @@ finger-shape/projection mismatch and an explicitly labeled infilled hand at 32 s
 [Gravity alignment](../../../outputs/retargeting/iphone-20261021/gravity/alignment_report.json)
 completed in **39.86 s**, retaining 297 consensus inliers from 385 selected frames.
 Source arrays/files and hand-camera relative geometry pass preservation checks;
-maximum relative-geometry difference is 2.85e-7 m. The
+maximum relative-geometry difference is 2.84e-7 m. The
 [vertical review](../../../outputs/retargeting/iphone-20261021/gravity/vertical_review.png)
 was inspected at beginning/middle/end and sampled inliers. Physical gravity,
 camera intrinsics and metric scale have no measured reference.
 
 ## Retargeting and review
 
-Retargeting is running. The unchanged camera heuristic retains `[0,296)`,
-`[432,893)`, `[947,1113)`, and `[1113,1286)`; shorter transitions remain unassigned.
-The full 1,286-frame timeline is preserved, with 1,096 frames selected for fitting.
-Results, independent FK checks and playback review will be recorded here after
-completion. This run does not perform simulation/controller or hardware execution.
+The unchanged camera heuristic retained four regions; shorter transitions remain
+unassigned. All 1,286 frames are exported, with 1,096 assigned frames and 1,095
+frames with valid reconstructed hands (the final source frame is invalid).
+**373/1,095 observed frames pass the pose tolerances; no region qualifies as a
+demonstration.** Here “observed” follows the existing `export_valid` contract and
+includes HaWoR motion infill. Each frame passes only if every available hand
+meets both 5 mm and 10°.
+
+| Frames [start, stop) | Time (s) | Pose-passing frames | Longest failing gap (s) | Acceleration RMS before → after (rad/s²) |
+| --- | --- | --- | --- | --- |
+| [0, 296) | 0–9.87 | 206/296 (69.59%) | 1.27 | 133.22 → 246.69 |
+| [432, 893) | 14.40–29.77 | 117/461 (25.38%) | 3.23 | 101.90 → 194.52 |
+| [947, 1113) | 31.57–37.10 | 50/166 (30.12%) | 1.47 | 137.49 → 222.30 |
+| [1113, 1286) | 37.10–42.87 | 0/172 (0%) | 5.77 | 173.11 → 341.23 |
+
+Every region fails >95% coverage, ≤0.2 s gaps, and reduced acceleration RMS;
+all exceed the ≥1 s duration requirement. Across 2,190 available hand samples,
+702 fail position and 810 fail orientation (overlapping counts). Position RMS
+is **144.66 mm**, maximum **1,314.77 mm**; orientation RMS is **40.42°**, maximum
+**174.31°**. Camera-position RMS is 0.491 m, diagnostic only. These failed
+fits remain saved and must not be interpreted as executable robot motion.
+
+All regions used three attempts; selected attempts are 1/0/0/0. Selected base
+and trajectory stages all exhausted their unchanged evaluation budgets. Solve
+time was **814.64 s**; total retargeting time was **831.05 s**, including
+15.10 s of visualization. These are one-run timings, not a speed benchmark.
+CLI exit 2 means completed output with `demo_accepted: false`, not a crashed run.
+
+Review the [summary](../../../outputs/retargeting/iphone-20261021/run-summary.json),
+[full solver report](../../../outputs/retargeting/iphone-20261021/trajectory/retargeting_report.json),
+[exported trajectory](../../../outputs/retargeting/iphone-20261021/trajectory/trajectory_retargeted.npz),
+[annotated video](../../../outputs/retargeting/iphone-20261021/trajectory/annotated_video.mp4),
+and [timeline](../../../outputs/retargeting/iphone-20261021/trajectory/feasibility_timeline.png).
+
+## Verification and limits
+
+The [independent ordinary-FK audit](../../../outputs/retargeting/iphone-20261021/audit-trajectory.json)
+passed for all 2,190 available hand samples and all assigned joint solutions:
+hard URDF bounds, locked fingers, separate physical wrist/match point/TCP,
+rotating 5 cm offset, transform direction, alternate-frame indices and seed
+interpolation, full-frame acceptance, missing/prediction labels, and all 24
+source arrays preserved byte-for-byte. Saved FK agrees within 4.45e-10 m and
+6.21e-10 rad. This verifies output consistency, not successful task execution.
+
+[Video checking](../../../outputs/retargeting/iphone-20261021/video-check.json)
+passed all 1,286 frames and timestamps at 30 FPS. The annotated video is 960×736
+because the review panel is added below the 960×540 RGB. The existing production
+workflow and these data audits were exercised; the unchanged unit suite was not
+rerun.
+
+[Browser checks](../../../outputs/retargeting/iphone-20261021/browser/browser.json)
+passed playback, 14 representative/boundary frames, hand/gripper closeups and
+pose visibility without page errors. Additional
+[failure views](../../../outputs/retargeting/iphone-20261021/browser/failure-review.json)
+compare hidden/shown failed poses in all four regions. Visual inspection includes
+the timeline, annotated RGB, passing region-0 alignment, later failed/missing
+arms, both hands, and an alternate left-hand angle. Failed poses and apparent
+arm/body overlap remain review limitations; no collision or dynamics check was
+performed. No simulation/controller or hardware execution was attempted.
+The [visual review record](../../../outputs/retargeting/iphone-20261021/visual-review.json)
+identifies the inspected frames and limitations; generated reports' original
+`manual_review: pending` fields remain unchanged.
+
+Open the saved run with the existing command (no inference or fitting rerun):
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+    outputs/retargeting/iphone-20261021/trajectory --open-browser
+```
+
+At handoff, the local review viewer is running on `http://localhost:8080` with
+region overview and hand-closeup camera shortcuts. Next: review the failed
+regions and reconstruction before approving any tuning. Focused repository
+cleanup remains due before another milestone; Milestone 2 pilot dataset and
+annotation acceptance are not established by this run.
