@@ -75,6 +75,34 @@ Stage 8 records hand validity masks and pins a wholly unobserved side to its hom
 pose. This produces robot motion without establishing the missing human motion's
 accuracy; final dataset mask propagation was not established by this review.
 
+## Second optimization
+
+Static comparison on 2026-10-21 used the same HuRo revision's
+[trajectory solver](https://github.com/3587jjh/HuRo/blob/aeaae17f0fd51cc325b030bbef79ceb68a25199e/pipeline/retargeting/retargeter.py#L271)
+and its pinned PyRoKi revision
+[`388e43e1`](https://github.com/chungmin99/pyroki/blob/388e43e1fc0d0ee382968d3dd72970fd62a0450c/src/pyroki/_residuals/_residuals.py#L122).
+Both workflows freeze the base for the trajectory solve, but their objectives differ:
+
+| Term | HuRo residual multiplier / behavior | Our current pass |
+| --- | --- | --- |
+| Hand alignment | Fingertip position 50; connected-keypoint direction agreement 20 | Shifted wrist position / 0.001 m and explicit tool rotation / (sqrt(2) × 0.08) |
+| Camera | SE(3)-log translation 10, rotation 3 | Rotation-matrix difference / sqrt(2); translation omitted |
+| Temporal | Adjacent joint difference 40; hand-group multiplier 0.25; no acceleration term | Timestamp-based velocity 0.001 and acceleration 0.0005 |
+| Rest pose | Default 0.2; stiff groups 1.2; hand groups 0.1 | Uniform 0.5 across 16 arm/neck joints |
+| Joint limits | Soft violation penalty 100 | Hard solver bounds |
+
+PyRoKi's smoothness residual is `weight * (q[t] - q[t-1])`, without division
+by elapsed time. At 30 FPS our velocity residual is `0.03 * delta_q`, and our
+acceleration residual is `0.45 * delta2_q`. Thus our velocity component is much
+weaker; these are residual multipliers, squared in the objective. This does not
+establish a total smoothing ratio or predict trajectory quality across different
+robots, targets and residual counts. HuRo additionally smooths observed keypoints
+and reduces outlier alignment weights in stage 8, as described above.
+Our implementation and settings remain owned by the
+[retargeting topic](stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
+and [configuration](../../../configs/joint_retargeting.json).
+No HuRo optimization was executed and no fitting settings changed.
+
 ## Language annotation
 
 [Stage 6](https://github.com/3587jjh/HuRo/blob/aeaae17f0fd51cc325b030bbef79ceb68a25199e/pipeline/stage6_annot_narr.py)
