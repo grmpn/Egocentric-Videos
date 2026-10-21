@@ -94,6 +94,20 @@ joints can contribute. Physical robot wrist, shifted match point and actual TCP
 are separately saved and labeled. Hand orientation matches the EZGripper
 palm/TCP rotation at the shifted point. Earlier joint runs and the workspace
 method retain their physical-wrist endpoint.
+
+The pinned URDF gives each gripper one independent pitch joint downstream of
+`WRIST_X_LINK`: `LEFT_GRIPPER_Y` / `RIGHT_GRIPPER_Y`, local axis `[0,1,0]`,
+limits ±0.785398 rad (±45°), with no mimic coupling. The palm adapter and TCP
+attachments are fixed. Changing this joint leaves the upstream wrist frame's
+position and orientation unchanged, but moves the TCP and the rotating 5 cm
+match point. A [2026-10-21 ordinary-FK check](../../../outputs/retargeting/iphone-no-infill-20261021/gripper-articulation-check.json)
+held every other joint at zero and turned each gripper by 30°: wrist pose change
+was zero, tool rotation was 30°, TCP displacement was 0.12284 m and match-point
+displacement was 0.02588 m. Both joints are already active in joint/base fitting
+and span approximately −45° to +45° in the saved iPhone rerun. This is model/FK
+evidence, not hardware validation; the position-only wrist baseline keeps these
+downstream joints at zero as described below.
+
 Fixed MANO-root-from-palm rotations use
 the zero-shape, neutral licensed models: X points wrist→middle MCP; Y points
 pinky→index MCP after orthogonalization; Z is their cross product. Target tool
