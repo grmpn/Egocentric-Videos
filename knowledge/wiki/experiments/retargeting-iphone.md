@@ -256,3 +256,95 @@ At this handoff, the new review viewer runs on `http://localhost:8081` with regi
 and hand-closeup shortcuts; the historical viewer remains on port 8080. Next:
 review missing-data gaps, frame 295 and acceleration failures before any further
 tuning. Focused repository cleanup remains due before another milestone.
+
+## Stronger temporal smoothing
+
+On 2026-10-21 the user requested a large increase in temporal penalties and a
+comparison including large-joint-change frame counts. Under approved revision 6,
+the [experimental configuration](../../../outputs/retargeting/iphone-smooth1000-20261021/config.json)
+raises velocity **0.001 → 1.0** and acceleration **0.0005 → 0.5**: 1,000× residual
+multipliers, or 1,000,000× squared penalties. Every other setting matches the
+no-infill baseline above, including hand weights 1.0, posture 0.5, original
+timestamps, segmentation, seeds, retries and evaluation budgets. The 960×540
+reconstruction/alignment is reused. Default settings and source code are unchanged.
+
+The [completed run](../../../outputs/retargeting/iphone-smooth1000-20261021/trajectory/retargeting_report.json)
+took 1,793.37 s solving / 1,809.46 s total, compared with baseline 942.03 / 958.03 s.
+All four regions are exported; CLI exit 2 indicates no accepted demonstration.
+The [comparison](../../../outputs/retargeting/iphone-smooth1000-20261021/comparison.json)
+uses the same 1,096 assigned frames, 957 observed frames and 1,797 eligible hand
+samples. Large changes mean **any of 16 joints changes strictly more than 0.5 rad
+(28.65°)** from the preceding frame; count the later frame once, including robot
+predictions through missing observations. Unassigned gaps are not bridged.
+
+| Metric | Baseline | Strong smoothing |
+| --- | ---: | ---: |
+| Large-change frames, including adjacent region boundary | **116 / 1,093** | **1 / 1,093** |
+| Large-change frames within regions | **116 / 1,092** | **0 / 1,092** |
+| Largest within-region joint step (rad) | 4.92384 | 0.23741 |
+| Within-region velocity RMS (rad/s) | 5.95011 | 0.75388 |
+| Within-region acceleration RMS (rad/s²) | 246.84942 | 5.31944 |
+| Pose-passing observed frames | 855/957 (89.34%) | 189/957 (19.75%) |
+| Eligible-hand position RMS (mm) | 18.49 | 21.42 |
+| Eligible-hand position 95th percentile (mm) | 0.16 | 17.74 |
+| Eligible-hand orientation RMS (degrees) | 5.63 | 26.99 |
+
+The remaining adjacent-frame change is at **frame 1113 (37.1 s)**, the independent
+region reset: `LEFT_WRIST_Z` changes 3.13573 rad, versus 0.24650 rad maximum across
+joints at that boundary in the baseline. It is excluded from within-region
+smoothing metrics but included in the first table row. Two other region resets
+span unassigned gaps; their joint differences are recorded separately in the JSON.
+Baseline within-region counts are 57 left-arm / 72 right-arm / 0 neck frames;
+13 frames overlap between arms, giving 116 unique frames. Strong smoothing has
+zero in every subset. Exact indices and per-joint counts are in the comparison;
+[baseline](../../../outputs/retargeting/iphone-smooth1000-20261021/baseline-joint-changes.csv)
+and [experimental](../../../outputs/retargeting/iphone-smooth1000-20261021/smooth1000-joint-changes.csv)
+CSVs contain every within-region transition.
+
+| Frames [start, stop) | Large-change frames, baseline → strong | Pose passes, baseline → strong | Acceleration RMS, baseline → strong (rad/s²) |
+| --- | ---: | ---: | ---: |
+| [0, 296) | 38 → 0 | 218/245 → 35/245 | 261.90 → 4.50 |
+| [432, 893) | 47 → 0 | 334/402 → 109/402 | 231.00 → 5.47 |
+| [947, 1113) | 17 → 0 | 153/156 → 17/156 | 303.06 → 5.82 |
+| [1113, 1286) | 14 → 0 | 150/154 → 28/154 | 196.09 → 5.70 |
+
+All twelve first-pass attempt costs and evaluation counts reproduce exactly.
+The first two regions retain the same selected attempts and bases; the last two
+select different restarts and bases (attempts 2 → 0 and 0 → 1). Thus the comparison
+is of the standard two-stage workflow, not a fixed-base-only ablation everywhere.
+The first two selected trajectory solves reach the 500-evaluation budget; the
+last two stop on `ftol` at 217 and 279 evaluations. No global optimum is claimed.
+All regions reduce acceleration from their interpolated seeds, but all fail
+pose coverage and gap gates. This setting removes within-region spikes at a
+substantial tracking cost; it is **not adopted as the default**.
+
+The [independent audit](../../../outputs/retargeting/iphone-smooth1000-20261021/audit-trajectory.json)
+passes all source/mask/prediction, joint-bound, FK/offset, sampling and gate checks.
+All 24 original arrays are preserved; maximum saved-versus-ordinary-FK differences
+are 3.72e−10 m and 6.13e−10 rad. The
+[video check](../../../outputs/retargeting/iphone-smooth1000-20261021/video-check.json)
+verifies all 1,286 original timestamps. No production code changed, so existing
+unit tests were not rerun. [Browser checks](../../../outputs/retargeting/iphone-smooth1000-20261021/browser/browser.json)
+cover 22 representative/boundary frames, playback, prediction visibility and
+hand closeups without page errors. The
+[visual review](../../../outputs/retargeting/iphone-smooth1000-20261021/visual-review.json)
+includes the [motion/error plot](../../../outputs/retargeting/iphone-smooth1000-20261021/motion-and-pose-comparison.png),
+[joint trajectories](../../../outputs/retargeting/iphone-smooth1000-20261021/joint-trajectory-comparison.png)
+and rendered boundary poses. Physical calibration, collisions and dynamics remain
+unverified. These are generated, local-only artifacts.
+
+At the user's request, a first-region reproduction was opened before full export.
+Its joints, seed, residuals, mask and base now
+[match the completed run exactly](../../../outputs/retargeting/iphone-smooth1000-20261021/preview-equality.json).
+At handoff, first-region playback is on `http://localhost:8082`; full-run playback
+is on `http://localhost:8083`. To reopen the full result:
+
+```bash
+env -u LD_LIBRARY_PATH OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+    outputs/retargeting/iphone-smooth1000-20261021/trajectory --open-browser
+```
+
+Reproduce fitting with the earlier no-infill command, adding
+`--config outputs/retargeting/iphone-smooth1000-20261021/config.json` and a new
+output directory. Next: review the accuracy tradeoff and region reset before
+authorizing another tuning experiment. Cleanup remains due before another milestone.
