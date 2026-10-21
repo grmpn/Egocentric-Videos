@@ -54,12 +54,13 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 4, "method": "joint_base", "status": "running", "started_at": utc_now(),
+    report = {"schema_version": 5, "method": "joint_base", "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings, "robot_settings": robot_settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "asset_root": str(Path(asset_root).resolve()), "hand_order": ["left", "right"],
               "target_frames": robot_settings["target_frames"], "orientation_frames": robot_settings["tool_frames"],
               "manual_review": "pending", "regions_only": True,
+              "observation_policy": "export_valid AND NOT motion_infilled; infilled hands are missing data",
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "limitations": "Kinematic fit only; collision, dynamics, scale, gravity and floor height unverified.",
@@ -78,7 +79,10 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         model = PoseModel(robot, robot_settings, settings)
         paths = [alignment["inputs"][f"mano_{hand}"]["path"] for hand in ("left", "right")]
         offsets = mano_palm_frames(paths)
-        n, valid, times = len(arrays["timestamp_s"]), arrays["export_valid"], arrays["timestamp_s"]
+        n, times = len(arrays["timestamp_s"]), arrays["timestamp_s"]
+        valid = arrays["export_valid"] & ~arrays["motion_infilled"]
+        wrists_aligned = arrays["wrist_position_aligned_m"].copy()
+        wrists_aligned[~valid] = np.nan
         orientations = np.full((n, 2, 3, 3), np.nan)
         for hand in range(2):
             orientations[valid[:, hand], hand] = Rotation.from_rotvec(
@@ -91,6 +95,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
         edges = frame_edges(times)
         derived = {
+            "retarget_valid": valid,
             "camera_position_smoothed_m": smooth,
             "rotation_mano_from_palm": offsets,
             "wrist_orientation_target_aligned": orientations,
@@ -133,11 +138,11 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                 continue
             initial = initialize_base(arrays["camera_position_aligned_m"][sl], cameras[sl], model,
                                       settings["heading_min_norm"])
-            pose, before, q, info = fit_region(model, arrays["wrist_position_aligned_m"][sl],
+            pose, before, q, info = fit_region(model, wrists_aligned[sl],
                                                orientations[sl], cameras[sl], v, times[sl], initial, settings,
                                                seed_index=seed_index)
             transform = base_transform(pose)
-            wrists = transform_points(arrays["wrist_position_aligned_m"][sl], transform)
+            wrists = transform_points(wrists_aligned[sl], transform)
             target_rotations = transform[:3, :3] @ orientations[sl]
             p, r, tcp, hp, hr = model.forward(q)
             errors = np.linalg.norm(p - wrists, axis=-1)

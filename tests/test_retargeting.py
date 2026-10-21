@@ -144,7 +144,7 @@ def test_alignment_loader_detects_mismatched_source_time(tmp_path):
     n = 4
     times = np.arange(n) / 30
     arrays = dict(timestamp_s=times, source_timestamp_s=times + 10, frame_index=np.arange(n),
-                  export_valid=np.ones((n, 2), bool), wrist_position_aligned_m=np.zeros((n, 2, 3)),
+                  export_valid=np.ones((n, 2), bool), motion_infilled=np.zeros((n, 2), bool), wrist_position_aligned_m=np.zeros((n, 2, 3)),
                   rotation_aligned_from_world=np.eye(3))
     np.savez(tmp_path / "trajectory_aligned.npz", **arrays)
     clip = {"prepared": {"frame_count": n}, "frames": {"mapping": [{"timestamp_s": float(t), "source_timestamp_s": float(t + 10)} for t in times]}}
@@ -152,6 +152,16 @@ def test_alignment_loader_detects_mismatched_source_time(tmp_path):
     metadata.write_text(json.dumps(clip))
     report = {"status": "completed", "hand_order": ["left", "right"], "inputs": {"clip_metadata": {"path": str(metadata)}}}
     (tmp_path / "alignment_report.json").write_text(json.dumps(report))
+    for provenance in (None, np.zeros(n, bool), np.zeros((n, 2), float)):
+        malformed = dict(arrays)
+        if provenance is None:
+            malformed.pop("motion_infilled")
+        else:
+            malformed["motion_infilled"] = provenance
+        np.savez(tmp_path / "trajectory_aligned.npz", **malformed)
+        with pytest.raises(ValueError, match="motion_infilled"):
+            load_alignment(tmp_path)
+    np.savez(tmp_path / "trajectory_aligned.npz", **arrays)
     restored, _, _ = load_alignment(tmp_path)
     np.testing.assert_array_equal(restored["source_timestamp_s"], times + 10)
     clip["frames"]["mapping"][0]["source_timestamp_s"] = 9
@@ -229,7 +239,8 @@ def test_visual_state_exposes_ik_failure_even_when_workspace_also_fails():
     assert "workspace margin failed" in frame_state(0, arrays, report)[1]
 
 
-def test_original_mano_meshes_follow_episode_base_and_missing_hand_validity():
+@pytest.mark.parametrize("exclude_infill", [False, True])
+def test_original_mano_meshes_follow_episode_base_and_missing_hand_validity(exclude_infill):
     pytest.importorskip("smplx")
     from scipy.spatial.transform import Rotation
     from egocentric_pipeline.hand_geometry import align_hand_geometry, load_mano_model, reconstruct_mano
@@ -261,9 +272,14 @@ def test_original_mano_meshes_follow_episode_base_and_missing_hand_validity():
         frames = arrays["episode_id"] == e["episode_id"]
         arrays["wrist_position_base_m"][frames] = transform_points(
             aligned["wrist_position_aligned_m"][frames], base_transforms[e["candidate_id"]])
+    if exclude_infill:
+        arrays["motion_infilled"] = np.zeros((5, 2), bool)
+        arrays["motion_infilled"][2, 0] = True
+        arrays["retarget_valid"] = arrays["export_valid"] & ~arrays["motion_infilled"]
+        arrays["wrist_position_base_m"][~arrays["retarget_valid"]] = np.nan
     meshes = base_hand_meshes(arrays, report, models)
     for hand, (vertices, faces) in enumerate(meshes):
-        valid = arrays["export_valid"][:, hand] & (arrays["episode_id"] >= 0)
+        valid = arrays.get("retarget_valid", arrays["export_valid"])[:, hand] & (arrays["episode_id"] >= 0)
         assert vertices.shape == (5, 778, 3) and faces.shape[1] == 3
         assert faces.min() == 0 and faces.max() < 778
         assert np.isnan(vertices[~valid]).all() and np.isfinite(vertices[valid]).all()

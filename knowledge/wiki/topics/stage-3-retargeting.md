@@ -143,13 +143,24 @@ are recorded; budget termination does not imply either pose failure or optimalit
 IKPy and Robotics Toolbox were considered; their target-pose APIs do not remove
 this shared-base/multiple-target/temporal objective. No dependency was added.
 
-Version 4 reports identify `method: joint_base`, the shifted endpoint and explicit
-`camera_position_objective: false`. Version 3 wrist-origin joint runs, version 2
-workspace reports and historical version 1 TCP runs remain readable. Original source arrays
-retain their dtype and bytes. New arrays include:
+Since 2026-10-21, both retargeting methods use the per-hand observation mask
+`retarget_valid = export_valid & ~motion_infilled`. Infilled hands are missing
+data: they contribute no targets, observed errors, success claims, meshes or
+paths. A directly estimated opposite hand remains eligible. All-missing frames
+stay unknown and count toward the gap limit. Original source arrays retain their
+dtype and bytes. Joint predictions may continue through gaps, labeled unobserved;
+the workspace method leaves missing joints NaN. Missing or malformed boolean
+`motion_infilled [T,2]` provenance rejects new inputs with regeneration guidance.
+
+Version 5 joint reports identify this observation policy, `method: joint_base`,
+the shifted endpoint and explicit `camera_position_objective: false`. Historical
+joint versions 3–4, workspace versions 1–2 and TCP runs remain readable using
+their original observation mask; the viewer labels that their fit may include
+infill. New arrays include:
 
 | Field | Contract |
 | --- | --- |
+| `retarget_valid` | `[T,2]` boolean eligible observations, in left/right order; distinct from preserved source validity. |
 | `joint_solution_rad`, `joint_solution_before_smoothing_rad` | `[T,16]`, recorded left-arm/right-arm/neck order; NaN outside solved regions. |
 | `joint_angles_rad`, `neck_joint_angles_rad` | `[T,2,7]` arms and `[T,2]` neck, including explicit failed/missing-hand predictions inside regions. |
 | `joint_prediction`, `ik_success` | `[T,2]`: missing-observation prediction label / observed position **and** orientation acceptance. A prediction never establishes observed success. |
@@ -205,7 +216,7 @@ Out-of-domain distances guide search only through a positive penalty and never
 pass the actual query test. A stopped iteration budget is a search outcome, not
 a global-optimality claim. Free base Z has no calibrated floor interpretation.
 
-A frame is observed if either hand has `export_valid`; every observed hand must
+A frame is observed if either hand has `retarget_valid`; every observed hand must
 meet `distance <= -0.03 m`. Missing hands stay unverified, with all-missing frames
 unknown and excluded from the percentage denominator. Unknown frames count toward
 the nonpassing gap limit. Observation coverage is reported separately; an empty
@@ -250,6 +261,7 @@ The diagnostic artifact is local-only.
 
 | Fields | Contract |
 | --- | --- |
+| `retarget_valid` | `[T,2]` boolean `export_valid & ~motion_infilled`; original validity and geometry remain intact. |
 | `camera_position_smoothed_m` | `[T,3]` aligned-frame seed signal; original cameras unchanged. |
 | `transform_base_from_aligned`, `transform_base_from_world`, `transform_aligned_from_base` | `[C,4,4]` float64 homogeneous transforms acting on column vectors. World transform composes Part 1 rotation; no rescaling. |
 | `candidate_distance_m`, `candidate_query_valid`, `candidate_hand_passed` | `[C,T,2]` signed metres / booleans, left then right. Distances NaN for missing/out-of-domain samples. |
@@ -260,7 +272,7 @@ The diagnostic artifact is local-only.
 | `joint_angles_rad`, `ik_success`, `ik_residual_m`, `ik_attempts` | `[T,2,7]` joints in recorded chain order; `[T,2]` success, metre error and solve counts. Failed joints/residuals are NaN. |
 | `joint_step_rad`, `joint_jump` | `[T,2]` maximum absolute adjacent joint change / threshold flag, computed only within episodes with consecutive successes. |
 
-`retargeting_report.json` schema 2 records target frames, locked zero joints,
+`retargeting_report.json` schema 3 records the observation policy, target frames, locked zero joints,
 source directories, model/settings/packages,
 transform conventions, all seeds/candidates/episodes, timing and video verification.
 A completed run can have `demo_accepted: false`; CLI exit code 2 preserves its

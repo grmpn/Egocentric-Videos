@@ -28,7 +28,7 @@ def compare_quality(directory, model, palm_offsets, settings):
     report = read_json(Path(directory) / "retargeting_report.json")
     with np.load(Path(directory) / "trajectory_retargeted.npz", allow_pickle=False) as f:
         a = dict(f)
-    observed = a["export_valid"] & (a["episode_id"][:, None] >= 0)
+    observed = a.get("retarget_valid", a["export_valid"]) & (a["episode_id"][:, None] >= 0)
     solved = np.isfinite(a["joint_angles_rad"]).all(axis=-1) & observed
     orientation_error = np.full(observed.shape, np.nan)
     camera_error = np.full(len(observed), np.nan)
@@ -45,6 +45,8 @@ def compare_quality(directory, model, palm_offsets, settings):
         _, actual, _, head_position, head = model.forward(np.nan_to_num(q[frames]))
         for h in range(2):
             mask = solved[frames, h]
+            if not mask.any():
+                continue
             target = rotation @ Rotation.from_rotvec(
                 a["root_orientation_aligned_axis_angle"][frames[mask], h]).as_matrix() @ palm_offsets[h]
             orientation_error[frames[mask], h] = rotation_error(actual[mask, h], target)

@@ -405,6 +405,11 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_re
 The new directory receives the same trajectory/report/video review artifacts.
 The viewer adds neck motion, target/fitted orientation axes, camera-position and angular residuals
 and **Show unverified robot poses**. Missing source observations stay unknown.
+Both retargeting methods exclude every motion-infilled hand as missing data:
+`retarget_valid = export_valid & ~motion_infilled`. Original arrays stay intact;
+excluded hands contribute no fitting target, pose error or observed success.
+Joint predictions through gaps remain explicitly unobserved. New inputs must
+include boolean infill provenance; historical saved runs retain their earlier policy.
 `--config` selects alternative solver settings; defaults are in
 [joint_retargeting.json](configs/joint_retargeting.json). Success is measured
 from saved FK residuals separately from optimizer termination.

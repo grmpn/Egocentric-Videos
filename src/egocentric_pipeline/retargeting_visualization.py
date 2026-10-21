@@ -25,18 +25,19 @@ def episode_region(episode):
 
 def frame_state(frame, arrays, report):
     """Classification under the selected interval; unassigned is not infeasible."""
+    valid = arrays.get("retarget_valid", arrays["export_valid"])
     eid = int(arrays["episode_id"][frame])
-    if not arrays["export_valid"][frame].any():
+    if not valid[frame].any():
         return "unknown", "No valid hand estimates"
     if eid < 0:
         return "unknown", "No retained episode"
     episode = report["episodes"][eid]
     cid = episode["candidate_id"]
     if report.get("method") == "joint_base":
-        if not (arrays["ik_success"][frame] | ~arrays["export_valid"][frame]).all():
+        if not (arrays["ik_success"][frame] | ~valid[frame]).all():
             return "ik_failed", f"Region {eid}: wrist position/orientation gate failed"
         return "feasible", f"Region {eid}: available wrists pass position and orientation"
-    if not (arrays["ik_success"][frame] | ~arrays["export_valid"][frame]).all():
+    if not (arrays["ik_success"][frame] | ~valid[frame]).all():
         suffix = "; workspace margin failed" if not arrays["candidate_frame_passed"][cid, frame] else ""
         return "ik_failed", f"Episode {eid}: IK unverified{suffix}"
     if not arrays["candidate_frame_passed"][cid, frame]:
@@ -74,6 +75,7 @@ def annotate_video(output, arrays, report, clip):
     """Use existing ffmpeg/Pillow; retain every prepared frame at source cadence."""
     output = Path(output)
     pose_fitting = report.get("method") == "joint_base"
+    valid = arrays.get("retarget_valid", arrays["export_valid"])
     n, fps = len(arrays["timestamp_s"]), Fraction(clip["prepared"]["fps"])
     if not np.allclose(np.diff(arrays["timestamp_s"]), float(1 / fps), atol=1e-7, rtol=0):
         raise ValueError("Annotated video requires uniform prepared timestamps matching its FPS")
@@ -83,7 +85,7 @@ def annotate_video(output, arrays, report, clip):
     font = ImageFont.load_default(size=17)
     review_frames = {0, n // 2, n - 1}
     review_frames.update(episode_region(e)["start"] for e in report["episodes"])
-    for mask in ((arrays["export_valid"] & ~arrays["ik_success"]).any(axis=1), arrays["joint_jump"].any(axis=1)):
+    for mask in ((valid & ~arrays["ik_success"]).any(axis=1), arrays["joint_jump"].any(axis=1)):
         indices = np.flatnonzero(mask)
         if len(indices):
             review_frames.add(int(indices[0]))
@@ -108,7 +110,7 @@ def annotate_video(output, arrays, report, clip):
                     label += " | Large joint change flagged"
                 draw.text((12, height + 8), f"Frame {frame} | clip {arrays['timestamp_s'][frame]:.3f}s | source {arrays['source_timestamp_s'][frame]:.3f}s", fill="white", font=font)
                 draw.text((12, height + 32), label, fill=COLORS[state], font=font)
-                missing = [name for hand, name in enumerate(("left", "right")) if not arrays["export_valid"][frame, hand]]
+                missing = [name for hand, name in enumerate(("left", "right")) if not valid[frame, hand]]
                 detail = "Missing/unverified: " + ", ".join(missing) if missing else "Both hand estimates available"
                 mode = "Pose fitting" if pose_fitting else "Position-only"
                 draw.text((12, height + 55), detail + f" | {mode}; collisions/dynamics unchecked", fill=(200, 205, 218), font=font)
@@ -143,7 +145,7 @@ def annotate_video(output, arrays, report, clip):
         draw.text((12, y), f"Base {cid} {'pose' if pose_fitting else 'SDF'}", fill="white", font=font)
         for frame in range(n):
             outside = pose_fitting and arrays["episode_id"][frame] != cid
-            state = "unknown" if outside or not arrays["export_valid"][frame].any() else (
+            state = "unknown" if outside or not valid[frame].any() else (
                 "feasible" if arrays["candidate_frame_passed"][cid, frame] else "ik_failed" if pose_fitting else "infeasible")
             draw.rectangle((140 + 942 * frame / n, y, 140 + 942 * (frame + 1) / n, y + 20), fill=COLORS[state])
     timeline.save(output / "feasibility_timeline.png")
@@ -159,6 +161,7 @@ def base_hand_meshes(arrays, report, model_paths):
     """
     from .hand_geometry import load_mano_model, reconstruct_mano
 
+    valid = arrays.get("retarget_valid", arrays["export_valid"])
     meshes = []
     for hand, path in enumerate(model_paths):
         if not Path(path).is_file():
@@ -166,7 +169,7 @@ def base_hand_meshes(arrays, report, model_paths):
         model = load_mano_model(path, hand)
         vertices = np.full((len(arrays["episode_id"]), len(model.v_template), 3), np.nan, np.float32)
         for episode in report["episodes"]:
-            indices = np.flatnonzero((arrays["episode_id"] == episode["episode_id"]) & arrays["export_valid"][:, hand])
+            indices = np.flatnonzero((arrays["episode_id"] == episode["episode_id"]) & valid[:, hand])
             if not len(indices):
                 continue
             joints, world_vertices = reconstruct_mano(
@@ -203,6 +206,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             alignment = read_json(Path(report["alignment_directory"]) / "alignment_report.json")
             mano_models = [alignment["inputs"][f"mano_{name}"]["path"] for name in ("left", "right")]
         meshes = base_hand_meshes(arrays, report, mano_models)
+    valid = arrays.get("retarget_valid", arrays["export_valid"])
     settings = report["robot_settings"]
     pose_fitting = report.get("method") == "joint_base"
     target_frames = settings.get("target_frames", settings["tool_frames"])
@@ -232,9 +236,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     wrists = arrays["wrist_position_aligned_m"]
     targets, endpoint_markers, tcp_markers, wrist_markers, paths = [], [], [], [], []
     for hand, name in enumerate(("left", "right")):
-        valid = arrays["export_valid"][:, hand]
-        colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(valid)], np.uint8)
-        paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[valid, hand].astype(np.float32), colors=colors, point_size=.018))
+        hand_valid = valid[:, hand]
+        colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(hand_valid)], np.uint8)
+        paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[hand_valid, hand].astype(np.float32), colors=colors, point_size=.018))
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
@@ -256,6 +260,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         f"Blue/orange: original left/right hand and wrist · White: verified {endpoint_label}"
         + (" · Cyan: gripper TCP" if wrist_matching else "")
         + (" · Pink: physical robot wrist" if shifted_matching else "")
+        + ("\nInfilled hands excluded; treated as missing observations." if "retarget_valid" in arrays
+           else "\nHistorical fit may include infilled hand estimates.")
         + "\nPath: green pass, purple pose/IK failure, gray unassigned; red is a baseline workspace failure.\n\n"
         + explanation + " Collisions and dynamic limits are unchecked.")
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
@@ -331,10 +337,10 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         for hand in range(2):
             if meshes:
                 handle = mesh_handles[hand]
-                handle.visible = mesh_control.value and eid >= 0 and bool(arrays["export_valid"][frame, hand])
+                handle.visible = mesh_control.value and eid >= 0 and bool(valid[frame, hand])
                 if handle.visible:
                     handle.vertices = meshes[hand][0][frame]
-            targets[hand].visible = bool(arrays["export_valid"][frame, hand])
+            targets[hand].visible = bool(valid[frame, hand])
             if targets[hand].visible:
                 targets[hand].position = wrists[frame, hand]
             endpoint_markers[hand].visible = eid >= 0 and bool(arrays["ik_success"][frame, hand])
@@ -349,7 +355,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         if pose_fitting:
             for i, handle in enumerate(orientation_handles):
                 hand = i // 2
-                observed = hand == 2 or bool(arrays["export_valid"][frame, hand])
+                observed = hand == 2 or bool(valid[frame, hand])
                 show_robot = hand == 2 or bool(arrays["ik_success"][frame, hand]) or predicted_control.value
                 handle.visible = axes_control.value and eid >= 0 and (observed if i % 2 == 0 else show_robot)
                 if not handle.visible:
@@ -380,7 +386,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         if arrays["joint_jump"][frame].any():
             label += " · **Large joint change flagged**"
         status.content = (f"**Frame {frame} · {arrays['timestamp_s'][frame]:.3f} s**\n\n{label}\n\n{detail}\n\n"
-                          f"Observed L/R: {arrays['export_valid'][frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}\n\n"
+                          f"Observed L/R: {valid[frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}\n\n"
                           f"Robot wrist frames: {', '.join(target_frames)}"
                           + (f" · Match offset in tool metres: {report['settings']['wrist_offset_tool_m']}" if shifted_matching else ""))
         viewer.redraw()
@@ -399,7 +405,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
                 slider.value = (int(slider.value) + 1) % len(wrists)
 
     update(0)
-    viewer.set_camera(angles=[np.pi / 3, 0, 3 * np.pi / 4], distance=2.4, center=np.mean(wrists[arrays["export_valid"]], axis=0))
+    viewer.set_camera(angles=[np.pi / 3, 0, 3 * np.pi / 4], distance=2.4, center=np.mean(wrists[valid], axis=0))
     viewer.show(open_browser=open_browser)
     threading.Thread(target=playback, daemon=True).start()
     return viewer

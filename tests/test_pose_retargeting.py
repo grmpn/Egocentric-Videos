@@ -165,6 +165,150 @@ def test_pose_viewer_distinguishes_failure_missing_and_unassigned():
     assert [frame_state(i, arrays, report)[0] for i in range(4)] == ["ik_failed", "feasible", "unknown", "unknown"]
 
 
+@pytest.mark.parametrize("method", ["joint_base", "workspace"])
+def test_viewer_treats_excluded_hands_as_missing(method):
+    from egocentric_pipeline.retargeting_visualization import frame_state
+
+    arrays = {"episode_id": np.zeros(3, int), "export_valid": np.ones((3, 2), bool),
+              "retarget_valid": np.array([[False, True], [False, False], [True, False]]),
+              "ik_success": np.array([[False, True], [False, False], [False, False]]),
+              "candidate_frame_passed": np.array([[True, False, False]])}
+    report = {"method": method, "episodes": [{"candidate_id": 0}]}
+    assert [frame_state(i, arrays, report)[0] for i in range(3)] == ["feasible", "unknown", "ik_failed"]
+
+
+@pytest.fixture
+def aligned_input(tmp_path, model):
+    """Small real FK input through the production alignment/retargeting boundary."""
+    from egocentric_pipeline.hand_geometry import mano_palm_frames
+
+    m, _, rs = model
+    paths = [ROOT / "external/HaWoR" / p for p in (
+        "_DATA/data_left/mano_left/MANO_LEFT.pkl", "_DATA/data/mano/MANO_RIGHT.pkl")]
+    if not all(p.exists() for p in paths):
+        pytest.skip("Requires licensed MANO assets")
+    offsets = mano_palm_frames(paths)
+    times = np.arange(8) / 6
+    p, r, _, hp, hr = m.forward(np.tile(m.neutral, (8, 1)))
+    source = dict(timestamp_s=times, source_timestamp_s=times + 10, frame_index=np.arange(8),
+                  export_valid=np.ones((8, 2), bool), motion_infilled=np.zeros((8, 2), bool),
+                  wrist_position_aligned_m=p, rotation_aligned_from_world=np.eye(3),
+                  root_orientation_aligned_axis_angle=Rotation.from_matrix(
+                      (r @ offsets.transpose(0, 2, 1)).reshape(-1, 3, 3)).as_rotvec().reshape(8, 2, 3),
+                  camera_position_aligned_m=hp, camera_rotation_aligned_from_camera=hr)
+    source["motion_infilled"][1, 0] = True
+    source["motion_infilled"][2:4] = True
+    source["motion_infilled"][4, 1] = True
+    directory = tmp_path / "alignment"
+    directory.mkdir()
+    metadata = directory / "clip.json"
+    metadata.write_text(json.dumps({"prepared": {"frame_count": 8}, "frames": {"mapping": [
+        {"timestamp_s": float(t), "source_timestamp_s": float(t + 10)} for t in times]}}))
+    inputs = {"clip_metadata": {"path": str(metadata)}, "prepared_video": {"path": "unused.mp4"},
+              **{f"mano_{hand}": {"path": str(path)} for hand, path in zip(("left", "right"), paths)}}
+    (directory / "alignment_report.json").write_text(json.dumps(
+        {"status": "completed", "hand_order": ["left", "right"], "source_run_id": "synthetic", "inputs": inputs}))
+    np.savez(directory / "trajectory_aligned.npz", **source)
+    return directory, source, offsets, rs
+
+
+def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings):
+    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.retargeting_comparison import compare_quality
+
+    directory, source, offsets, rs = aligned_input
+    settings.update(base_max_evaluations=30, trajectory_max_evaluations=30, fit_attempts=1)
+    eligible = source["export_valid"] & ~source["motion_infilled"]
+    outputs = []
+    for index in range(2):
+        if index:
+            # Excluded NaN/absurd geometry must not influence either fitting stage.
+            source["wrist_position_aligned_m"][~eligible] = np.nan
+            source["root_orientation_aligned_axis_angle"][~eligible] = 1e6
+            np.savez(directory / "trajectory_aligned.npz", **source)
+        output = tmp_path / f"run-{index}"
+        report = joint_retarget_trajectory(directory, output, settings, rs,
+                                          ROOT / "data/models/purdue-alex-assets", render_video=False)
+        with np.load(output / "trajectory_retargeted.npz") as f:
+            arrays = dict(f)
+        for name, values in source.items():
+            assert arrays[name].dtype == values.dtype and arrays[name].tobytes() == values.tobytes()
+        np.testing.assert_array_equal(arrays["retarget_valid"], eligible)
+        np.testing.assert_array_equal(arrays["joint_prediction"], ~eligible)
+        assert not arrays["ik_success"][~eligible].any()
+        for name in ("wrist_position_base_m", "wrist_orientation_target_aligned", "wrist_orientation_target_base",
+                     "ik_residual_m", "orientation_residual_rad"):
+            assert np.isnan(arrays[name][~eligible]).all(), name
+        assert np.isfinite(arrays["joint_solution_rad"]).all()
+        assert report["episodes"][0]["region"]["observed_frames"] == 6
+        assert report["episodes"][0]["region"]["longest_nonpassing_s"] >= 1 / 3 - 1e-10
+        quality = compare_quality(output, model[0], offsets, settings)
+        assert quality["observed_hand_frames"] == int(eligible.sum())
+        assert quality["observed_frames"] == 6
+        outputs.append(arrays)
+    for name in ("joint_solution_rad", "transform_base_from_aligned", "ik_success", "ik_residual_m",
+                 "orientation_residual_rad", "candidate_frame_passed"):
+        np.testing.assert_array_equal(outputs[0][name], outputs[1][name])
+
+
+def test_entirely_infilled_region_has_no_fit(tmp_path, aligned_input, settings):
+    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+
+    directory, source, _, rs = aligned_input
+    source["motion_infilled"][:] = True
+    np.savez(directory / "trajectory_aligned.npz", **source)
+    output = tmp_path / "no-observations"
+    report = joint_retarget_trajectory(directory, output, settings, rs,
+                                      ROOT / "data/models/purdue-alex-assets", render_video=False)
+    assert report["status"] == "completed" and not report["demo_accepted"]
+    assert not report["episodes"] and report["seeds"][0]["reason"] == "no_observed_wrists"
+    with np.load(output / "trajectory_retargeted.npz") as arrays:
+        assert not arrays["retarget_valid"].any() and not arrays["ik_success"].any()
+        assert np.isnan(arrays["joint_solution_rad"]).all()
+
+
+def test_workspace_workflow_ignores_infilled_geometry(tmp_path, aligned_input):
+    from egocentric_pipeline.retargeting import retarget_trajectory
+    from egocentric_pipeline.workspace import WorkspaceGrid
+
+    directory, source, _, rs = aligned_input
+    settings = json.loads((ROOT / "configs/trajectory_retargeting.json").read_text())
+    settings.update(optimizer_iterations=2, optimizer_population=2, ik_attempts=1, ik_iterations=5)
+    rs = dict(rs, voxel_size_m=.1)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    # A synthetic field suffices to exercise placement and IK masking; it does
+    # not assert physical reachability or replace the sampled production grid.
+    distances = np.full((2, 20, 20, 20), -.1)
+    WorkspaceGrid(np.array([-1., -1., 0.]), .1, distances < 0, distances).save(workspace / "workspace_grid.npz")
+    (workspace / "workspace_report.json").write_text(json.dumps({
+        "status": "completed", "hand_order": ["left", "right"], "settings": rs,
+        "arms": [{"tool_frame": tool, "target_frame": target}
+                 for tool, target in zip(rs["tool_frames"], rs["target_frames"])]}))
+    eligible = source["export_valid"] & ~source["motion_infilled"]
+    outputs = []
+    for index in range(2):
+        if index:
+            source["wrist_position_aligned_m"][~eligible] = np.nan
+            np.savez(directory / "trajectory_aligned.npz", **source)
+        output = tmp_path / f"workspace-run-{index}"
+        report = retarget_trajectory(directory, workspace, output, settings,
+                                    ROOT / "data/models/purdue-alex-assets", regions_only=True, render_video=False)
+        with np.load(output / "trajectory_retargeted.npz") as f:
+            arrays = dict(f)
+        np.testing.assert_array_equal(arrays["retarget_valid"], eligible)
+        assert not arrays["ik_success"][~eligible].any()
+        assert not arrays["candidate_query_valid"][:, ~eligible].any()
+        assert not arrays["candidate_hand_passed"][:, ~eligible].any()
+        assert not arrays["ik_attempts"][~eligible].any()
+        for name in ("wrist_position_base_m", "joint_angles_rad", "ik_residual_m"):
+            assert np.isnan(arrays[name][~eligible]).all()
+        assert report["episodes"][0]["combined"]["observed_frames"] == 6
+        outputs.append(arrays)
+    for name in ("transform_base_from_aligned", "candidate_frame_passed", "joint_angles_rad", "ik_success"):
+        np.testing.assert_array_equal(outputs[0][name], outputs[1][name])
+
+
 @pytest.mark.parametrize("stride", [1, 2])
 def test_known_pose_region_fit_with_missing_observation(model, settings, stride):
     m, _, _ = model

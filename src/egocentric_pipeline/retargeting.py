@@ -47,9 +47,12 @@ def load_alignment(directory):
     n = len(times)
     if valid.shape != (n, 2) or valid.dtype != bool:
         raise ValueError("export_valid must be boolean [T,2] in left/right order")
+    infilled = arrays.get("motion_infilled")
+    if infilled is None or infilled.shape != (n, 2) or infilled.dtype != bool:
+        raise ValueError("motion_infilled must be boolean [T,2]; regenerate alignment with hand provenance")
     wrists = arrays["wrist_position_aligned_m"]
-    if wrists.shape != (n, 2, 3) or not np.isfinite(wrists[valid]).all() or not np.isnan(wrists[~valid]).all():
-        raise ValueError("Physical wrists must be finite where valid and NaN where missing")
+    if wrists.shape != (n, 2, 3) or not np.isfinite(wrists[valid & ~infilled]).all() or not np.isnan(wrists[~valid]).all():
+        raise ValueError("Physical wrists must be finite for non-infilled observations and NaN where export-invalid")
     rotation = arrays["rotation_aligned_from_world"]
     if (rotation.shape != (3, 3) or not np.allclose(rotation @ rotation.T, np.eye(3), atol=1e-8)
             or not np.isclose(np.linalg.det(rotation), 1, atol=1e-8)):
@@ -92,12 +95,13 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 2, "method": "workspace", "regions_only": regions_only,
+    report = {"schema_version": 3, "method": "workspace", "regions_only": regions_only,
               "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "workspace_directory": str(Path(workspace_directory).resolve()),
               "hand_order": ["left", "right"], "manual_review": "pending",
+              "observation_policy": "export_valid AND NOT motion_infilled; infilled hands are missing data",
               "units": {"position": "metres (input scale unverified)", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "invalid_geometry": "NaN for missing wrists and missing/failed IK; gaps are not interpolated",
@@ -131,8 +135,10 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
                       source_run_id=alignment_report["source_run_id"],
                       prepared_video=alignment_report["inputs"]["prepared_video"]["path"],
                       packages={p: importlib.metadata.version(p) for p in ("scikit-robot", "numpy", "scipy", "torch", "viser", "Pillow")})
-        times, valid = arrays["timestamp_s"], arrays["export_valid"]
-        observed, edges, wrists = valid.any(axis=1), frame_edges(times), arrays["wrist_position_aligned_m"]
+        times, valid = arrays["timestamp_s"], arrays["export_valid"] & ~arrays["motion_infilled"]
+        observed, edges = valid.any(axis=1), frame_edges(times)
+        wrists = arrays["wrist_position_aligned_m"].copy()
+        wrists[~valid] = np.nan
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
         report["timing"] = {"loading_s": time.perf_counter() - started}
         solve_started = time.perf_counter()
@@ -164,7 +170,7 @@ def retarget_trajectory(alignment_directory, workspace_directory, output_directo
             selected = select_disjoint_regions(candidates, evaluations, observed, edges, settings)
         ik_started = time.perf_counter()
         n, joints = len(times), len(robot_settings["arm_joints"][0])
-        derived = {"camera_position_smoothed_m": smooth,
+        derived = {"retarget_valid": valid, "camera_position_smoothed_m": smooth,
                    "episode_id": np.full(n, -1, np.int32), "wrist_position_base_m": np.full((n, 2, 3), np.nan),
                    "joint_angles_rad": np.full((n, 2, joints), np.nan), "tcp_position_base_m": np.full((n, 2, 3), np.nan),
                    "target_position_base_m": np.full((n, 2, 3), np.nan),

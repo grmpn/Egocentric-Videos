@@ -1,55 +1,53 @@
 # Milestone 3 — Joint base and trajectory optimization
 
-Approved revision 4 · 2026-10-20 · User-requested gripper alignment and hand-weight experiment: `20261020-gripper-offset-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 5 · 2026-10-21 · User explicitly requested that retargeting never trust infilled frames and that the iPhone workflow be rerun: `20261021-no-infill-001` in the [action log](../logs/2026-10.jsonl).
 
-Earlier revisions and their outcomes remain in Git and the [evidence page](../experiments/joint-base-bundled.md). This amendment supersedes revision 3's camera-position objective and wrist-origin endpoint for the joint/base method.
+Earlier revisions and outcomes remain in Git and the [bundled evidence](../experiments/joint-base-bundled.md). This amendment changes observation eligibility; it preserves the latest weights, geometry and solver limits.
 
 ## Objective and deliverable
 
-Improve human-hand/gripper alignment by moving the wrist match point toward the
-extended fingers, reduce joint/base fitting to alternate frames, and measure the
-tradeoff from weaker hand-pose objectives. Deliver reproducible trajectories,
-viewer evidence and a controlled comparison on the bundled clip.
+Treat every infilled hand sample as missing data throughout retargeting, then
+produce a new iPhone trajectory, report and reviewed playback using the existing
+960×540 input's reconstruction/alignment. Preserve the previous run for comparison.
 
 ## Scope and boundaries
 
-- Use the same aligned input, pinned Purdue Alex model and retained regions
-  `[0,52)` and `[74,105)`. Preserve source geometry, timestamps, metres/radians,
-  hand identity, validity and confidence. Preserve previous runs and workspace
-  behavior; no workspace regeneration is required for this joint/base amendment.
-- Match each human wrist to a point 0.05 m from the robot wrist-joint origin along
-  the gripper's local +X direction, toward its fingers. The user confirmed this
-  gripper-relative direction; it rotates with the tool. Keep physical wrist,
-  shifted match point and actual TCP distinct in reports/playback. Preserve the
-  anatomical orientation mapping and original MANO geometry.
-- Optimize shared base XYZ/yaw and joint poses on every other frame of each
-  retained region, starting at its first frame. Initialize omitted frames by
-  source-time joint interpolation, holding the last sampled pose at an unmatched
-  endpoint. Freeze the base, then optimize and evaluate every original frame.
-  Preserve median camera initialization, gravity-aligned roll/pitch, hard URDF
-  bounds and fixed fingers.
-- Remove the camera-position residual in both stages; retain camera rotation,
-  segmentation and median-position initialization. Set posture residual weight
-  to 0.5. Compare joint hand position/orientation residual multipliers 1.0, 0.5,
-  0.2 and 0.1 with identical remaining settings, retries, seeds and budgets.
-  Record squared-cost scaling; retain failures and termination messages.
-- Reuse existing dependencies and workflows. No retiming, rescaling, collision or
-  dynamics certification, simulation/controller execution or hardware transfer.
+- Define eligible hand observations per frame as `export_valid` and not
+  `motion_infilled`. Exclude ineligible hand positions/orientations from fitting,
+  workspace queries, IK acceptance and observed-frame denominators. A directly
+  estimated opposite hand remains eligible. Frames with neither hand eligible
+  remain unknown and count toward the existing gap limit.
+- Apply the rule consistently to both maintained retargeting methods, comparison
+  metrics, annotated video and interactive playback. Preserve original source
+  geometry, validity, infill provenance, confidence, hand identity, timestamps,
+  metres/radians and coordinate transforms. Export a distinct retargeting mask;
+  do not rewrite HaWoR's original validity. Reject missing/malformed infill
+  provenance on new input rather than silently trusting it.
+- Joint trajectories may still contain regularized predictions within retained
+  regions, as for existing missing data. Mark these as unobserved predictions;
+  never assign observed success/errors or show infilled human targets as data.
+  Preserve historical saved runs and make their earlier observation policy clear
+  when viewed, without rewriting old acceptance results.
+- Reuse the saved iPhone HaWoR and gravity results. Keep hand residual weights
+  1.0, posture 0.5, 5 cm tool-local +X match offset, alternate-frame base solve,
+  camera rotation objective, segmentation, seeds, attempts and evaluation budgets.
+  No reconstruction changes, tuning, new dependencies, retiming, rescaling,
+  collision/dynamics certification or controller/hardware execution.
 
 ## Acceptance
 
-- Verify the 5 cm offset and both-stage analytic Jacobians against ordinary FK
-  and finite differences, including both hands and missing observations. Verify
-  camera translation cannot affect the loss at fixed initialization/regions.
-- Verify alternate-frame selection, source-time interpolation and full-resolution
-  output/acceptance. Independently audit FK, bounds, transforms, source arrays,
-  timestamps and failed/missing labels for all four production trials.
-- Keep ≤5 mm and ≤10° per observed hand, >95% passing observed frames, ≤0.2 s
-  gaps, ≥1 s duration and reduced acceleration RMS for demonstrated regions.
-  Lower objective weights must not weaken these gates.
-- Compare hand errors/coverage, posture, head/camera diagnostics, acceleration,
-  attempts and single-run solve time. Inspect representative control/downweighted
-  playback, hand/gripper closeups, failures and boundaries; retain legacy viewer
-  support. Save configs, reports, tests, audits and visual evidence under
-  `outputs/retargeting/`. Completion means an honest experiment, including any
-  regressions or absence of qualifying regions.
+- Focused tests must demonstrate that changing infilled geometry cannot change
+  fitted observations/objectives, acceptance or diagnostics; cover mixed-hand
+  availability, entirely missing intervals, provenance validation, prediction
+  labels, visualization and historical compatibility.
+- Rerun the real iPhone retargeting workflow. Independently verify the observation
+  mask, absent success/error claims for excluded hands, source-array preservation,
+  timestamps, joint bounds, FK/offset transforms, sampling and region gates.
+- Retain ≤5 mm / ≤10° per eligible hand, >95% passing observed frames, ≤0.2 s
+  unknown/failure gaps, ≥1 s duration and reduced acceleration RMS. Report changed
+  coverage and failed gates honestly. Compare the preserved run on common eligible
+  observations; do not interpret a changed denominator as improved reconstruction.
+- Inspect representative directly estimated, infilled, mixed and boundary frames
+  in annotated video and playback. Save tests, reports and visual evidence under
+  `outputs/retargeting/iphone-no-infill-20261021/`. Completion means verified
+  exclusion and a reproducible run, even if no region qualifies as a demo.
