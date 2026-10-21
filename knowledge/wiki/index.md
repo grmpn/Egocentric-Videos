@@ -23,6 +23,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
+- [iPhone retargeting evidence](experiments/retargeting-iphone.md) — downscaled full demonstration using the existing hand-weight-1 defaults, reconstruction and retargeting review.
 - [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — original benchmark and subsequent experiments, including gripper-offset/hand-weight results and visual evidence; posture, motion and orientation tradeoffs.
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
 - [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — historical TCP runs and current wrist-aligned episodes, independent transform/SDF/IK audits, annotated video and MANO playback with preserved failures/discontinuities.

@@ -134,7 +134,10 @@ deviations. Squared-cost coefficients are the squares of these multipliers;
 reported posture RMS is the unweighted deviation in radians. Acceptance uses
 unweighted physical errors and is unchanged by these weights.
 The [configuration](../../../configs/joint_retargeting.json) owns weights,
-tolerances and finite evaluation budgets. Failed region fits can retry up to
+tolerances and finite evaluation budgets. On 2026-10-21 the user selected the
+last hand-weight-1 experiment settings as defaults for the iPhone run; the
+existing configuration already matched every setting (`20261021-iphone-001`
+in the [action log](../logs/2026-10.jsonl)). Failed region fits can retry up to
 three seeded starting postures. All attempts, termination messages and selection
 are recorded; budget termination does not imply either pose failure or optimality.
 IKPy and Robotics Toolbox were considered; their target-pose APIs do not remove
