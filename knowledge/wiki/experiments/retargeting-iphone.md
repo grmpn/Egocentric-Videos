@@ -348,3 +348,78 @@ Reproduce fitting with the earlier no-infill command, adding
 `--config outputs/retargeting/iphone-smooth1000-20261021/config.json` and a new
 output directory. Next: review the accuracy tradeoff and region reset before
 authorizing another tuning experiment. Cleanup remains due before another milestone.
+
+## GPU solver rerun (2026-10-22)
+
+The [approved GPU plan](../plans/milestone-3-gpu-ik.md) is fulfilled. The latest
+1,000× smoothing configuration was rerun on the RTX 4090, adding only
+`solver_backend: "cuda"`. All objective weights, seeds, three attempts per region,
+stride, 700/500 residual-evaluation budgets and acceptance gates are unchanged.
+The [solver contract](../topics/stage-3-retargeting.md#gpu-sparse-solver) owns the
+CUDA/CPU split and numerical limitations; setup is in
+[environment/README.md](../../../environment/README.md#cuda-trajectory-ik).
+
+| Measurement | Previous CPU run | CUDA rerun |
+| --- | ---: | ---: |
+| Complete solve, all attempts | 1,793.37 s | **285.15 s (6.29× faster)** |
+| Total including video export | 1,809.46 s | **301.41 s (6.00× faster)** |
+| Pose-passing observed frames | 189/957 | 189/957 |
+| Position RMS | 21.420 mm | 21.419 mm |
+| Orientation RMS | 26.991° | 28.185° |
+| Velocity RMS | 0.75388 rad/s | 0.73251 rad/s |
+| Acceleration RMS | 5.31944 rad/s² | 5.29975 rad/s² |
+| >0.5 rad change frames, within regions | 0/1,092 | 0/1,092 |
+| >0.5 rad change frames, including adjacent reset | 1/1,093 | 1/1,093 |
+| Demonstration accepted | No | No |
+
+These are observed complete-run times against the historical CPU result, not a
+controlled hardware-only benchmark. The CUDA path also replaces iterative LSMR
+with direct sparse factorization. A fresh [matched benchmark](../../../outputs/retargeting/gpu-ik-20261022/benchmark.json)
+uses identical stage inputs, tolerances and budgets with one OpenBLAS/OpenMP
+thread. First-region full-budget base/trajectory times are 32.10/56.45 s on CPU
+versus 11.65/13.65 s on repeated CUDA runs (2.76×/4.14×). Their CUDA objective
+costs are slightly lower. The larger region's 40-evaluation trajectory sample is
+24.77 versus 1.64 s (15.09×), with equal cost to numerical precision. Its truncated
+base sample is faster but has a higher cost (24,171 versus 19,067); acceleration
+does not imply uniformly better optimization. First CUDA base execution, with
+fresh kernel cache/imports, takes 13.58 s. Repeat termination counts differ, so
+the first/repeat difference is not a pure compilation-time measurement.
+
+All four selected restarts remain 0/2/0/1. Pose-passing counts by region are
+36/245, 109/402, 17/156 and 27/154, versus CPU 35/245, 109/402, 17/156 and 28/154.
+The first two selected trajectory solves exhaust 500 evaluations; the last two
+terminate by `ftol`. The adjacent region reset at frame 1113 remains **3.133 rad**;
+the worst observed position residual remains about **758 mm**. All regions still
+fail pose coverage/gap gates. Orientation errors and some individual poses differ;
+neither bitwise equivalence nor improved reconstruction accuracy is claimed.
+
+Validation passes: **66 focused tests**, compatible installed dependencies, all
+24 source arrays byte-preserved, unchanged masks/segmentation and all 1,286 video
+timestamps, hard joint/base bounds, ordinary URDF FK and saved-error consistency,
+selected-stage objective recomputation, all attempts' initializations/budgets,
+and unchanged acceptance labels. The maximum CUDA linear backward error is
+4.34e-16. The browser checks 22 representative/boundary frames, observation labels,
+prediction visibility, hand/gripper closeups and playback with no page errors.
+Plots, timeline, video labels and representative hand/robot screenshots were
+visually inspected. Browser capture uses software WebGL; IK uses CUDA.
+
+Local-only evidence: [report](../../../outputs/retargeting/gpu-ik-20261022/trajectory/retargeting_report.json),
+[trajectory](../../../outputs/retargeting/gpu-ik-20261022/trajectory/trajectory_retargeted.npz),
+[annotated video](../../../outputs/retargeting/gpu-ik-20261022/trajectory/annotated_video.mp4),
+[comparison and frame counts](../../../outputs/retargeting/gpu-ik-20261022/comparison.json),
+[plots](../../../outputs/retargeting/gpu-ik-20261022/motion-and-pose-comparison.png),
+[geometry audit](../../../outputs/retargeting/gpu-ik-20261022/audit-trajectory.json),
+[solver audit](../../../outputs/retargeting/gpu-ik-20261022/solver-audit.json),
+[video check](../../../outputs/retargeting/gpu-ik-20261022/video-check.json),
+[browser review](../../../outputs/retargeting/gpu-ik-20261022/browser/browser.json),
+[pose/retargeting tests](../../../outputs/retargeting/gpu-ik-20261022/tests.log),
+[workspace tests](../../../outputs/retargeting/gpu-ik-20261022/workspace-tests.log),
+and [visual review](../../../outputs/retargeting/gpu-ik-20261022/visual-review.json).
+
+The viewer is available at `http://localhost:8080`. Reopen the saved result with
+`scripts/view_retargeting.py outputs/retargeting/gpu-ik-20261022/trajectory` in
+the workspace environment. To repeat fitting, use the earlier joint command
+with `--config outputs/retargeting/gpu-ik-20261022/config.json` and a new output
+directory. CUDA is now the default backend; default temporal weights remain
+0.001/0.0005. Review the pose/smoothing tradeoff and region reset before further
+tuning. Focused repository cleanup remains due before another milestone.
