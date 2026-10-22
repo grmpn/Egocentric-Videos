@@ -234,3 +234,44 @@ are local evidence. The [render script](../../../outputs/retargeting/pose-refine
 uses existing HaWoR/PyTorch3D and project MANO reconstruction; no dependencies or
 production behavior changed. The player was opened after validation and linked
 from the all-experiment viewer.
+
+## Frame 1050: projection jitter diagnosis
+
+On 2026-10-22 the user reported stronger jitter in the smoothed overlay around
+frame 1050. The saved data confirm this over frames **1035–1065 inclusive**:
+
+| Hand | World acceleration RMS, original → smoothed (m/s²) | Projected wrist second-difference RMS, original → smoothed (px/frame²) |
+| --- | ---: | ---: |
+| Left | 47.19 → 9.19 | 7.96 → 49.51 |
+| Right | 47.56 → 10.14 | 6.70 → 56.45 |
+
+The cause is smoothing hands in world coordinates while retaining the original
+camera poses for projection. Original world hands are reconstructed using those
+camera poses, so camera-related variations cancel on reprojection. Independently
+filtering the hands removes part of that shared motion; the original moving
+camera then introduces rapid relative motion in the overlay. Camera translation
+is the largest contribution here (19.0 mm RMS versus 5.0–5.5 mm for rotation).
+Estimated camera translation steps range from 1.6 to 80.9 mm/frame in this window.
+This alone cannot separate actual head motion from SLAM estimation noise.
+
+The diagnosis checks an exact decomposition. With camera-to-world rotation R,
+camera position c, camera-relative wrist x, and the interior nine-sample linear
+filter S, world position is p = c + Rx. The saved filtered camera-relative wrist
+differs from S(x) by `R_i.T (S(c)_i - c_i)` plus
+`sum_j w_j (R_i.T R_j - I) x_j`. Both terms together reproduce the measured
+difference within 1.13e-7 m. The same filter applied to camera-relative wrists
+only as a diagnostic gives 1.88/1.97 px/frame² (left/right). These are projected
+wrist metrics, including wrists below the image edge, not ground-truth pixel
+tracking errors. Camera-relative filtering changes the smoothing objective;
+it is not adopted for world-space robot targets.
+
+Both hands are continuously eligible, well inside their filter spans, with no
+region boundary, missing transition or rotation ambiguity in this window.
+Recomputed world filtering matches the saved result. The plot and source-video
+contact sheet were visually inspected; production settings and trajectories are
+unchanged. Future tuning should assess camera/hand consistency as well as world
+smoothness. [Diagnostic plot](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/frame1050-diagnostics.png),
+[measurements](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/frame1050-analysis.json),
+[frames 1040/1050/1053](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/frame1050-contact-sheet.png)
+and [reproduction script](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/frame1050-diagnose.py)
+are local evidence.

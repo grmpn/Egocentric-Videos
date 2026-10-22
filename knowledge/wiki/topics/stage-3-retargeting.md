@@ -293,6 +293,11 @@ residuals, success masks, restart pose-ranking and demonstration gates use the
 **original** eligible observations. The viewer continues to display those raw
 observations and saved robot poses. Both CPU and CUDA paths share this objective.
 
+World-space hand smoothing can increase jitter when projected through unchanged
+camera poses, because it disrupts shared camera/hand motion cancellation. See the
+[frame-1050 diagnosis](../experiments/hand-pose-refinement.md#frame-1050-projection-jitter-diagnosis)
+for measured evidence; world smoothness alone does not establish overlay fidelity.
+
 ## Part 3 placement and IK contract
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.
