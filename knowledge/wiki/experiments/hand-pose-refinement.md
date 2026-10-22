@@ -199,3 +199,38 @@ The [full trajectory](../../../outputs/retargeting/pose-refinement-20261022/traj
 and [synchronized video](../../../outputs/retargeting/pose-refinement-20261022/trajectory/annotated_video.mp4)
 are available independently of the viewers. Repeat the CLI with the saved
 `config.json`, the original iPhone gravity directory and a new output directory.
+
+## Smoothed hands on source video
+
+User-requested visual review, 2026-10-22:
+[video player](http://localhost:8090/smoothed-overlay/review.html),
+[smoothed-hand overlay](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/smoothed-hands.mp4)
+and [original/smoothed comparison](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/original-vs-smoothed.mp4).
+Both MP4s preserve all 1,286 source frames at 30 FPS (42.867 seconds).
+Blue/orange meshes identify left/right hands; 0.3-second wrist trails show motion.
+The player supports slow motion, frame stepping and representative-frame jumps.
+
+The saved full-combined targets rigidly rotate each reconstructed MANO mesh about
+its original physical wrist and translate it to the filtered wrist. Original
+finger articulation and shape remain intact. Projection uses the original camera
+poses and approximate intrinsics, with no refitting or new inference. Invalid and
+motion-infilled hands are hidden; trails never bridge missing samples or regions.
+Outside-region and short-span targets remain unchanged and are labeled. These are
+human fitting targets before robot IK, not robot trajectories.
+
+Geometry checks pass: wrist agreement within 1.2e-7 m, preserved mesh distances
+and agreement between analytic and renderer camera projections within 0.00062 px.
+Both videos pass complete decoding and every frame timestamp matches the source.
+Visually inspected frames 148, 450, 739, 1113 and 1147 plus the browser comparison.
+Frame 1147 (38.233 s) has the largest smoothing displacement and shows visible
+offset from the source hands; it is directly accessible in the player.
+Browser checks pass for both modes, seeking, half-speed playback, frame stepping
+and preservation of time/speed on mode changes. The player loads local video blobs
+to support seeking on the existing server without HTTP byte ranges.
+[Render geometry](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/render-report.json),
+[video validation](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/validation.json)
+and [browser validation](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/browser-check.json)
+are local evidence. The [render script](../../../outputs/retargeting/pose-refinement-20261022/smoothed-overlay/render.py)
+uses existing HaWoR/PyTorch3D and project MANO reconstruction; no dependencies or
+production behavior changed. The player was opened after validation and linked
+from the all-experiment viewer.
