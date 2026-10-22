@@ -241,16 +241,25 @@ class PoseProblem:
             lower, upper = np.tile(self.model.lower, self.n), np.tile(self.model.upper, self.n)
             initial = initial_q.ravel()
         started = time.perf_counter()
-        result = least_squares(lambda x: self.evaluate(x)[0], initial,
-                               jac=lambda x: self.evaluate(x)[1], bounds=(lower, upper),
-                               max_nfev=max_evaluations, ftol=self.settings["solver_tolerance"],
-                               xtol=self.settings["solver_tolerance"], gtol=self.settings["solver_tolerance"],
-                               x_scale="jac", tr_options={"atol": 1e-8, "btol": 1e-8})
+        backend = self.settings.get("solver_backend", "cpu")
+        if backend == "cuda":
+            from .gpu_least_squares import least_squares_cuda
+            result = least_squares_cuda(self.evaluate, initial, lower, upper,
+                                        max_evaluations, self.settings["solver_tolerance"])
+        elif backend == "cpu":
+            result = least_squares(lambda x: self.evaluate(x)[0], initial,
+                                   jac=lambda x: self.evaluate(x)[1], bounds=(lower, upper),
+                                   max_nfev=max_evaluations, ftol=self.settings["solver_tolerance"],
+                                   xtol=self.settings["solver_tolerance"], gtol=self.settings["solver_tolerance"],
+                                   x_scale="jac", tr_options={"atol": 1e-8, "btol": 1e-8})
+        else:
+            raise ValueError("solver_backend must be 'cpu' or 'cuda'")
         base, q = self.unpack(result.x)
         return base, q, {"wall_time_s": time.perf_counter() - started, "evaluations": result.nfev,
                         "jacobian_evaluations": result.njev, "cost": float(result.cost),
                         "optimality": float(result.optimality), "converged": bool(result.success),
-                        "message": str(result.message), "global_optimum_claimed": False}
+                        "message": str(result.message), "global_optimum_claimed": False,
+                        "solver_backend": backend, **({"gpu": result.gpu} if backend == "cuda" else {})}
 
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,

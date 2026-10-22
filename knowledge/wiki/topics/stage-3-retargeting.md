@@ -127,8 +127,10 @@ both stages; camera rotation remains fitted. Camera translation error remains
 available as a diagnostic. Saved revision 3 runs retain their original objective
 and viewer explanation.
 
-The installed scikit-robot supplies batched FK and geometric Jacobians; SciPy
-bounded `least_squares` fits the combined residual. Position residuals are in
+The installed scikit-robot supplies batched FK and geometric Jacobians. Bounded
+trust-region reflective optimization fits the combined residual, with a
+[CUDA sparse solver](#gpu-sparse-solver) or the historical SciPy CPU reference.
+Position residuals are in
 metres; orientation residuals are rotation-matrix differences divided by
 sqrt(2), with configurable radian scales. Acceptance uses geodesic angular
 error, not the matrix residual. URDF bounds are hard constraints; neutral posture
@@ -155,7 +157,8 @@ in the [action log](../logs/2026-10.jsonl)). Failed region fits can retry up to
 three seeded starting postures. All attempts, termination messages and selection
 are recorded; budget termination does not imply either pose failure or optimality.
 IKPy and Robotics Toolbox were considered; their target-pose APIs do not remove
-this shared-base/multiple-target/temporal objective. No dependency was added.
+this shared-base/multiple-target/temporal objective. The original CPU implementation
+added no dependency; the later CUDA backend is described below.
 
 Since 2026-10-21, both retargeting methods use the per-hand observation mask
 `retarget_valid = export_valid & ~motion_infilled`. Infilled hands are missing
@@ -204,6 +207,41 @@ failures, camera position/angle errors, unweighted posture deviation and finite
 consecutive joint-motion statistics accompany timing; the
 baseline has no orientation/head/smoothness objective, so this is a workflow
 comparison rather than an isolated solver benchmark.
+
+### GPU sparse solver
+
+The 2026-10-22 [approved GPU plan](../plans/milestone-3-gpu-ik.md) adds
+`solver_backend: "cuda"` to the default joint configuration. An explicit `cpu`
+selects historical SciPy TRF/LSMR; configurations without the key remain CPU.
+The CLI's `--solver-backend` overrides either setting. GPU setup is documented in
+[environment/README.md](../../../environment/README.md#cuda-trajectory-ik).
+
+[gpu_least_squares.py](../../../src/egocentric_pipeline/gpu_least_squares.py)
+reuses SciPy 1.15.3's bound reflection, Coleman–Li scaling, two-dimensional trust
+region, Jacobian scaling and termination helpers. Its limited driver is adapted
+with the upstream BSD notice because SciPy's public optimizer does not accept a
+custom sparse linear solver. CuPy assembles the scaled sparse normal matrix on
+CUDA; NVIDIA cuDSS factors and solves it in float64. This replaces LSMR's
+iterative subproblem. Existing scikit-robot FK, residuals, geometric Jacobians,
+small trust-region operations and cuDSS symbolic planning remain on CPU. The
+sample profile attributes 94%/98% of base/trajectory time to LSMR, which motivated
+targeting this step rather than duplicating the inexpensive FK implementation.
+
+Both backends minimize exactly the same objective and keep hard joint/base
+bounds, residual-evaluation budgets, masks, timestamps and demonstration gates.
+Direct normal equations square conditioning; each GPU solve checks a normalized
+backward error (limit 1e-8) and finite results, with explicit failure rather than
+silent fallback. This does not guarantee forward accuracy or the same local
+optimum. Direct versus iterative steps and GPU floating-point ordering can change
+termination, restart selection and final trajectories, including between repeats.
+
+Per-stage reports identify backend, device, precision, linear-solve time/count
+and maximum backward error; run reports record GPU package versions. Cold CUDA
+initialization and kernel compilation are included in wall time. Timings compare
+complete solver paths, including their different linear algorithms, rather than
+isolating a GPU-versus-CPU hardware effect. Version 5 trajectory/viewer contracts
+remain unchanged. The [iPhone evidence](../experiments/retargeting-iphone.md)
+owns measured speed and quality results.
 
 ## Part 3 placement and IK contract
 

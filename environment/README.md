@@ -433,6 +433,32 @@ and review figures. Annotation uses the existing system `ffmpeg`/`ffprobe`; no
 OpenCV, simulator or model inference is required. Browser automation used for
 acceptance is local validation tooling, not a production dependency.
 
+### CUDA trajectory IK
+
+The joint/base solver defaults to `solver_backend: "cuda"`. Install the optional
+[GPU requirements](workspace-gpu-requirements.txt) into the workspace environment:
+
+```bash
+uv pip install --python .venv-workspace/bin/python -r environment/workspace-gpu-requirements.txt
+uv pip check --python .venv-workspace/bin/python
+```
+
+This adds CuPy 13.6.0 and NVIDIA nvmath-python 0.6.0 (cuDSS 0.5.0.16), with CUDA
+12 runtime libraries, without replacing CPU PyTorch. An NVIDIA driver and device
+access are required. On this machine set `CUDA_PATH=/usr/local/cuda-12.9`; use
+`env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1` when launching
+the workspace Python to avoid unrelated environments' libraries and excessive
+CPU threading. CuPy compiles and caches kernels on first use; cold timings include
+that overhead. GPU-restricted sandboxes require device access outside the sandbox.
+
+Use `--method joint --solver-backend cuda` with `scripts/retarget_trajectory.py`
+to override an older saved configuration, or `--solver-backend cpu` for the SciPy
+reference. Missing backend keys retain historical CPU behavior; there is no
+automatic CPU fallback. Objective weights and output formats are unchanged.
+The [solver contract](../knowledge/wiki/topics/stage-3-retargeting.md#gpu-sparse-solver)
+explains which operations run on CUDA and the numerical tradeoffs. CPU-only
+workspace sampling and visualization do not require the GPU packages.
+
 Original hand meshes in the Part 3 viewer reuse SMPL-X 0.1.28 and the same pinned
 Chumpy revision as gravity alignment. These evaluate saved MANO poses on CPU;
 they do not rerun HaWoR. Chumpy needs the build tools and package-specific build

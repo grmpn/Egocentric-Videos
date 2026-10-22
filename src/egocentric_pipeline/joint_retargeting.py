@@ -18,6 +18,8 @@ from .run_metadata import utc_now, write_json
 
 
 def validate_settings(settings):
+    if settings.get("solver_backend", "cpu") not in ("cpu", "cuda"):
+        raise ValueError("solver_backend must be 'cpu' or 'cuda'")
     for key in ("camera_displacement_m", "camera_sustain_s", "minimum_episode_s", "ik_tolerance_m",
                 "orientation_tolerance_rad", "joint_jump_report_rad", "heading_min_norm",
                 "base_translation_radius_m", "position_scale_m", "orientation_scale_rad",
@@ -126,6 +128,10 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                       locked_joint_positions_rad={j.name: 0. for j in robot.joint_list if j.name not in model.joint_names},
                       packages={p: importlib.metadata.version(p) for p in ("scikit-robot", "numpy", "scipy", "torch", "viser", "smplx")},
                       seeds=seeds, timing={"loading_s": time.perf_counter() - started})
+        report["solver_backend"] = settings.get("solver_backend", "cpu")
+        if report["solver_backend"] == "cuda":
+            report["packages"].update({p: importlib.metadata.version(p) for p in
+                                       ("cupy-cuda12x", "nvmath-python", "nvidia-cudss-cu12")})
         candidates, episodes, transforms, frame_passed = [], [], [], []
         solve_started = time.perf_counter()
         for seed_index, seed in enumerate(seeds):

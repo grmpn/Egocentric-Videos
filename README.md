@@ -391,9 +391,14 @@ camera-motion region. Camera position guides segmentation and median initializat
 its error is diagnostic only. Human wrists match a point 5 cm toward the gripper
 fingers from each robot wrist, in rotating tool coordinates.
 No workspace build is required for this method.
+Joint fitting defaults to CUDA sparse solves. Install the
+[GPU requirements](environment/README.md#cuda-trajectory-ik) first, or pass
+`--solver-backend cpu` to use the existing CPU solver. Old saved configurations
+without a backend key retain CPU behavior; pass `--solver-backend cuda` to rerun
+them on the GPU.
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
+env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
     --method joint \
     --alignment-directory outputs/gravity/part-1-20261014/bundled \
     --asset-root data/models/purdue-alex-assets \

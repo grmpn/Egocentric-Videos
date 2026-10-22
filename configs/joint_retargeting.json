@@ -1,4 +1,5 @@
 {
+  "solver_backend": "cuda",
   "camera_smoothing_sigma_s": 0.05,
   "camera_displacement_m": 0.3,
   "camera_sustain_s": 0.3,

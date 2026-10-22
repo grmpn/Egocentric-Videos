@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — approved GPU solver, matched benchmark and latest smoothing-configuration rerun.
 - [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — original fitting and infill-exclusion evidence preserved; approved stronger-smoothing experiment verified.
 - [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved robot-wrist-to-human-wrist matching, verified with regenerated workspaces and playback; fulfilled.
 - [Milestone 3, Part 3: Placement and segmentation](plans/milestone-3-part-3-placement-and-segmentation.md) — approved camera segmentation, base fitting, region expansion and positional IK acceptance; fulfilled.

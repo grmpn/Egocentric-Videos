@@ -16,9 +16,19 @@ from egocentric_pipeline.robot_workspace import load_robot
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def require_cuda():
+    cp = pytest.importorskip("cupy")
+    pytest.importorskip("nvmath")
+    try:
+        if cp.cuda.runtime.getDeviceCount() == 0:
+            pytest.skip("CUDA tests require an NVIDIA GPU")
+    except cp.cuda.runtime.CUDARuntimeError:
+        pytest.skip("CUDA tests require NVIDIA driver/device access")
+
+
 @pytest.fixture
 def settings():
-    return json.loads((ROOT / "configs/joint_retargeting.json").read_text())
+    return dict(json.loads((ROOT / "configs/joint_retargeting.json").read_text()), solver_backend="cpu")
 
 
 @pytest.fixture
@@ -136,6 +146,58 @@ def test_source_timed_derivatives_and_rotations_near_pi():
         temporal_operators([0, 0, 1])
 
 
+def test_cuda_bound_optimum_and_evaluation_budget():
+    require_cuda()
+    from scipy import sparse
+    from scipy.optimize import least_squares
+    from egocentric_pipeline.gpu_least_squares import least_squares_cuda
+
+    matrix = sparse.csr_matrix([[2., .3, 0.], [.2, 3., .4], [0., .2, 1.]])
+    target = np.array([3., -4., .2])
+    initial, lower, upper = np.zeros(3), np.full(3, -.5), np.full(3, .5)
+    evaluate = lambda x: (matrix @ x - target, matrix)
+    cpu = least_squares(lambda x: evaluate(x)[0], initial, jac=lambda x: matrix,
+                        bounds=(lower, upper), x_scale="jac", ftol=1e-10, xtol=1e-10, gtol=1e-10)
+    gpu = least_squares_cuda(evaluate, initial, lower, upper, 80, 1e-10)
+    np.testing.assert_allclose(gpu.x, cpu.x, atol=2e-7)
+    assert gpu.cost == pytest.approx(cpu.cost, rel=1e-10)
+    assert np.all(gpu.x >= lower) and np.all(gpu.x <= upper)
+    assert gpu.success and gpu.gpu["linear_solves"] > 0
+    assert gpu.gpu["max_linear_backward_error"] < 1e-10
+    stopped = least_squares_cuda(evaluate, initial, lower, upper, 1, 1e-10)
+    np.testing.assert_array_equal(stopped.x, initial)
+    assert stopped.nfev == 1 and not stopped.success
+
+
+@pytest.mark.parametrize("fixed", [False, True])
+def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed):
+    require_cuda()
+    m, _, _ = model
+    times = np.array([0., .03, .07, .10, .15])
+    target_q = np.tile(m.neutral, (len(times), 1)) + .025
+    p, r, _, _, cameras = m.forward(target_q)
+    base = np.array([.3, -.2, .1, .4])
+    rotation = base_transform(base)[:3, :3].T
+    wrists, rotations, cameras = p @ rotation.T + base[:3], rotation @ r, rotation @ cameras
+    valid = np.array([[True, True], [False, True], [False, False], [True, False], [True, True]])
+    wrists[~valid], rotations[~valid] = np.nan, np.nan
+    costs = []
+    for backend in ("cpu", "cuda"):
+        options = dict(settings, solver_backend=backend)
+        problem = PoseProblem(m, wrists, rotations, cameras, valid, times, options,
+                              fixed_base=base if fixed else None, smooth=fixed)
+        b, q, info = problem.solve(base, np.tile(m.neutral, (len(times), 1)), 150)
+        residual, jacobian = problem.evaluate(q.ravel() if fixed else np.r_[b, q.ravel()])
+        assert np.isfinite(residual).all() and np.isfinite(jacobian.data).all()
+        assert np.all(q >= m.lower) and np.all(q <= m.upper)
+        assert info["cost"] == pytest.approx(.5 * residual @ residual, rel=1e-12)
+        assert info["solver_backend"] == backend
+        costs.append(info["cost"])
+    # Nonlinear local paths need not match joint-for-joint; this near-neutral
+    # problem should reach the same objective basin at the same tolerances.
+    assert costs[1] <= costs[0] * 1.01 + 1e-8
+
+
 def test_neutral_mano_palm_frames_preserve_hand_identity():
     from egocentric_pipeline.hand_geometry import mano_palm_frames, load_mano_model, reconstruct_mano
     paths = [ROOT / "external/HaWoR" / p for p in (
@@ -212,11 +274,15 @@ def aligned_input(tmp_path, model):
     return directory, source, offsets, rs
 
 
-def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings):
+@pytest.mark.parametrize("backend", ["cpu", "cuda"])
+def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings, backend):
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.retargeting_comparison import compare_quality
 
     directory, source, offsets, rs = aligned_input
+    if backend == "cuda":
+        require_cuda()
+    settings["solver_backend"] = backend
     settings.update(base_max_evaluations=30, trajectory_max_evaluations=30, fit_attempts=1)
     eligible = source["export_valid"] & ~source["motion_infilled"]
     outputs = []

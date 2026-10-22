@@ -15,17 +15,23 @@ def main():
     parser.add_argument("--workspace-directory", type=Path, help="Required for the workspace baseline")
     parser.add_argument("--output-directory", type=Path, required=True, help="New directory; existing outputs are preserved")
     parser.add_argument("--config", type=Path, help="Defaults to the selected method's configuration")
+    parser.add_argument("--solver-backend", choices=("cpu", "cuda"),
+                        help="Override joint fitting backend; old configurations without a backend use CPU")
     parser.add_argument("--robot-config", type=Path, default=root / "configs/robot_workspace.json")
     parser.add_argument("--regions-only", action="store_true", help="Baseline comparison on unexpanded heuristic regions")
     parser.add_argument("--asset-root", type=Path, help="Override the location of the same pinned robot assets")
     args = parser.parse_args()
+    if args.solver_backend is not None and args.method != "joint":
+        parser.error("--solver-backend applies only to --method joint")
     if args.method == "joint":
         from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
         if args.asset_root is None:
             parser.error("--asset-root is required for joint fitting")
+        settings = read_json(args.config or root / "configs/joint_retargeting.json")
+        if args.solver_backend is not None:
+            settings["solver_backend"] = args.solver_backend
         report = joint_retarget_trajectory(args.alignment_directory, args.output_directory,
-            read_json(args.config or root / "configs/joint_retargeting.json"),
-            read_json(args.robot_config), args.asset_root)
+            settings, read_json(args.robot_config), args.asset_root)
     else:
         if args.workspace_directory is None:
             parser.error("--workspace-directory is required for workspace fitting")
