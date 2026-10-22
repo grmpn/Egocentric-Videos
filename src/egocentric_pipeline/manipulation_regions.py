@@ -50,6 +50,27 @@ def camera_segments(camera, timestamps, settings):
     return smooth, segments
 
 
+def retained_regions(seeds, timestamps, merge_adjacent=False):
+    """Merge exact adjacency only after duration filtering; retain seed indices.
+
+    The original segmentation diagnostics (including discarded intervals) stay
+    untouched. The first seed index also preserves RNG seeds for unmerged runs.
+    """
+    edges = frame_edges(timestamps)
+    regions = []
+    for index, seed in enumerate(seeds):
+        if not seed["retained"]:
+            continue
+        if merge_adjacent and regions and regions[-1]["stop"] == seed["start"]:
+            region = regions[-1]
+            region["stop"] = seed["stop"]
+            region["seed_indices"].append(index)
+            region["duration_s"] = float(edges[region["stop"]] - edges[region["start"]])
+        else:
+            regions.append(dict(seed, seed_indices=[index]))
+    return regions
+
+
 def interval_metrics(start, stop, passed, observed, edges, settings):
     """Assess a contiguous interval; the percentage comparison is strictly >."""
     if not 0 <= start < stop <= len(passed):

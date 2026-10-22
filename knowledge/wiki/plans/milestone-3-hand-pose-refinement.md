@@ -1,6 +1,6 @@
 # Milestone 3 — Hand-pose smoothing and region continuity
 
-Draft revision 1 · 2026-10-22 · Awaiting user approval; planning request recorded as `20261022-pose-refinement-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 1 · 2026-10-22 · User approval recorded as `20261022-pose-refinement-003` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 

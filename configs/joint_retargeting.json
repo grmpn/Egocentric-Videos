@@ -1,5 +1,12 @@
 {
   "solver_backend": "cuda",
+  "hand_position_window_s": 0.0,
+  "hand_orientation_window_s": 0.0,
+  "hand_filter_polyorder": 2,
+  "base_initialization_weight": 0.0,
+  "base_prior_translation_scale_m": 1.0,
+  "base_prior_yaw_scale_rad": 1.0,
+  "merge_adjacent_regions": false,
   "camera_smoothing_sigma_s": 0.05,
   "camera_displacement_m": 0.3,
   "camera_sustain_s": 0.3,

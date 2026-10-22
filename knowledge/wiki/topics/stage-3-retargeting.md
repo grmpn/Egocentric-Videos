@@ -243,6 +243,56 @@ isolating a GPU-versus-CPU hardware effect. Version 5 trajectory/viewer contract
 remain unchanged. The [iPhone evidence](../experiments/retargeting-iphone.md)
 owns measured speed and quality results.
 
+### Hand targets, base prior and adjacent regions
+
+Implemented 2026-10-22 under the [approved refinement plan](../plans/milestone-3-hand-pose-refinement.md).
+New configuration keys default to disabled behavior, including when omitted from
+historical configurations. The installed SciPy 1.15.3 provides the filter and
+coefficients; no dependency was added.
+
+`hand_position_window_s` and `hand_orientation_window_s` independently enable
+centred offline Savitzky–Golay filtering; zero disables either. Windows round to
+the nearest odd number of samples (ties upward), which must exceed
+`hand_filter_polyorder` (default 2). Enabled filtering requires uniform timestamps
+(atol 1e-7 s, rtol 1e-5); disable both windows for irregular input. Each hand's
+contiguous `retarget_valid` span inside a retained region is independent. A span
+shorter than the requested window is unchanged and reported. XYZ uses SciPy
+`mode="interp"`; endpoints evaluate a polynomial on the first/last full window.
+For orientation sample i, filter local rotation vectors `log(R_i.T @ R_j)` with
+SciPy coefficients at i, then compose `R_i @ exp(filtered vector)`. This avoids
+global angle wraparound and quaternion sign ambiguity. Windows containing a
+relative angle within 1e-6 rad of pi leave that sample unchanged and report it;
+shorter windows may be necessary for such motion. Polynomial recovery is exact
+for XYZ and fixed-axis angular polynomials; general noncommuting rotations are
+an approximation. Negative coefficients can introduce overshoot. Filtering is
+not evidence of more accurate reconstructed motion.
+
+`merge_adjacent_regions` merges chains only after the existing duration filter,
+with exact equality of previous stop and next start. Discarded intervals remain
+gaps. `seeds` preserves the heuristic diagnostics; `regions` adds the fitted
+intervals and contributing `seed_indices`. Initialization is recomputed over each
+merged interval. Alternate-frame sampling restarts at its beginning, and the
+first contributing seed index controls its RNG. Merging changes sampling parity
+and restarts for later constituent intervals; comparisons must disclose this.
+
+`base_initialization_weight` multiplies a four-component residual: XYZ offset
+from median-camera initialization divided by `base_prior_translation_scale_m`,
+and wrapped yaw offset divided by `base_prior_yaw_scale_rad`. Both scales default
+to 1. The cost is half the squared residual norm. Zero weight omits the term.
+It applies only during base fitting, with unchanged hard bounds and camera
+rotation terms; fixed-base trajectory fitting has no prior. Each attempt reports
+prior cost, translation drift and wrapped yaw drift. There is no per-frame
+camera-position objective.
+
+Report schema 6 preserves all existing fields and raw-observation semantics.
+`wrist_position_filtered_aligned_m [T,2,3]` and
+`wrist_orientation_filtered_aligned [T,2,3,3]` save separate fitting targets;
+`filtered_ik_residual_m [T,2]` and `filtered_orientation_residual_rad [T,2]` save
+errors against those targets. Missing eligible observations remain NaN. Existing
+residuals, success masks, restart pose-ranking and demonstration gates use the
+**original** eligible observations. The viewer continues to display those raw
+observations and saved robot poses. Both CPU and CUDA paths share this objective.
+
 ## Part 3 placement and IK contract
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.

@@ -136,11 +136,12 @@ class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
     def __init__(self, model, wrists, orientations, cameras, valid, times, settings,
-                 *, fixed_base=None, smooth=False):
+                 *, fixed_base=None, smooth=False, base_reference=None):
         self.model, self.settings = model, settings
         self.wrists, self.orientations, self.cameras = wrists, orientations, cameras
         self.valid, self.n = valid, len(times)
         self.fixed_base = fixed_base
+        self.base_reference = base_reference
         self.base_variables = 4 if fixed_base is None else 0
         self.width = self.n * 16 + self.base_variables
         if smooth:
@@ -154,6 +155,19 @@ class PoseProblem:
             settings["neutral_weight"] * np.tile(model.neutral, self.n),
             np.zeros(self.regularizer.shape[0] - self.n * 16)]
         self.cached_x = None
+
+    def base_prior(self, base):
+        """Weighted XYZ/metres and wrapped yaw/radians; absent in fixed-base IK."""
+        weight = self.settings.get("base_initialization_weight", 0.) if self.base_variables else 0.
+        if not weight:
+            return np.empty(0), np.empty(0)
+        if self.base_reference is None:
+            raise ValueError("Base prior requires the median-camera initialization as base_reference")
+        delta = base - self.base_reference
+        delta[3] = np.arctan2(np.sin(delta[3]), np.cos(delta[3]))
+        scales = np.array([self.settings.get("base_prior_translation_scale_m", 1.)] * 3
+                          + [self.settings.get("base_prior_yaw_scale_rad", 1.)])
+        return weight * delta / scales, weight / scales
 
     def unpack(self, x):
         return (x[:4] if self.base_variables else self.fixed_base,
@@ -223,6 +237,12 @@ class PoseProblem:
         rows.append(reg.row + row_start)
         cols.append(reg.col + self.base_variables)
         values.append(reg.data)
+        prior, prior_derivative = self.base_prior(base)
+        if len(prior):
+            residuals.append(prior)
+            rows.append(row_start + reg.shape[0] + np.arange(4))
+            cols.append(np.arange(4))
+            values.append(prior_derivative)
         residual = np.concatenate(residuals)
         jac = sparse.coo_matrix((np.concatenate(values), (np.concatenate(rows), np.concatenate(cols))),
                                 shape=(len(residual), self.width)).tocsr()
@@ -233,6 +253,8 @@ class PoseProblem:
 
     def solve(self, initial_base, initial_q, max_evaluations):
         if self.base_variables:
+            self.base_reference = np.asarray(initial_base).copy()
+            self.cached_x = None
             radius = np.array([self.settings["base_translation_radius_m"]] * 3 + [np.pi])
             lower = np.r_[initial_base - radius, np.tile(self.model.lower, self.n)]
             upper = np.r_[initial_base + radius, np.tile(self.model.upper, self.n)]
@@ -255,17 +277,21 @@ class PoseProblem:
         else:
             raise ValueError("solver_backend must be 'cpu' or 'cuda'")
         base, q = self.unpack(result.x)
+        prior, _ = self.base_prior(base)
         return base, q, {"wall_time_s": time.perf_counter() - started, "evaluations": result.nfev,
                         "jacobian_evaluations": result.njev, "cost": float(result.cost),
                         "optimality": float(result.optimality), "converged": bool(result.success),
                         "message": str(result.message), "global_optimum_claimed": False,
+                        "base_prior_cost": float(.5 * prior @ prior),
                         "solver_backend": backend, **({"gpu": result.gpu} if backend == "cuda" else {})}
 
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
-               *, seed_index=0):
+               *, seed_index=0, raw_wrists=None, raw_orientations=None):
     """Fit alternate frames, freeze base, interpolate seeds and refine all frames."""
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
+    raw_wrists = wrists if raw_wrists is None else raw_wrists
+    raw_orientations = orientations if raw_orientations is None else raw_orientations
     sampled = np.arange(0, len(timestamps), settings["base_frame_stride"])
     attempts, best, best_rank = [], None, None
     for attempt in range(settings["fit_attempts"]):
@@ -284,9 +310,9 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
         p, r, *_ = model.forward(after)
         rotation = base_transform(base)[:3, :3].T
-        pe = np.linalg.norm(p @ rotation.T + base[:3] - wrists, axis=-1)
+        pe = np.linalg.norm(p @ rotation.T + base[:3] - raw_wrists, axis=-1)
         oe = np.full(valid.shape, np.nan)
-        oe[valid] = rotation_error((rotation @ r)[valid], orientations[valid])
+        oe[valid] = rotation_error((rotation @ r)[valid], raw_orientations[valid])
         passed = valid.any(axis=1) & ((valid & (pe <= settings["ik_tolerance_m"])
                                       & (oe <= settings["orientation_tolerance_rad"])) | ~valid).all(axis=1)
         metrics = interval_metrics(0, len(timestamps), passed, valid.any(axis=1), frame_edges(timestamps), settings)
@@ -295,6 +321,8 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
                 "trajectory_frame_count": len(timestamps),
                 "trajectory_initialization": "source-time linear joint interpolation; endpoint hold",
                 "joint_base": first, "fixed_base_trajectory": second, "pose": metrics,
+                "base_drift_translation_m": float(np.linalg.norm(base[:3] - initial_base[:3])),
+                "base_drift_yaw_rad": float(np.arctan2(np.sin(base[3] - initial_base[3]), np.cos(base[3] - initial_base[3]))),
                 "before_smoothing": motion_metrics(before, timestamps),
                 "after_smoothing": motion_metrics(after, timestamps)}
         attempts.append(info)

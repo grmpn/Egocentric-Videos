@@ -10,7 +10,8 @@ from scipy.spatial.transform import Rotation
 
 from .base_placement import base_transform, transform_points
 from .hand_geometry import mano_palm_frames
-from .manipulation_regions import camera_segments, frame_edges, interval_metrics
+from .hand_pose_filtering import smooth_hand_targets, validate_filter_settings
+from .manipulation_regions import camera_segments, frame_edges, interval_metrics, retained_regions
 from .pose_retargeting import PoseModel, fit_region, initialize_base, rotation_error
 from .retargeting import load_alignment, save_retargeting
 from .robot_workspace import load_robot, verify_asset_source
@@ -18,6 +19,15 @@ from .run_metadata import utc_now, write_json
 
 
 def validate_settings(settings):
+    validate_filter_settings(settings)
+    if type(settings.get("merge_adjacent_regions", False)) is not bool:
+        raise ValueError("merge_adjacent_regions must be boolean")
+    for key in ("base_prior_translation_scale_m", "base_prior_yaw_scale_rad"):
+        if not np.isfinite(settings.get(key, 1.)) or settings.get(key, 1.) <= 0:
+            raise ValueError(f"{key} must be positive finite")
+    weight = settings.get("base_initialization_weight", 0.)
+    if not np.isfinite(weight) or weight < 0:
+        raise ValueError("base_initialization_weight must be nonnegative finite")
     if settings.get("solver_backend", "cpu") not in ("cpu", "cuda"):
         raise ValueError("solver_backend must be 'cpu' or 'cuda'")
     for key in ("camera_displacement_m", "camera_sustain_s", "minimum_episode_s", "ik_tolerance_m",
@@ -56,7 +66,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
-    report = {"schema_version": 5, "method": "joint_base", "status": "running", "started_at": utc_now(),
+    report = {"schema_version": 6, "method": "joint_base", "status": "running", "started_at": utc_now(),
               "command": [sys.executable, *sys.argv], "settings": settings, "robot_settings": robot_settings,
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "asset_root": str(Path(asset_root).resolve()), "hand_order": ["left", "right"],
@@ -66,7 +76,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
               "limitations": "Kinematic fit only; collision, dynamics, scale, gravity and floor height unverified.",
-              "camera_position_use": "segmentation, initialization and diagnostic errors only",
+              "camera_position_use": "segmentation, median initialization, optional shared-base prior and diagnostic errors; no per-frame tracking",
+              "acceptance_targets": "original eligible observations, including restart pose-ranking",
               "camera_position_objective": False,
               "position_mapping": "human wrist matches robot wrist origin + tool rotation @ wrist_offset_tool_m; physical wrist and TCP saved separately",
               "base_initialization": "yaw from component-wise median of normalized horizontal optical forward vectors; XYZ from median camera position minus rotated neutral camera offset",
@@ -95,12 +106,17 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                 or not np.allclose(np.linalg.det(cameras), 1., atol=1e-6)):
             raise ValueError("Camera rotations must be finite proper optical-to-aligned rotations")
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
+        regions = retained_regions(seeds, times, settings.get("merge_adjacent_regions", False))
+        filtered_positions, filtered_rotations, filtering = smooth_hand_targets(
+            wrists_aligned, orientations, valid, times, regions, settings)
         edges = frame_edges(times)
         derived = {
             "retarget_valid": valid,
             "camera_position_smoothed_m": smooth,
             "rotation_mano_from_palm": offsets,
             "wrist_orientation_target_aligned": orientations,
+            "wrist_position_filtered_aligned_m": filtered_positions,
+            "wrist_orientation_filtered_aligned": filtered_rotations,
             "episode_id": np.full(n, -1, np.int32),
             "joint_solution_rad": np.full((n, 16), np.nan),
             "joint_solution_before_smoothing_rad": np.full((n, 16), np.nan),
@@ -119,6 +135,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             "camera_rotation_error_rad": np.full(n, np.nan),
             "ik_residual_m": np.full((n, 2), np.nan),
             "orientation_residual_rad": np.full((n, 2), np.nan),
+            "filtered_ik_residual_m": np.full((n, 2), np.nan),
+            "filtered_orientation_residual_rad": np.full((n, 2), np.nan),
             "ik_success": np.zeros((n, 2), bool),
             "joint_step_rad": np.full((n, 2), np.nan),
             "joint_jump": np.zeros((n, 2), bool),
@@ -127,26 +145,29 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                       joint_names=model.joint_names, joint_lower_rad=model.lower.tolist(), joint_upper_rad=model.upper.tolist(),
                       locked_joint_positions_rad={j.name: 0. for j in robot.joint_list if j.name not in model.joint_names},
                       packages={p: importlib.metadata.version(p) for p in ("scikit-robot", "numpy", "scipy", "torch", "viser", "smplx")},
-                      seeds=seeds, timing={"loading_s": time.perf_counter() - started})
+                      seeds=seeds, regions=regions, hand_target_filtering=filtering,
+                      timing={"loading_s": time.perf_counter() - started})
         report["solver_backend"] = settings.get("solver_backend", "cpu")
         if report["solver_backend"] == "cuda":
             report["packages"].update({p: importlib.metadata.version(p) for p in
                                        ("cupy-cuda12x", "nvmath-python", "nvidia-cudss-cu12")})
         candidates, episodes, transforms, frame_passed = [], [], [], []
         solve_started = time.perf_counter()
-        for seed_index, seed in enumerate(seeds):
-            if not seed["retained"]:
-                continue
+        for seed in regions:
+            seed_index = seed["seed_indices"][0]
             sl = slice(seed["start"], seed["stop"])
             v = valid[sl]
             if not v.any():
                 seed["reason"] = "no_observed_wrists"
+                for index in seed["seed_indices"]:
+                    seeds[index]["reason"] = "no_observed_wrists"
                 continue
             initial = initialize_base(arrays["camera_position_aligned_m"][sl], cameras[sl], model,
                                       settings["heading_min_norm"])
-            pose, before, q, info = fit_region(model, wrists_aligned[sl],
-                                               orientations[sl], cameras[sl], v, times[sl], initial, settings,
-                                               seed_index=seed_index)
+            pose, before, q, info = fit_region(model, filtered_positions[sl],
+                                               filtered_rotations[sl], cameras[sl], v, times[sl], initial, settings,
+                                               seed_index=seed_index, raw_wrists=wrists_aligned[sl],
+                                               raw_orientations=orientations[sl])
             transform = base_transform(pose)
             wrists = transform_points(wrists_aligned[sl], transform)
             target_rotations = transform[:3, :3] @ orientations[sl]
@@ -192,6 +213,11 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             derived["camera_rotation_base_from_optical"][sl] = hr
             derived["camera_rotation_error_rad"][sl] = rotation_error(hr, transform[:3, :3] @ cameras[sl])
             derived["ik_residual_m"][sl], derived["orientation_residual_rad"][sl] = errors, angles
+            derived["filtered_ik_residual_m"][sl] = np.linalg.norm(
+                p - transform_points(filtered_positions[sl], transform), axis=-1)
+            filtered_angles = np.full(v.shape, np.nan)
+            filtered_angles[v] = rotation_error(r[v], (transform[:3, :3] @ filtered_rotations[sl])[v])
+            derived["filtered_orientation_residual_rad"][sl] = filtered_angles
             derived["ik_success"][sl] = success
             steps = np.max(np.abs(np.diff(q[:, :14].reshape(-1, 2, 7), axis=0)), axis=-1)
             derived["joint_step_rad"][seed["start"] + 1:seed["stop"]] = steps

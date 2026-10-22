@@ -170,7 +170,8 @@ def test_cuda_bound_optimum_and_evaluation_budget():
 
 
 @pytest.mark.parametrize("fixed", [False, True])
-def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed):
+@pytest.mark.parametrize("prior_weight", [0., .3])
+def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight):
     require_cuda()
     m, _, _ = model
     times = np.array([0., .03, .07, .10, .15])
@@ -183,7 +184,7 @@ def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed):
     wrists[~valid], rotations[~valid] = np.nan, np.nan
     costs = []
     for backend in ("cpu", "cuda"):
-        options = dict(settings, solver_backend=backend)
+        options = dict(settings, solver_backend=backend, base_initialization_weight=prior_weight)
         problem = PoseProblem(m, wrists, rotations, cameras, valid, times, options,
                               fixed_base=base if fixed else None, smooth=fixed)
         b, q, info = problem.solve(base, np.tile(m.neutral, (len(times), 1)), 150)
@@ -275,7 +276,8 @@ def aligned_input(tmp_path, model):
 
 
 @pytest.mark.parametrize("backend", ["cpu", "cuda"])
-def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings, backend):
+@pytest.mark.parametrize("refinement", [False, True])
+def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings, backend, refinement):
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.retargeting_comparison import compare_quality
 
@@ -284,10 +286,18 @@ def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp
         require_cuda()
     settings["solver_backend"] = backend
     settings.update(base_max_evaluations=30, trajectory_max_evaluations=30, fit_attempts=1)
+    if refinement:
+        settings.update(hand_position_window_s=.5, hand_orientation_window_s=.5,
+                        hand_filter_polyorder=1, base_initialization_weight=.3, merge_adjacent_regions=True)
     eligible = source["export_valid"] & ~source["motion_infilled"]
     outputs = []
     for index in range(2):
         if index:
+            if not refinement:
+                # Omitted new keys reproduce explicit disabled settings exactly.
+                for key in list(settings):
+                    if key.startswith(('hand_position_window', 'hand_orientation_window', 'hand_filter_', 'base_prior_', 'base_initialization_')) or key == 'merge_adjacent_regions':
+                        del settings[key]
             # Excluded NaN/absurd geometry must not influence either fitting stage.
             source["wrist_position_aligned_m"][~eligible] = np.nan
             source["root_orientation_aligned_axis_angle"][~eligible] = 1e6
@@ -303,11 +313,14 @@ def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp
         np.testing.assert_array_equal(arrays["joint_prediction"], ~eligible)
         assert not arrays["ik_success"][~eligible].any()
         for name in ("wrist_position_base_m", "wrist_orientation_target_aligned", "wrist_orientation_target_base",
-                     "ik_residual_m", "orientation_residual_rad"):
+                     "ik_residual_m", "orientation_residual_rad", "wrist_position_filtered_aligned_m",
+                     "wrist_orientation_filtered_aligned", "filtered_ik_residual_m", "filtered_orientation_residual_rad"):
             assert np.isnan(arrays[name][~eligible]).all(), name
         assert np.isfinite(arrays["joint_solution_rad"]).all()
         assert report["episodes"][0]["region"]["observed_frames"] == 6
         assert report["episodes"][0]["region"]["longest_nonpassing_s"] >= 1 / 3 - 1e-10
+        expected = eligible & (arrays['ik_residual_m'] <= settings['ik_tolerance_m']) & (arrays['orientation_residual_rad'] <= settings['orientation_tolerance_rad'])
+        np.testing.assert_array_equal(arrays['ik_success'], expected)
         quality = compare_quality(output, model[0], offsets, settings)
         assert quality["observed_hand_frames"] == int(eligible.sum())
         assert quality["observed_frames"] == 6
@@ -469,3 +482,68 @@ def test_hand_weights_scale_only_matching_residuals(model, settings, fixed):
         factors[start + 9:start + 36] = .5
     np.testing.assert_allclose(weaker, residual * factors, atol=1e-12)
     np.testing.assert_allclose(weaker_jac.toarray(), jac.toarray() * factors[:, None], atol=1e-12)
+
+
+def test_base_prior_derivatives_wraparound_and_fixed_stage_exclusion(model, settings):
+    m, _, _ = model
+    q = np.tile(m.neutral, (3, 1))
+    p, r, _, _, cameras = m.forward(q)
+    times, valid = np.arange(3) / 30, np.ones((3, 2), bool)
+    reference = np.array([.3, -.2, .1, np.pi - .02])
+    base = reference + np.array([.1, -.3, .2, -2*np.pi + .04])
+    options = dict(settings, base_initialization_weight=.3,
+                   base_prior_translation_scale_m=.5, base_prior_yaw_scale_rad=.2)
+    for fixed in (False, True):
+        kwargs = dict(fixed_base=base if fixed else None, base_reference=reference)
+        original = PoseProblem(m, p, r, cameras, valid, times, settings, **kwargs)
+        problem = PoseProblem(m, p, r, cameras, valid, times, options, **kwargs)
+        x = q.ravel() if fixed else np.r_[base, q.ravel()]
+        res, jac = problem.evaluate(x)
+        old, old_jac = original.evaluate(x)
+        if fixed:
+            np.testing.assert_array_equal(res, old)
+            np.testing.assert_array_equal(jac.toarray(), old_jac.toarray())
+        else:
+            np.testing.assert_array_equal(res[:-4], old)
+            np.testing.assert_array_equal(jac[:-4].toarray(), old_jac.toarray())
+            np.testing.assert_allclose(res[-4:], .3 * np.array([.1/.5, -.3/.5, .2/.5, .04/.2]))
+            for j in range(4):
+                step = np.eye(len(x))[j] * 1e-6
+                numerical = (problem.evaluate(x + step)[0] - problem.evaluate(x - step)[0]) / 2e-6
+                np.testing.assert_allclose(jac[:, j].toarray().ravel(), numerical, atol=2e-6)
+
+
+def test_restart_ranking_uses_original_observations(model, settings, monkeypatch):
+    m, _, _ = model
+    times = np.arange(8) / 6
+    target_q = np.tile(m.neutral, (8, 1))
+    raw_q = target_q.copy()
+    raw_q[:, 3] += .2
+    raw_q[:, 10] += .2
+    p, r, _, _, cameras = m.forward(target_q)
+    raw_p, raw_r, *_ = m.forward(raw_q)
+    calls = []
+    def solve(problem, base, initial_q, budget):
+        attempt = len(calls) // 2
+        calls.append(problem.fixed_base is not None)
+        q = target_q.copy() if attempt == 0 else raw_q.copy()
+        if problem.fixed_base is None:
+            q[1::2, 3] += .02  # before is rougher, so raw-pose ranking decides
+        return base, q, {'cost': 0. if attempt == 0 else 100.}
+    monkeypatch.setattr(PoseProblem, 'solve', solve)
+    settings.update(base_frame_stride=1, fit_attempts=2)
+    _, _, q, info = fit_region(m, p, r, cameras, np.ones((8, 2), bool), times, np.zeros(4), settings,
+                               raw_wrists=raw_p, raw_orientations=raw_r)
+    assert info['selected_attempt'] == 1
+    assert info['attempts'][0]['pose']['passing_frames'] == 0
+    assert info['pose']['passing_frames'] == 8
+    np.testing.assert_array_equal(q, raw_q)
+
+
+@pytest.mark.parametrize('key,value', [('hand_position_window_s', -1), ('hand_orientation_window_s', np.nan),
+                                     ('hand_filter_polyorder', 1.5), ('merge_adjacent_regions', 1),
+                                     ('base_initialization_weight', -1), ('base_prior_translation_scale_m', 0),
+                                     ('base_prior_yaw_scale_rad', np.inf)])
+def test_invalid_refinement_settings(settings, key, value):
+    with pytest.raises(ValueError):
+        validate_settings(dict(settings, **{key: value}))
