@@ -288,7 +288,7 @@ Report schema 6 preserves all existing fields and raw-observation semantics.
 `wrist_position_filtered_aligned_m [T,2,3]` and
 `wrist_orientation_filtered_aligned [T,2,3,3]` save separate fitting targets;
 `filtered_ik_residual_m [T,2]` and `filtered_orientation_residual_rad [T,2]` save
-errors against those targets. Missing eligible observations remain NaN. Existing
+errors against those targets. Ineligible observations remain NaN. Existing
 residuals, success masks, restart pose-ranking and demonstration gates use the
 **original** eligible observations. The viewer continues to display those raw
 observations and saved robot poses. Both CPU and CUDA paths share this objective.

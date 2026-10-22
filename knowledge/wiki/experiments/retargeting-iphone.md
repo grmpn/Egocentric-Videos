@@ -423,3 +423,10 @@ with `--config outputs/retargeting/gpu-ik-20261022/config.json` and a new output
 directory. CUDA is now the default backend; default temporal weights remain
 0.001/0.0005. Review the pose/smoothing tradeoff and region reset before further
 tuning. Focused repository cleanup remains due before another milestone.
+
+## Hand-pose refinement, 2026-10-22
+
+The subsequent [controlled refinement study](hand-pose-refinement.md) adds configurable
+Savitzky–Golay targets, a median-base prior and adjacent-region merging. It preserves
+this CUDA run as its baseline and documents raw versus smoothed target pass rates,
+full motion/pose tradeoffs and the all-experiment viewer.

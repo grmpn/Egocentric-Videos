@@ -288,7 +288,11 @@ class PoseProblem:
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
                *, seed_index=0, raw_wrists=None, raw_orientations=None):
-    """Fit alternate frames, freeze base, interpolate seeds and refine all frames."""
+    """Fit alternate frames, freeze base, interpolate seeds and refine all frames.
+
+    With filtered targets, pass raw_wrists/raw_orientations for observation-based
+    acceptance and restart ranking. Omitted raw arrays retain legacy behavior.
+    """
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
     raw_wrists = wrists if raw_wrists is None else raw_wrists
     raw_orientations = orientations if raw_orientations is None else raw_orientations

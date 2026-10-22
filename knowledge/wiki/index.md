@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — approved: Savitzky–Golay hand-target filtering, median-camera base prior and adjacent retained-region merging; implementing.
+- [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — fulfilled: configurable target filtering, base prior and merging; controlled comparisons and full rerun, with pose/motion tradeoffs.
 - [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — fulfilled GPU solver, matched benchmark and latest smoothing-configuration rerun.
 - [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — original fitting and infill-exclusion evidence preserved; approved stronger-smoothing experiment verified.
 - [Milestone 3: Wrist alignment amendment](plans/milestone-3-wrist-alignment.md) — approved robot-wrist-to-human-wrist matching, verified with regenerated workspaces and playback; fulfilled.
@@ -25,6 +25,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
+- [Hand-pose refinement evidence](experiments/hand-pose-refinement.md) — seven controlled variants, full iPhone rerun, raw/smoothed pass rates and all-experiment viewer.
 - [iPhone retargeting evidence](experiments/retargeting-iphone.md) — full demonstration, infill exclusion, 1,000× temporal-weight comparison and verified CUDA rerun (6.29× faster solve).
 - [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — original benchmark and subsequent experiments, including gripper-offset/hand-weight results and visual evidence; posture, motion and orientation tradeoffs.
 - [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
