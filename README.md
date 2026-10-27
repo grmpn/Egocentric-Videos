@@ -466,8 +466,10 @@ opening. **Save mapping snapshot** preserves each adjustment in a new child
 directory; reopen that directory with the same viewer command. **Manual grippers**
 enables independent position, orientation and opening controls without IK.
 
-The initial grasp center is the fingertip midpoint; closing direction is thumb
-MCP→index MCP, with wrist→midpoint(thumb MCP, index MCP) defining the orthogonalized forward direction.
+The grasp center is the fingertip midpoint. Shift the wrist construction point
+2.5 cm toward the thumb, then preserve its direction to the thumb/index MCP
+midpoint as forward. Project the MCP closing direction perpendicular to forward.
+Adjust **Wrist shift toward thumb (m)** in the viewer; snapshots preserve it.
 Opening is continuous, 0 closed / 1 open, fitted to right iPhone frame 92 → 0.03
 and frame 119 → 0.33. The fully-open distance is extrapolated from these examples.
 The default settings are in [gripper_mapping.json](configs/gripper_mapping.json).

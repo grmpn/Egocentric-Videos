@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from egocentric_pipeline.gripper_mapping import load_mapping, map_grasp_landmarks, save_mapping
+from egocentric_pipeline.gripper_mapping import grasp_forward_segment, load_mapping, map_grasp_landmarks, save_mapping
 from egocentric_pipeline.run_metadata import read_json
 
 
@@ -42,15 +42,16 @@ def test_analytic_axes_center_and_continuous_opening(settings):
     mapped = map_grasp_landmarks(points, np.ones((5, 2), bool), settings)
     assert mapped["mapping_valid"].all()
     for hand, sign in enumerate((-1, 1)):
+        expected = np.array([[12/13, -5/13, 0], [5*sign/13, 12*sign/13, 0], [0, 0, sign]])
         np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][:, hand, :3, :3],
-                                   np.tile(np.diag([1, sign, sign]), (5, 1, 1)), atol=1e-15)
+                                   np.tile(expected, (5, 1, 1)), atol=1e-15)
     np.testing.assert_allclose(mapped["transform_aligned_from_tcp"][..., :3, 3], np.tile([.15, 0, 0], (5, 2, 1)))
     np.testing.assert_allclose(mapped["gripper_action"], np.repeat([[0], [.2], [.5], [1], [1]], 2, axis=1))
     np.testing.assert_array_equal(points, original)
 
 
 def test_original_five_landmark_mapping_remains_reproducible(settings):
-    legacy = dict(settings)
+    legacy = {k: v for k, v in settings.items() if k not in ("orientation_priority", "wrist_thumb_offset_m")}
     legacy.pop("forward_axis")
     points = landmarks([.03])[..., :5, :].copy()
     points[..., 0, 2] = 0.
@@ -59,12 +60,13 @@ def test_original_five_landmark_mapping_remains_reproducible(settings):
         np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
                                    np.diag([1, sign, sign]), atol=1e-15)
     with pytest.raises(ValueError, match="requires index PIP"):
-        map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+        map_grasp_landmarks(points, np.ones((1, 2), bool), {**legacy, "forward_axis": "index_mcp_to_pip"})
 
 
 def test_six_landmark_thumb_mapping_remains_reproducible(settings):
     points = landmarks([.03])[..., :6, :]
-    legacy = {**settings, "forward_axis": "thumb_mcp_to_ip"}
+    legacy = {k: v for k, v in settings.items() if k not in ("orientation_priority", "wrist_thumb_offset_m")}
+    legacy["forward_axis"] = "thumb_mcp_to_ip"
     mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), legacy)
     x = np.array([2., 0., 1.]) / np.sqrt(5.)
     for hand, sign in enumerate((-1, 1)):
@@ -72,17 +74,37 @@ def test_six_landmark_thumb_mapping_remains_reproducible(settings):
         np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
                                    np.stack([x, y, np.cross(x, y)], axis=-1), atol=1e-15)
     with pytest.raises(ValueError, match="requires index PIP"):
-        map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+        map_grasp_landmarks(points, np.ones((1, 2), bool), {**legacy, "forward_axis": "index_mcp_to_pip"})
 
 
 def test_index_segment_mapping_remains_reproducible(settings):
     points = landmarks([.03])
-    mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+    legacy = {k: v for k, v in settings.items() if k not in ("orientation_priority", "wrist_thumb_offset_m")}
+    mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), {**legacy, "forward_axis": "index_mcp_to_pip"})
     x = np.array([.8, 0., -.6])
     for hand, sign in enumerate((-1, 1)):
         y = np.array([0., sign, 0.])
         np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
                                    np.stack([x, y, np.cross(x, y)], axis=-1), atol=1e-15)
+
+
+def test_thumbward_shift_and_axis_priority(settings):
+    points = landmarks([.05])
+    original = points.copy()
+    start, end = grasp_forward_segment(points, settings)
+    np.testing.assert_allclose(start[0], [[0, .025, 0], [0, -.025, 0]], atol=1e-15)
+    np.testing.assert_allclose(end[0], [[.06, 0, 0], [.06, 0, 0]], atol=1e-15)
+    np.testing.assert_array_equal(points, original)
+    observed = np.ones((1, 2), bool)
+    current = map_grasp_landmarks(points, observed, settings)
+    direction = end - start
+    np.testing.assert_allclose(current["transform_aligned_from_grasp"][..., :3, 0],
+                               direction / np.linalg.norm(direction, axis=-1, keepdims=True), atol=1e-15)
+    # Keeping closing exact cancels lateral shifts; preserve that historical rule.
+    unshifted = map_grasp_landmarks(points, observed, {**settings, "wrist_thumb_offset_m": 0., "orientation_priority": "closing"})
+    closing_first = map_grasp_landmarks(points, observed, {**settings, "orientation_priority": "closing"})
+    np.testing.assert_allclose(closing_first["transform_aligned_from_grasp"], unshifted["transform_aligned_from_grasp"], atol=1e-15)
+    assert not np.allclose(current["transform_aligned_from_grasp"], unshifted["transform_aligned_from_grasp"])
 
 
 def test_opening_matches_user_selected_iphone_examples(settings):
@@ -120,7 +142,8 @@ def test_invalid_geometry_and_missing_hand_isolation(settings):
     observed = np.ones((6, 2), bool)
     observed[0, 0] = False
     points[1, 0, 2] = points[1, 0, 1]  # Zero closing direction.
-    points[2, 0, 0] = (points[2, 0, 1] + points[2, 0, 2]) / 2  # Zero forward direction.
+    closing = points[2, 0, 2] - points[2, 0, 1]
+    points[2, 0, 0] = (points[2, 0, 1] + points[2, 0, 2]) / 2 + settings["wrist_thumb_offset_m"] * closing / np.linalg.norm(closing)
     points[3, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 0, 0]]
     points[4, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 1e-8, 0]]
     points[5, 0, 4] = np.nan
@@ -138,6 +161,8 @@ def test_invalid_geometry_and_missing_hand_isolation(settings):
     {"minimum_axis_sine": 0.}, {"minimum_axis_length_m": -1.},
     {"tcp_offset_grasp_m": [[0, 0, 0]]}, {"tcp_rotation_grasp_xyz_rad": [[0, 0, 0], [0, 0, float("inf")]]},
     {"forward_axis": "unknown"},
+    {"orientation_priority": "unknown"}, {"wrist_thumb_offset_m": -.01},
+    {"wrist_thumb_offset_m": float("nan")}, {"forward_axis": "thumb_mcp_to_ip"},
 ])
 def test_reject_invalid_configuration(settings, change):
     with pytest.raises(ValueError):

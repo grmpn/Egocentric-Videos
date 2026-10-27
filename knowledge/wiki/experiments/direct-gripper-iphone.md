@@ -1,15 +1,56 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 4 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 5 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
-## Wrist→MCP-midpoint forward direction
+## Thumbward wrist shift with forward priority
+
+Revision 5 shifts the wrist construction point **2.5 cm toward the thumb** along
+index-MCP→thumb-MCP, then aims at the MCP midpoint. The user explicitly selected
+preserving forward and making closing perpendicular. The shared implementation
+and compatibility rules are in the [mapping contract](../topics/direct-gripper-mapping.md).
+The [current viewer](http://localhost:8091) loads the
+[shifted result](../../../outputs/retargeting/gripper-wrist-offset-20261027/mapping/mapping_report.json).
+
+[22 focused tests](../../../outputs/retargeting/gripper-wrist-offset-20261027/tests.log)
+and the [296-frame / 470-sample audit](../../../outputs/retargeting/gripper-wrist-offset-20261027/audit.json)
+pass. Every eligible shift is 0.025 m (numerical error below 4e−17 m), forward is
+preserved and the rotation is proper. Original fields/landmarks, grasp centers
+and opening actions are unchanged; right frames 92/119 still command **0.03/0.33**.
+All four earlier saved mappings recompute with their original rules.
+
+Median orientation change from revision 4 is **39.99°** (range 34.41–44.44°).
+This includes the new axis priority: with forward priority held constant, the
+2.5 cm shift itself changes orientation by a median **13.92°** (12.47–15.72°).
+The maximum ordinary-FK TCP discrepancy remains **2.78e−17**. Neither the wrist
+surface location nor physical contact alignment is calibrated.
+
+[Browser verification](../../../outputs/retargeting/gripper-wrist-offset-20261027/browser.json)
+passes full playback, endpoints/gaps, opening anchors, shift editing, snapshot save
+and reset to 0.025 m, with no page errors. Visually checked
+[frame 92](../../../outputs/retargeting/gripper-wrist-offset-20261027/right-frame-92.png),
+[the shifted wrist and forward line](../../../outputs/retargeting/gripper-wrist-offset-20261027/right-landmarks-119.png)
+and [both hands](../../../outputs/retargeting/gripper-wrist-offset-20261027/final-viewer.png).
+A [reload check](../../../outputs/retargeting/gripper-wrist-offset-20261027/reload.json)
+verifies the original five-landmark run and a new 0.03 m control-validation
+snapshot. Both displayed markers/segments match the selected offset and forward
+direction. The live baseline remains **0.025 m**, paused at frame **119**;
+the 0.03 m snapshot is validation evidence, not an adopted tuning change.
+
+To reopen:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-wrist-offset-20261027/mapping --port 8091
+```
+
+## Previous wrist→MCP-midpoint direction
 
 Revision 4 follows the user's subsequent request: forward points from wrist to
 midpoint(thumb MCP, index MCP), projected perpendicular to the closing axis.
 The closing axis, fingertip grasp center and fitted opening normalization remain
-unchanged. The [current viewer](http://localhost:8091) loads the
+unchanged. Its viewer loaded the
 [midpoint result](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/mapping/mapping_report.json).
 
 [17 focused tests](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/tests.log)
@@ -24,7 +65,7 @@ The maximum rotation-element difference is **3.34e−16**.
 pass. Visually inspected [frame 92](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/right-frame-92.png),
 [the midpoint construction](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/right-landmarks-119.png)
 and the [both-hand view at frame 119](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/final-viewer.png).
-The live viewer is paused at frame 119. Physical contact calibration remains unverified.
+The midpoint result was reviewed at frame 119. Physical contact calibration remains unverified.
 
 To reopen:
 
@@ -204,7 +245,7 @@ recomputed mapping against saved outputs. The initial image audit required
 converting browser-canvas RGBA to RGB; the corrected comparison passes.
 
 The original baseline remains saved at the paths above; the live viewer now
-shows revision 4 described earlier. Its first-pass review deliverable was complete,
+shows revision 5 described earlier. Its first-pass review deliverable was complete,
 with later user feedback addressed by the refinement. The temporary baseline
 snapshot viewer was stopped after its reload verification.
 

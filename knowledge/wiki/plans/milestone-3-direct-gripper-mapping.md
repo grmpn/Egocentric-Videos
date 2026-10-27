@@ -1,6 +1,6 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 4 · 2026-10-27 · User-requested wrist-to-MCP-midpoint direction recorded as `20261027-gripper-midpoint-001` in the [action log](../logs/2026-10.jsonl). The preceding index-axis trial is preserved in local evidence. Opening normalization is unchanged.
+Approved revision 5 · 2026-10-27 · User-requested thumbward wrist shift and explicit forward-axis priority recorded as `20261027-gripper-offset-001` in the [action log](../logs/2026-10.jsonl). Opening normalization is unchanged.
 
 ## Objective and deliverable
 
@@ -23,9 +23,10 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
   geometry and `export_valid & ~motion_infilled`; hide missing hands/grippers and
   label gaps. Document and visually check MANO wrist/MCP/tip landmark selection.
 - **First mapping:** implement the user's humanEgo-inspired description. Grasp
-  center is the thumbtip/index-tip midpoint. Set +Y to normalized thumb-MCP →
-  index-MCP (closing axis). Project wrist → midpoint(thumb-MCP, index-MCP) perpendicular to +Y and
-  normalize for +X (forward); +Z = +X × +Y. Mark near-zero/collinear constructions
+  center is the thumbtip/index-tip midpoint. Shift the wrist **0.025 m toward
+  the thumb**, along index-MCP → thumb-MCP. Set +X to the normalized direction
+  from that shifted wrist to midpoint(thumb-MCP, index-MCP). Preserve +X; project
+  thumb-MCP → index-MCP perpendicular to it for +Y; +Z = +X × +Y. Mark near-zero/collinear constructions
   invalid instead of inventing a pose. Verify handedness and axis signs on both
   hands. Initially align the URDF's nominal TCP with the human grasp center;
   expose a fixed local translation/rotation correction for alignment tuning.
@@ -51,8 +52,8 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
 - Check standalone/full-model gripper geometry agreement at representative
   openings, mimic coupling, limits, center placement, proper rotations, rigid-frame
   equivariance, action clipping, left/right identity and invalid-data isolation.
-- Preserve reload of earlier results. Verify the revised wrist-to-MCP-midpoint forward axis
-  and user-confirmed opening anchors.
+- Preserve reload of earlier results. Verify the thumbward shift, preserved forward direction, proper perpendicular closing
+  axis and unchanged opening anchors.
 - Replay all 296 frames without invoking IK. Inspect both hands at representative
   opening/closing poses, region endpoints and missing-data transitions; verify
   RGB/frame synchronization and viewer controls.

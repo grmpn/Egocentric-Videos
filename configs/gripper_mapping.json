@@ -1,5 +1,7 @@
 {
   "forward_axis": "wrist_to_mcp_midpoint",
+  "orientation_priority": "forward",
+  "wrist_thumb_offset_m": 0.025,
   "closed_distance_m": 0.010637088979430357,
   "open_distance_m": 0.3586942059948014,
   "minimum_axis_length_m": 1e-06,

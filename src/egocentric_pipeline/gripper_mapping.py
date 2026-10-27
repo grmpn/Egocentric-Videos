@@ -19,6 +19,13 @@ def validate_settings(settings):
     if settings.get("forward_axis", "wrist_to_thumb_mcp") not in (
             "wrist_to_thumb_mcp", "thumb_mcp_to_ip", "index_mcp_to_pip", "wrist_to_mcp_midpoint"):
         raise ValueError("forward_axis must be wrist_to_thumb_mcp, thumb_mcp_to_ip, index_mcp_to_pip or wrist_to_mcp_midpoint")
+    if settings.get("orientation_priority", "closing") not in ("closing", "forward"):
+        raise ValueError("orientation_priority must be closing or forward")
+    offset = settings.get("wrist_thumb_offset_m", 0.)
+    if not np.isfinite(offset) or offset < 0:
+        raise ValueError("wrist_thumb_offset_m must be nonnegative and finite")
+    if offset and settings.get("forward_axis") != "wrist_to_mcp_midpoint":
+        raise ValueError("A wrist thumb offset requires forward_axis wrist_to_mcp_midpoint")
     closed, opened = settings["closed_distance_m"], settings["open_distance_m"]
     if not np.isfinite([closed, opened]).all() or not 0 <= closed < opened:
         raise ValueError("Require 0 <= closed_distance_m < open_distance_m")
@@ -70,13 +77,38 @@ def reconstruct_grasp_geometry(arrays, model_paths, *, landmark_count=7):
     return landmarks, meshes
 
 
+def grasp_forward_segment(landmarks, settings):
+    """Start/end positions [...,3] in aligned metres, shared by mapping/display.
+
+    Shift the wrist toward the thumb along index-MCP→thumb-MCP. This is a
+    construction point; the original MANO wrist and fingertip center stay fixed.
+    """
+    points = np.asarray(landmarks, dtype=float)
+    wrist, thumb, index = (points[..., i, :] for i in range(3))
+    axis = settings.get("forward_axis", "wrist_to_thumb_mcp")
+    if axis == "wrist_to_mcp_midpoint":
+        closing = index - thumb
+        length = np.linalg.norm(closing, axis=-1, keepdims=True)
+        thumbward = -closing / np.maximum(length, settings["minimum_axis_length_m"])
+        return wrist + settings.get("wrist_thumb_offset_m", 0.) * thumbward, (thumb + index) / 2
+    if axis == "index_mcp_to_pip":
+        if points.shape[-2] != 7:
+            raise ValueError("index_mcp_to_pip requires index PIP landmarks; regenerate the mapping")
+        return index, points[..., 6, :]
+    if axis == "thumb_mcp_to_ip":
+        if points.shape[-2] < 6:
+            raise ValueError("thumb_mcp_to_ip requires thumb IP landmarks; regenerate the mapping")
+        return thumb, points[..., 5, :]
+    return wrist, thumb
+
+
 def map_grasp_landmarks(landmarks, observed, settings):
     """Map [T,2,7,3] aligned landmarks to [T,2,4,4] column-vector transforms.
 
-    +Y is thumb MCP→index MCP; +X projects the configured forward direction
-    perpendicular to +Y; +Z=X×Y. Missing forward_axis preserves the original
-    wrist→thumb MCP convention and five-point saved runs. Local corrections
-    are T_grasp_from_TCP. No interpolation,
+    +X follows the configured forward segment; +Y follows thumb MCP→index MCP.
+    The priority axis is preserved and the other projected perpendicular to it;
+    +Z=X×Y. Older settings default to closing priority, zero wrist shift and
+    wrist→thumb MCP. Local corrections are T_grasp_from_TCP. No interpolation,
     filtering, sign flips or IK. Missing/degenerate outputs are NaN.
     """
     validate_settings(settings)
@@ -85,31 +117,27 @@ def map_grasp_landmarks(landmarks, observed, settings):
     if (observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool
             or points.shape not in tuple((*observed.shape, n, 3) for n in (5, 6, 7))):
         raise ValueError("Expected landmarks [T,2,5|6|7,3] and boolean observed [T,2]")
-    wrist, thumb, index, thumb_tip, index_tip = np.moveaxis(points[..., :5, :], 2, 0)
-    forward_axis = settings.get("forward_axis", "wrist_to_thumb_mcp")
-    if forward_axis == "wrist_to_mcp_midpoint":
-        forward = (thumb + index) / 2 - wrist
-    elif forward_axis == "index_mcp_to_pip":
-        if points.shape[2] != 7:
-            raise ValueError("index_mcp_to_pip requires index PIP landmarks; regenerate the mapping")
-        forward = points[..., 6, :] - index
-    elif forward_axis == "thumb_mcp_to_ip":
-        if points.shape[2] < 6:
-            raise ValueError("thumb_mcp_to_ip requires thumb IP landmarks; regenerate the mapping")
-        forward = points[..., 5, :] - thumb
-    else:
-        forward = thumb - wrist
+    _, thumb, index, thumb_tip, index_tip = np.moveaxis(points[..., :5, :], 2, 0)
+    start, end = grasp_forward_segment(points, settings)
+    forward = end - start
     closing = index - thumb
     lengths = np.linalg.norm(closing, axis=-1)
     forward_lengths = np.linalg.norm(forward, axis=-1)
     eps = settings["minimum_axis_length_m"]
-    y = closing / np.maximum(lengths[..., None], eps)
-    orthogonal = forward - np.sum(forward * y, axis=-1)[..., None] * y
+    if settings.get("orientation_priority", "closing") == "forward":
+        x = forward / np.maximum(forward_lengths[..., None], eps)
+        orthogonal = closing - np.sum(closing * x, axis=-1)[..., None] * x
+        y = orthogonal / np.maximum(np.linalg.norm(orthogonal, axis=-1, keepdims=True), eps)
+        secondary_lengths = lengths
+    else:
+        y = closing / np.maximum(lengths[..., None], eps)
+        orthogonal = forward - np.sum(forward * y, axis=-1)[..., None] * y
+        x = orthogonal / np.maximum(np.linalg.norm(orthogonal, axis=-1, keepdims=True), eps)
+        secondary_lengths = forward_lengths
     orthogonal_lengths = np.linalg.norm(orthogonal, axis=-1)
-    sine = orthogonal_lengths / np.maximum(forward_lengths, eps)
+    sine = orthogonal_lengths / np.maximum(secondary_lengths, eps)
     valid = (observed & np.isfinite(points).all(axis=(-1, -2)) & (lengths > eps)
              & (forward_lengths > eps) & (orthogonal_lengths > eps) & (sine > settings["minimum_axis_sine"]))
-    x = orthogonal / np.maximum(orthogonal_lengths[..., None], eps)
     grasp = np.full((*observed.shape, 4, 4), np.nan)
     grasp[valid] = np.eye(4)
     rotation = np.stack((x, y, np.cross(x, y)), axis=-1)
