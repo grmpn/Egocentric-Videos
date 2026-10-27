@@ -461,16 +461,17 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gr
 ```
 
 Open the printed local URL. Use **Left closeup** / **Right closeup** and the
-visibility controls to inspect both tip correspondences. **Save mapping snapshot**
+visibility controls to inspect the MCP/index-PIP construction plane. **Save mapping snapshot**
 preserves the mapping in a new child directory; reopen it with the same command.
 **Manual grippers** enables independent pose/opening controls without arm IK.
 
-The default solves opening from actual gripper tip separation, then places both
-mesh tip markers on the human thumbtip and index tip. The true wrist→thumb MCP
-direction resolves rotation around the fingertip line. The fixed nominal TCP may
-move relative to the human tip midpoint. No model scaling or opening clipping is
-used; unreachable/degenerate mappings are hidden and labeled. The viewer shows
-tip markers and positional errors. Older runs retain their prior tuning controls.
+The default jaw axis follows thumb MCP→index MCP. Forward is index MCP→index PIP
+projected perpendicular to the jaw axis; both lie in the three-landmark plane.
+The third axis is their cross product. Gripper tip midpoint follows the human
+fingertip midpoint; opening remains geometry-derived from fingertip separation.
+The fixed nominal TCP is separate. Individual tip offsets are expected with this
+orientation and displayed alongside midpoint error. Unreachable/degenerate mappings
+are hidden and labeled; older runs retain their original behavior.
 
 Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original MANO
 geometry and timestamps are preserved; physical contact remains uncalibrated.

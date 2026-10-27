@@ -1,5 +1,5 @@
 {
-  "mapping_mode": "fingertip_correspondence",
+  "mapping_mode": "mcp_plane",
   "distal_tip_local_m": [
     0.057395,
     0.0,

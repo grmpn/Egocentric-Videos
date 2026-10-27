@@ -45,6 +45,8 @@ class GripperMappingViewer:
         self.arrays, self.report = load_mapping(directory)
         self.settings = copy.deepcopy(self.report["settings"])
         self.exact_tips = self.settings.get("mapping_mode") == "fingertip_correspondence"
+        self.mcp_plane = self.settings.get("mapping_mode") == "mcp_plane"
+        self.kinematic_opening = self.exact_tips or self.mcp_plane
         self.report["mano_models"] = [str(Path(p).resolve()) for p in (mano_models or self.report["mano_models"])]
         self.report["asset_root"] = str(Path(asset_root or self.report["asset_root"]).resolve())
         point_count = self.arrays["landmarks_aligned_m"].shape[2]
@@ -84,6 +86,9 @@ class GripperMappingViewer:
         if self.exact_tips:
             forward_label = "true wrist → thumb MCP"
             rule = "Both tips matched. Fingertip line preserved; wrist direction resolves twist."
+        if self.mcp_plane:
+            forward_label = "index MCP → index PIP, projected in MCP plane"
+            rule = "Jaw: thumb MCP → index MCP. Tip midpoint matched."
         gui.add_markdown(f"Forward direction: **{forward_label}**\n\n{rule}")
         first, last = self.arrays["frame_index"][[0, -1]]
         self.frame = gui.add_slider("Source frame", min=int(first), max=int(last), step=1,
@@ -104,22 +109,25 @@ class GripperMappingViewer:
             gui.add_markdown("Axes: X red (forward), Y green (closing), Z blue.\n\n"
                              "Landmarks: wrist white, MCPs yellow, thumbtip pink, index tip green; thumb IP orange and index PIP purple when present. "
                              "Small cyan sphere: nominal gripper TCP. " +
-                             ("Cyan tip spheres: gripper tip markers, coincident with human fingertips." if self.exact_tips else
+                             ("Yellow triangle: thumb MCP / index MCP / index PIP plane. Cyan spheres: gripper tips; individual offsets are expected." if self.mcp_plane else
+                              "Cyan tip spheres: gripper tip markers, coincident with human fingertips." if self.exact_tips else
                               "White sphere: shifted wrist construction point."))
         with gui.add_folder("Mapping adjustments", expand_by_default=False):
-            gui.add_markdown("Opening and pose are solved from both fingertips. "
+            gui.add_markdown("Jaw follows the MCP line; forward lies in the MCP/index-PIP plane. "
+                             "Tip midpoint and separation follow the fingertips." if self.mcp_plane else
+                             "Opening and pose are solved from both fingertips. "
                              "Tip markers are the centers of the distal mesh edges." if self.exact_tips else
                              "Offsets are relative to each human grasp frame. "
                              "Opening: 0 closed, 1 open. Distance thresholds are adjustable.")
-            self.closed = gui.add_number("Closed distance (m)", initial_value=self.settings.get("closed_distance_m", 0.), min=0., step=.005, visible=not self.exact_tips)
-            self.opened = gui.add_number("Open distance (m)", initial_value=self.settings.get("open_distance_m", .1), min=.001, step=.005, visible=not self.exact_tips)
+            self.closed = gui.add_number("Closed distance (m)", initial_value=self.settings.get("closed_distance_m", 0.), min=0., step=.005, visible=not self.kinematic_opening)
+            self.opened = gui.add_number("Open distance (m)", initial_value=self.settings.get("open_distance_m", .1), min=.001, step=.005, visible=not self.kinematic_opening)
             self.wrist_offset = gui.add_number("Wrist shift toward thumb (m)", initial_value=self.settings.get("wrist_thumb_offset_m", 0.),
                                                min=0., step=.005, visible=self.midpoint_forward)
             self.offsets, self.rotations = [], []
             for hand, side in enumerate(("Left", "Right")):
-                self.offsets.append(gui.add_vector3(f"{side} TCP offset (m)", initial_value=self.settings.get("tcp_offset_grasp_m", np.zeros((2,3)))[hand], step=.005, visible=not self.exact_tips))
-                self.rotations.append(gui.add_vector3(f"{side} TCP rotation (deg)", initial_value=np.rad2deg(self.settings.get("tcp_rotation_grasp_xyz_rad", np.zeros((2,3)))[hand]), step=5., visible=not self.exact_tips))
-            self.reset = gui.add_button("Reset to saved settings", visible=not self.exact_tips)
+                self.offsets.append(gui.add_vector3(f"{side} TCP offset (m)", initial_value=self.settings.get("tcp_offset_grasp_m", np.zeros((2,3)))[hand], step=.005, visible=not self.kinematic_opening))
+                self.rotations.append(gui.add_vector3(f"{side} TCP rotation (deg)", initial_value=np.rad2deg(self.settings.get("tcp_rotation_grasp_xyz_rad", np.zeros((2,3)))[hand]), step=5., visible=not self.kinematic_opening))
+            self.reset = gui.add_button("Reset to saved settings", visible=not self.kinematic_opening)
             self.save = gui.add_button("Save mapping snapshot")
             self.save_status = gui.add_markdown("Snapshots preserve the current settings and all mapped frames in a new directory.")
         with gui.add_folder("Detached gripper controls", expand_by_default=False):
@@ -135,12 +143,12 @@ class GripperMappingViewer:
                 self.manual_positions.append(gui.add_vector3(f"{side} position (m)", initial_value=pose[:3, 3], step=.01, disabled=True))
                 self.manual_rotations.append(gui.add_vector3(f"{side} rotation (deg)", initial_value=Rotation.from_matrix(pose[:3, :3]).as_euler("xyz", degrees=True), step=5., disabled=True))
                 self.manual_actions.append(gui.add_slider(f"{side} opening", min=0., max=1., step=.01, initial_value=1., disabled=True))
-        gui.add_markdown(("Mesh tip correspondence is geometric. " if self.exact_tips else "Nominal TCP and opening scale are uncalibrated. ") +
+        gui.add_markdown(("Tip markers use the gripper mesh. " if self.kinematic_opening else "Nominal TCP and opening scale are uncalibrated. ") +
                          "Missing/infilled hands are hidden. "
                          "Physical grasp accuracy remains unverified.")
         self.hand_handles, self.robot_handles, self.grasp_axes, self.tcp_axes = [], [], [], []
         self.landmarks, self.lines, self.tcp_markers, self.gizmos, self.wrist_markers = [], [], [], [], []
-        self.tip_markers = []
+        self.tip_markers, self.plane_handles = [], []
         for hand, side in enumerate(("left", "right")):
             verts, faces = self.meshes[hand]
             self.hand_handles.append(self.server.scene.add_mesh_simple(f"/{side}/mano", vertices=np.zeros_like(verts[0]), faces=faces,
@@ -153,6 +161,9 @@ class GripperMappingViewer:
                         faces=mesh.faces, color=(185, 194, 205), side="double", visible=False)
                     handles.append((link, handle))
             self.robot_handles.append(handles)
+            self.plane_handles.append(self.server.scene.add_mesh_simple(f"/{side}/mcp_plane",
+                vertices=np.zeros((3, 3), np.float32), faces=np.array([[0, 1, 2]]),
+                color=(255, 220, 70), opacity=.22, side="double", visible=False))
             self.grasp_axes.append(self.server.scene.add_frame(f"/{side}/grasp", axes_length=.045, axes_radius=.0015, visible=False))
             self.tcp_axes.append(self.server.scene.add_frame(f"/{side}/tcp", axes_length=.025, axes_radius=.001, visible=False))
             self.tcp_markers.append(self.server.scene.add_icosphere(f"/{side}/tcp_marker", radius=.004, color=(70, 240, 230), visible=False))
@@ -223,7 +234,7 @@ class GripperMappingViewer:
 
     def remap(self):
         with self.lock:
-            if self.exact_tips:
+            if self.kinematic_opening:
                 self.save.disabled = self.manual.value
                 self.render()
                 return
@@ -332,17 +343,22 @@ class GripperMappingViewer:
                 if visible:
                     self.tcp_markers[hand].position = pose[:3, 3]
                 for tip, marker in enumerate(self.tip_markers[hand]):
-                    marker.visible = visible and self.exact_tips and self.show_landmarks.value
+                    marker.visible = visible and self.kinematic_opening and self.show_landmarks.value
                     if marker.visible:
                         marker.position = self.grippers[hand].tip_positions(self.settings["distal_tip_local_m"])[tip]
                 self.landmarks[hand].visible = self.lines[hand].visible = enabled and observed and self.show_landmarks.value
                 self.wrist_markers[hand].visible = self.landmarks[hand].visible and self.midpoint_forward and self.settings.get("wrist_thumb_offset_m", 0.) > 0
+                self.plane_handles[hand].visible = self.landmarks[hand].visible and self.mcp_plane
                 if observed:
                     points = self.arrays["landmarks_aligned_m"][i, hand]
                     self.landmarks[hand].points = points
+                    if self.mcp_plane:
+                        self.plane_handles[hand].vertices = points[[1, 2, 6]]
                     start, end = grasp_forward_segment(points, self.settings)
                     segments = np.array([[start, end], points[[1, 2]], points[[3, 4]], [points[0], start]])
-                    if not self.midpoint_forward:
+                    if self.mcp_plane:
+                        segments[3] = points[[1, 6]]
+                    elif not self.midpoint_forward:
                         segments[3] = [points[0], points[0]]
                     self.lines[hand].points = segments
                     self.wrist_markers[hand].position = start
@@ -351,12 +367,17 @@ class GripperMappingViewer:
                 elif valid:
                     distance = self.mapping["fingertip_distance_m"][i, hand]
                     detail = f"{distance * 100:.2f} cm · action **{action:.3f}**" + (" · fully open (clipped)" if action == 1 else "")
-                    if self.exact_tips:
+                    if self.kinematic_opening:
                         error = self.mapping["tip_error_m"][i, hand].max() * 1000
-                        detail += f" · tip error **{error:.4f} mm**"
+                        if self.mcp_plane:
+                            center = self.mapping["gripper_tips_aligned_m"][i, hand].mean(axis=0)
+                            target = self.mapping["transform_aligned_from_grasp"][i, hand, :3, 3]
+                            detail += f" · center error **{np.linalg.norm(center - target) * 1000:.4f} mm** · tip offset **{error:.2f} mm**"
+                        else:
+                            detail += f" · tip error **{error:.4f} mm**"
                 else:
                     detail = "missing/infilled" if not observed else "invalid landmark geometry"
-                    if observed and self.exact_tips and not self.mapping["opening_reachable"][i, hand]:
+                    if observed and self.kinematic_opening and not self.mapping["opening_reachable"][i, hand]:
                         detail = "fingertip separation outside gripper range"
                 details.append(f"{side}: {detail}")
             mode = "Manual gripper preview" if self.manual.value else "Direct hand mapping"

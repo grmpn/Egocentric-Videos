@@ -39,7 +39,7 @@ def grippers():
 
 
 def test_exact_tip_mapping_fk_twist_and_equivariance(grippers):
-    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
     # Includes observed extrema and the user's two reference frames.
     points = landmarks([.003720637467527735, .02107880248989149, .12549593759450284, .15052035605268244, .2799])
     observed = np.ones(points.shape[:2], bool)
@@ -76,7 +76,7 @@ def test_exact_tip_mapping_fk_twist_and_equivariance(grippers):
 
 
 def test_tip_mapping_rejects_unreachable_degenerate_and_missing(grippers):
-    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
     points = landmarks([.05]*5)
     observed = np.ones((5,2), bool)
     observed[0,0] = False
@@ -104,6 +104,56 @@ def landmarks(distances):
                                [.15, -distance / 2 * sign, 0], [.15, distance / 2 * sign, 0],
                                [.10, -.01 * sign, .02], [.10, .01 * sign, -.03]]
     return points
+
+
+def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers):
+    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    points = landmarks([.02107880248989149, .12549593759450284])
+    # Tilt the fingertip line away from the MCP jaw line: individual tips must
+    # differ, while their midpoint and distance remain exact.
+    points[..., 3, 0] += .012
+    points[..., 4, 0] -= .012
+    observed = np.ones((2, 2), bool)
+    mapped = map_grasp_landmarks(points, observed, settings, grippers)
+    previous = map_grasp_landmarks(points, observed, {**settings, "mapping_mode": "fingertip_correspondence"}, grippers)
+    assert mapped["mapping_valid"].all()
+    np.testing.assert_allclose(mapped["gripper_action"], previous["gripper_action"], atol=1e-12)
+    for hand, sign in enumerate((-1, 1)):
+        x, y = np.array([.8, 0., -.6]), np.array([0., sign, 0.])
+        rotation = np.stack([x, y, np.cross(x, y)], axis=-1)
+        for frame in range(2):
+            np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][frame,hand,:3,:3], rotation, atol=1e-14)
+            g = grippers[hand]
+            g.set_opening(mapped["gripper_action"][frame,hand])
+            g.place_tcp(mapped["transform_aligned_from_tcp"][frame,hand])
+            tips = g.tip_positions(settings["distal_tip_local_m"])
+            np.testing.assert_allclose(tips.mean(axis=0), points[frame,hand,3:5].mean(axis=0), atol=1e-12)
+            np.testing.assert_allclose(tips[1]-tips[0], y * mapped["fingertip_distance_m"][frame,hand], atol=1e-12)
+            assert np.linalg.det(g.model.root_link.worldrot()) == pytest.approx(1.)
+    assert mapped["tip_error_m"].min() > .001
+    transform = np.eye(4)
+    transform[:3,:3] = Rotation.from_euler('xyz', [.4, -.6, 2.]).as_matrix()
+    transform[:3,3] = [.5, -.9, .2]
+    moved = map_grasp_landmarks(points @ transform[:3,:3].T + transform[:3,3], observed, settings, grippers)
+    for key in ("transform_aligned_from_grasp", "transform_aligned_from_tcp"):
+        np.testing.assert_allclose(moved[key], transform @ mapped[key], atol=1e-10)
+
+
+def test_mcp_plane_degenerate_and_missing_observations(grippers):
+    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    points = landmarks([.05]*5)
+    observed = np.ones((5,2), bool)
+    observed[0,0] = False
+    points[1,0,2] = points[1,0,1]  # Coincident MCPs.
+    points[2,0,6] = points[2,0,2]  # Coincident index MCP/PIP.
+    points[3,0,6] = points[3,0,2] + (points[3,0,2]-points[3,0,1])  # Collinear plane.
+    points[4,0,4] = points[4,0,3] + [0., 1., 0.]  # Unreachable opening.
+    result = map_grasp_landmarks(points, observed, settings, grippers)
+    assert not result["mapping_valid"][:,0].any()
+    assert result["mapping_valid"][:,1].all()
+    assert np.isnan(result["transform_aligned_from_tcp"][:,0]).all()
+    with pytest.raises(ValueError, match="requires index PIP"):
+        map_grasp_landmarks(points[:,:,:6], observed, settings, grippers)
 
 
 def test_analytic_axes_center_and_continuous_opening(settings):
@@ -283,8 +333,8 @@ def test_detached_gripper_matches_full_model_and_free_tcp_pose():
             gripper.place_tcp(np.zeros((4, 4)))
 
 
-@pytest.mark.parametrize("exact", [False, True])
-def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings, exact, grippers):
+@pytest.mark.parametrize("mode", ["landmark_frame", "fingertip_correspondence", "mcp_plane"])
+def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings, mode, grippers):
     from egocentric_pipeline.hand_geometry import load_mano_model, reconstruct_mano
     from egocentric_pipeline.gripper_visualization import review_rgb
     from smplx.vertex_ids import vertex_ids
@@ -331,8 +381,8 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
         "inputs":{"clip_metadata":{"path":str(clip_path)},"prepared_video":{"path":str(video)},
                   "mano_left":{"path":str(models[0])},"mano_right":{"path":str(models[1])}}}))
     output = tmp_path / "mapping"
-    if exact:
-        settings = read_json(ROOT / "configs/gripper_mapping.json")
+    if mode != "landmark_frame":
+        settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
     config = tmp_path / "mapping-config.json"
     config.write_text(json.dumps(settings))
     command = [sys.executable,str(ROOT / "scripts/map_gripper.py"),"--alignment-directory",str(alignment),
@@ -356,7 +406,7 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
     decoded = review_rgb(report, arrays["frame_index"])
     np.testing.assert_allclose(decoded.mean(axis=(1,2,3)), [30,60,90,120], atol=2)
     tuned = copy.deepcopy(settings)
-    if not exact:
+    if mode == "landmark_frame":
         tuned["open_distance_m"] = .2
     snapshot = tmp_path / "tuned"
     save_mapping(snapshot, arrays, report, tuned)

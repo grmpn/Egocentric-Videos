@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 6 fulfilled: exact two-tip correspondence, FK-derived opening and true-wrist twist direction in the detached first-region viewer.
+- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 7 fulfilled: MCP/index-PIP plane orientation, fingertip-midpoint placement and FK-derived opening in the detached first-region viewer.
 - [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — fulfilled: configurable target filtering, base prior and merging; controlled comparisons and full rerun, with pose/motion tradeoffs.
 - [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — fulfilled GPU solver, matched benchmark and latest smoothing-configuration rerun.
 - [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — original fitting and infill-exclusion evidence preserved; approved stronger-smoothing experiment verified.

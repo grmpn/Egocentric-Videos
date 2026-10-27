@@ -1,17 +1,63 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 6 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 7 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
-## Exact fingertip correspondence
+## MCP/index-PIP plane orientation
+
+Revision 7 follows the user's three-point construction: thumb MCP, index MCP and
+index PIP define the orientation plane; jaw +Y is thumb→index MCP, forward +X is
+in-plane and perpendicular toward PIP, and +Z = +X × +Y. The gripper tip midpoint
+stays at the human fingertip midpoint. Geometry-derived opening is unchanged;
+individual tip correspondence is superseded by the new jaw direction. See the
+[mapping contract](../topics/direct-gripper-mapping.md) for the transform.
+The [current viewer](http://localhost:8091) loads the
+[plane result](../../../outputs/retargeting/gripper-mcp-plane-20261027/mapping/mapping_report.json).
+
+[28 focused tests](../../../outputs/retargeting/gripper-mcp-plane-20261027/tests.log)
+pass, including analytic mirrored plane axes, forward sign, real-FK midpoint and
+jaw placement, frame equivariance, degenerate/missing/unreachable samples, and
+production CLI/snapshots for all three mapping modes. The
+[296-frame audit](../../../outputs/retargeting/gripper-mcp-plane-20261027/audit.json)
+passes for **470 eligible samples** (228 left, 242 right): no degenerate or
+unreachable observations, maximum actual FK midpoint error **1.30e−15 m**,
+proper rotations, original fields/landmarks byte-preserved, unchanged actions and
+all six historical runs reproduced.
+
+Right frames **92 / 119** retain commands **0.063020 / 0.327544**. Their individual
+tip offsets are **11.90 / 5.53 mm** respectively. Across both hands, median offset
+is **10.18 mm**, maximum **36.34 mm**. These are expected consequences of the MCP
+jaw constraint, not midpoint-placement errors.
+
+[Browser verification](../../../outputs/retargeting/gripper-mcp-plane-20261027/browser.json)
+passes full playback/loop, source endpoints/gaps, closeups, separate midpoint/tip
+readouts, snapshots and manual-mode restoration with no page errors. Inspected
+[right frame 92](../../../outputs/retargeting/gripper-mcp-plane-20261027/right-frame-92.png),
+[right frame 119](../../../outputs/retargeting/gripper-mcp-plane-20261027/right-frame-119.png),
+[the construction triangle](../../../outputs/retargeting/gripper-mcp-plane-20261027/right-landmarks-119.png)
+and [left frame 119](../../../outputs/retargeting/gripper-mcp-plane-20261027/left-frame-119.png).
+[Reload checks](../../../outputs/retargeting/gripper-mcp-plane-20261027/reload.json)
+verify the original viewer, exact-tip viewer and new plane snapshot, including
+triangle vertices, displayed forward segment and midpoint. The live viewer is
+paused at **119**, showing both hands. Physical contact, scale, collisions and
+dynamics remain unverified.
+
+To reopen:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-mcp-plane-20261027/mapping --port 8091
+```
+
+## Previous exact fingertip correspondence
 
 Revision 6 follows the user's request to place both gripper tips on the human
 fingertips and resolve the remaining rotation using true wrist→thumb MCP.
 Opening is solved from real gripper FK; the earlier empirical normalization is
 superseded for this trial. See the [mapping contract](../topics/direct-gripper-mapping.md)
 for marker definitions, transform construction and reachable-branch selection.
-The [current viewer](http://localhost:8091) loads the
+The previous viewer loaded the
 [tip-matching result](../../../outputs/retargeting/gripper-tip-match-20261027/mapping/mapping_report.json).
 
 [25 focused tests](../../../outputs/retargeting/gripper-tip-match-20261027/tests.log)
@@ -39,8 +85,7 @@ mode restoration, without page errors. Inspected
 and [left frame 119](../../../outputs/retargeting/gripper-tip-match-20261027/left-frame-119.png).
 [Reload checks](../../../outputs/retargeting/gripper-tip-match-20261027/reload.json)
 verify the original five-landmark viewer and new snapshot, including displayed
-marker positions and the true-wrist construction vector. The live viewer is
-paused at **119**, showing both hands. Physical scale/contact, collisions and
+marker positions and the true-wrist construction vector. That viewer was reviewed at **119**, showing both hands. Physical scale/contact, collisions and
 dynamics remain unverified; this is geometric correspondence between mesh markers.
 
 To reopen:
