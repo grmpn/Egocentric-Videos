@@ -1,6 +1,6 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Draft revision 1 · 2026-10-27 · Not approved; requested in `20261027-gripper-plan-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 1 · 2026-10-27 · User approval recorded as `20261027-gripper-implementation-001` in the [action log](../logs/2026-10.jsonl).
 
 ## Objective and deliverable
 
