@@ -12,10 +12,12 @@ from .retargeting import load_alignment
 from .run_metadata import read_json, utc_now, write_json
 
 
-LANDMARK_NAMES = ("wrist", "thumb_mcp", "index_mcp", "thumb_tip", "index_tip")
+LANDMARK_NAMES = ("wrist", "thumb_mcp", "index_mcp", "thumb_tip", "index_tip", "thumb_ip")
 
 
 def validate_settings(settings):
+    if settings.get("forward_axis", "wrist_to_thumb_mcp") not in ("wrist_to_thumb_mcp", "thumb_mcp_to_ip"):
+        raise ValueError("forward_axis must be wrist_to_thumb_mcp or thumb_mcp_to_ip")
     closed, opened = settings["closed_distance_m"], settings["open_distance_m"]
     if not np.isfinite([closed, opened]).all() or not 0 <= closed < opened:
         raise ValueError("Require 0 <= closed_distance_m < open_distance_m")
@@ -29,17 +31,18 @@ def validate_settings(settings):
             raise ValueError(f"{key} must be finite [2,3], left then right")
 
 
-def reconstruct_grasp_geometry(arrays, model_paths):
-    """Landmarks [T,2,5,3] and left/right (vertices [T,778,3], faces), metres.
+def reconstruct_grasp_geometry(arrays, model_paths, *, include_thumb_ip=True):
+    """Landmarks [T,2,6,3] and left/right (vertices [T,778,3], faces), metres.
 
     MANO native joints: wrist=0, index MCP=1, thumb CMC/MCP/IP=13/14/15.
     Tips use SMPL-X's MANO vertex IDs. Original articulation/shape and aligned
     root poses are evaluated unchanged. Missing/infilled samples remain NaN.
+    Exclude the appended thumb IP only when reconstructing older five-point runs.
     """
     from smplx.vertex_ids import vertex_ids
 
     observed = arrays["export_valid"] & ~arrays["motion_infilled"]
-    landmarks = np.full((*observed.shape, 5, 3), np.nan, np.float32)
+    landmarks = np.full((*observed.shape, 6 if include_thumb_ip else 5, 3), np.nan, np.float32)
     meshes = []
     for hand, path in enumerate(model_paths):
         model = load_mano_model(path, hand)
@@ -52,27 +55,38 @@ def reconstruct_grasp_geometry(arrays, model_paths):
                 arrays["hand_pose_axis_angle"][indices, hand], arrays["mano_betas"][indices, hand])
             if not np.allclose(joints[:, 0], arrays["wrist_position_aligned_m"][indices, hand], atol=1e-5, rtol=0):
                 raise ValueError("Reconstructed wrist differs from alignment; check MANO assets/hand order")
-            landmarks[indices, hand] = np.stack((joints[:, 0], joints[:, 14], joints[:, 1],
-                verts[:, vertex_ids["mano"]["thumb"]], verts[:, vertex_ids["mano"]["index"]]), axis=1)
+            points = [joints[:, 0], joints[:, 14], joints[:, 1],
+                      verts[:, vertex_ids["mano"]["thumb"]], verts[:, vertex_ids["mano"]["index"]]]
+            if include_thumb_ip:
+                points.append(joints[:, 15])
+            landmarks[indices, hand] = np.stack(points, axis=1)
             vertices[indices] = verts
         meshes.append((vertices, model.faces))
     return landmarks, meshes
 
 
 def map_grasp_landmarks(landmarks, observed, settings):
-    """Map [T,2,5,3] aligned landmarks to [T,2,4,4] column-vector transforms.
+    """Map [T,2,6,3] aligned landmarks to [T,2,4,4] column-vector transforms.
 
-    +Y is thumb MCP→index MCP; +X is wrist→thumb MCP projected perpendicular
-    to +Y; +Z=X×Y. Local corrections are T_grasp_from_TCP. No interpolation,
+    +Y is thumb MCP→index MCP; +X projects the configured forward direction
+    perpendicular to +Y; +Z=X×Y. Missing forward_axis preserves the original
+    wrist→thumb MCP convention and five-point saved runs. Local corrections
+    are T_grasp_from_TCP. No interpolation,
     filtering, sign flips or IK. Missing/degenerate outputs are NaN.
     """
     validate_settings(settings)
     points = np.asarray(landmarks, dtype=float)
     observed = np.asarray(observed)
-    if points.shape != (*observed.shape, 5, 3) or observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool:
-        raise ValueError("Expected landmarks [T,2,5,3] and boolean observed [T,2]")
-    wrist, thumb, index, thumb_tip, index_tip = np.moveaxis(points, 2, 0)
-    forward, closing = thumb - wrist, index - thumb
+    if points.shape not in ((*observed.shape, 5, 3), (*observed.shape, 6, 3)) or observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool:
+        raise ValueError("Expected landmarks [T,2,5|6,3] and boolean observed [T,2]")
+    wrist, thumb, index, thumb_tip, index_tip = np.moveaxis(points[..., :5, :], 2, 0)
+    if settings.get("forward_axis", "wrist_to_thumb_mcp") == "thumb_mcp_to_ip":
+        if points.shape[2] != 6:
+            raise ValueError("thumb_mcp_to_ip requires thumb IP landmarks; regenerate the mapping")
+        forward = points[..., 5, :] - thumb
+    else:
+        forward = thumb - wrist
+    closing = index - thumb
     lengths = np.linalg.norm(closing, axis=-1)
     forward_lengths = np.linalg.norm(forward, axis=-1)
     eps = settings["minimum_axis_length_m"]
@@ -92,7 +106,7 @@ def map_grasp_landmarks(landmarks, observed, settings):
     correction[:, :3, 3] = settings["tcp_offset_grasp_m"]
     correction[:, :3, :3] = Rotation.from_euler("xyz", settings["tcp_rotation_grasp_xyz_rad"]).as_matrix()
     separation = np.linalg.norm(thumb_tip - index_tip, axis=-1)
-    separation[~observed | ~np.isfinite(points[..., 3:, :]).all(axis=(-1, -2))] = np.nan
+    separation[~observed | ~np.isfinite(points[..., 3:5, :]).all(axis=(-1, -2))] = np.nan
     action = np.clip((separation - settings["closed_distance_m"]) /
                      (settings["open_distance_m"] - settings["closed_distance_m"]), 0., 1.)
     action[~valid] = np.nan
@@ -161,7 +175,7 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
               "mano_models": [str(Path(p).resolve()) for p in model_paths],
               "asset_root": str(Path(asset_root).resolve()), "robot_settings": robot_settings,
               "frame_interval": [start, stop], "landmark_names": list(LANDMARK_NAMES),
-              "landmarks": {"wrist_joint": 0, "thumb_mcp_joint": 14, "index_mcp_joint": 1,
+              "landmarks": {"wrist_joint": 0, "thumb_mcp_joint": 14, "thumb_ip_joint": 15, "index_mcp_joint": 1,
                             "tips": "smplx.vertex_ids.vertex_ids['mano']"},
               "command": [sys.executable, *sys.argv],
               "units": {"length": "metres", "angle": "radians", "time": "seconds"},

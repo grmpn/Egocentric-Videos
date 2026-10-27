@@ -1,10 +1,63 @@
 # Direct gripper mapping — first iPhone region
 
-Approved scope fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 2 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
-## Input and direct mapping
+## Thumb-IP forward direction and opening refinement
+
+The user requested thumb MCP→thumb IP as the forward direction and corrected
+opening examples to **right frame 92 <~0.05** and **right frame 119 ~0.33**.
+The [current configuration](../../../configs/gripper_mapping.json) projects that
+forward direction perpendicular to the unchanged MCP closing axis. Grasp centers
+remain the tip midpoint. The [mapping contract](../topics/direct-gripper-mapping.md)
+owns the exact shared normalization and old-result compatibility.
+
+| Right-hand anchor | Measured tip distance | Refined command |
+| --- | ---: | ---: |
+| Frame 92 | 2.107880 cm | 0.030 |
+| Frame 119 | 12.549594 cm | 0.330 |
+
+The 0.03 target satisfies the first example. The fitted closed/open thresholds
+are 1.063709 / 35.869421 cm; fully open is extrapolated. Across the first region,
+action spans **0–0.401897**, with 8 right samples clipped closed and none clipped
+open. Both hands share the rule. No physical contact calibration is established.
+
+[15 focused tests](../../../outputs/retargeting/gripper-refinement-20261027/tests-final.log)
+pass, including analytic thumb-IP axes, missing/degenerate behavior, original
+five-landmark compatibility, native MANO thumb-IP selection and both opening
+anchors. The [296-frame audit](../../../outputs/retargeting/gripper-refinement-20261027/audit.json)
+checks all **470** valid hand samples, proper rotations, expected forward axes,
+unchanged centers/distances, all 11 original source fields, limits and ordinary
+FK (maximum TCP discrepancy **2.78e−17**). Orientation changes by a median 8.55°
+(maximum 22.98°) relative to the original mapping.
+
+[Browser verification](../../../outputs/retargeting/gripper-refinement-20261027/browser.json)
+checks a full playback loop, endpoints/gaps, both reference commands, six-landmark
+overlays, saved settings and snapshot export, with no page errors. Visually
+inspected the [nearly closed frame 92](../../../outputs/retargeting/gripper-refinement-20261027/right-frame-92.png),
+[frame 119](../../../outputs/retargeting/gripper-refinement-20261027/right-frame-119.png),
+[thumb-IP landmarks](../../../outputs/retargeting/gripper-refinement-20261027/right-landmarks-119.png)
+and a missing-left-hand frame. The [reload check](../../../outputs/retargeting/gripper-refinement-20261027/reload.json)
+starts/renders both the original five-landmark viewer and a new six-landmark
+snapshot; temporary servers were stopped afterward. The first browser attempt
+reached the previous viewer because it still owned port 8091; its
+[failure log](../../../outputs/retargeting/gripper-refinement-20261027/browser.log)
+is retained. Stopping that task-owned process and restarting the revised viewer
+resolved it; the numerical checks were unaffected.
+
+The current [viewer](http://localhost:8091) uses the
+[refined result](../../../outputs/retargeting/gripper-refinement-20261027/mapping/mapping_report.json)
+and is paused at frame **119**. To reopen it:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-refinement-20261027/mapping --port 8091
+```
+
+The original first-pass evidence below is historical and remains intact.
+
+## Original first pass: input and direct mapping
 
 Reused the [original iPhone reconstruction/alignment](retargeting-iphone.md#reconstruction-and-alignment),
 without filtering or inference reruns, for frames **[0,296)** (0–9.8667 s at
@@ -95,10 +148,10 @@ with their own saved settings; the viewer checks reconstructed landmarks and
 recomputed mapping against saved outputs. The initial image audit required
 converting browser-canvas RGBA to RGB; the corrected comparison passes.
 
-The final baseline viewer is available at **http://localhost:8091**. The temporary
-snapshot viewer was stopped after reload verification. The approved first-pass
-review deliverable is complete; next is user review of alignment and opening
-before authorizing the deferred landmark/region comparisons.
+The original baseline remains saved at the paths above; the live viewer now
+shows revision 2 described earlier. Its first-pass review deliverable was complete,
+with later user feedback addressed by the refinement. The temporary baseline
+snapshot viewer was stopped after its reload verification.
 
 To reopen the baseline:
 

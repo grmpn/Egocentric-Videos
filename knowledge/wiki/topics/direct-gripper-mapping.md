@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 1](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 2](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -26,7 +26,7 @@ Fingertips use the installed SMPL-X MANO vertex definitions: thumb 744 and index
 320, on both hands. These are mesh landmarks, not separate regressed tip joints.
 
 The human grasp frame has its origin at the fingertip midpoint. +Y points from
-thumb MCP to index MCP. +X is wrist→thumb MCP projected perpendicular to +Y;
+thumb MCP to index MCP. +X is thumb MCP→thumb IP projected perpendicular to +Y;
 +Z = +X × +Y. Both hands use this rule without a reflection or temporal sign
 flip. Near-zero axes or near-collinearity invalidate the mapping; thresholds live
 in [configuration](../../../configs/gripper_mapping.json). No gap is filled.
@@ -41,8 +41,11 @@ center at every opening.
 
 Action is continuous **0 closed / 1 open**:
 `clip((tip_distance - closed_distance) / (open_distance - closed_distance), 0, 1)`.
-Defaults are 0 and **0.10 m**; this scale is an initial guess. The distance mapping
-does not imply that physical jaw separation equals human fingertip separation.
+Defaults are **0.010637088979430357 m** closed and **0.3586942059948014 m** open.
+The shared rule fits the user-selected right-hand examples: frame 92 (2.108 cm)
+→ **0.03**, and frame 119 (12.550 cm) → **0.33**. The first target is within the
+requested <~0.05 range. Fully open is extrapolated; this fit does not imply
+physical jaw separation equals human fingertip separation.
 
 ## Input/output and review
 
@@ -53,7 +56,7 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 
 | Field | Contract |
 | --- | --- |
-| `landmarks_aligned_m` | `[T,2,5,3]`, wrist/thumb MCP/index MCP/thumbtip/index tip, NaN for missing/infilled observations |
+| `landmarks_aligned_m` | `[T,2,6,3]`, wrist/thumb MCP/index MCP/thumbtip/index tip/thumb IP (joint 15), NaN for missing/infilled observations |
 | `observation_valid`, `mapping_valid` | `[T,2]` bool; the second additionally rejects invalid geometry |
 | `transform_aligned_from_grasp`, `transform_aligned_from_tcp`, `transform_aligned_from_palm` | `[T,2,4,4]` rigid transforms; entire matrix NaN when mapping-invalid |
 | `transform_palm_from_tcp` | `[2,4,4]` fixed nominal URDF reference |
@@ -61,6 +64,10 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
 left/right URDFs are saved in a new output directory. Existing outputs are refused.
+Older five-landmark runs remain readable: settings without `forward_axis` retain
+wrist→thumb MCP. New settings use `forward_axis: thumb_mcp_to_ip` and append thumb
+IP to the original landmark order. The viewer labels the active direction and
+draws that segment; it never silently changes an older saved mapping.
 Reports record the source, asset revision/configuration, landmark convention and
 per-hand missing/degenerate/opening-saturation counts. Licensed models and generated
 geometry remain local inputs/evidence, outside Git.

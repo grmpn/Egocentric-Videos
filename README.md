@@ -467,8 +467,9 @@ directory; reopen that directory with the same viewer command. **Manual grippers
 enables independent position, orientation and opening controls without IK.
 
 The initial grasp center is the fingertip midpoint; closing direction is thumb
-MCP→index MCP, with wrist→thumb MCP defining the orthogonalized forward direction.
-Opening is continuous, 0 closed / 1 open, with a guessed 10 cm fully-open distance.
+MCP→index MCP, with thumb MCP→thumb IP defining the orthogonalized forward direction.
+Opening is continuous, 0 closed / 1 open, fitted to right iPhone frame 92 → 0.03
+and frame 119 → 0.33. The fully-open distance is extrapolated from these examples.
 The default settings are in [gripper_mapping.json](configs/gripper_mapping.json).
 Missing/infilled hands are hidden. Original MANO geometry and timestamps are
 preserved; the nominal TCP is not a calibrated contact center.

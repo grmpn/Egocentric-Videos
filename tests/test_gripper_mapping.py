@@ -24,16 +24,20 @@ def settings():
 
 
 def landmarks(distances):
-    """Planar analytic hands: +X forward; opposite left/right closing signs."""
-    points = np.zeros((len(distances), 2, 5, 3))
+    """Analytic thumb geometry: +X forward; opposite left/right closing signs."""
+    points = np.zeros((len(distances), 2, 6, 3))
     for i, distance in enumerate(distances):
         for hand, sign in enumerate((-1, 1)):
-            points[i, hand] = [[0, 0, 0], [.06, -.02 * sign, 0], [.06, .02 * sign, 0],
-                               [.15, -distance / 2 * sign, 0], [.15, distance / 2 * sign, 0]]
+            # Wrist direction differs from thumb MCP→IP, so axes cannot pass by
+            # accidentally using the original forward definition.
+            points[i, hand] = [[0, 0, -.04], [.06, -.02 * sign, 0], [.06, .02 * sign, 0],
+                               [.15, -distance / 2 * sign, 0], [.15, distance / 2 * sign, 0],
+                               [.10, -.01 * sign, 0]]
     return points
 
 
 def test_analytic_axes_center_and_continuous_opening(settings):
+    settings = {**settings, "closed_distance_m": 0., "open_distance_m": .10}
     points = landmarks([0., .02, .05, .10, .20])
     original = points.copy()
     mapped = map_grasp_landmarks(points, np.ones((5, 2), bool), settings)
@@ -44,6 +48,30 @@ def test_analytic_axes_center_and_continuous_opening(settings):
     np.testing.assert_allclose(mapped["transform_aligned_from_tcp"][..., :3, 3], np.tile([.15, 0, 0], (5, 2, 1)))
     np.testing.assert_allclose(mapped["gripper_action"], np.repeat([[0], [.2], [.5], [1], [1]], 2, axis=1))
     np.testing.assert_array_equal(points, original)
+
+
+def test_original_five_landmark_mapping_remains_reproducible(settings):
+    legacy = dict(settings)
+    legacy.pop("forward_axis")
+    points = landmarks([.03])[..., :5, :].copy()
+    points[..., 0, 2] = 0.
+    mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), legacy)
+    for hand, sign in enumerate((-1, 1)):
+        np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
+                                   np.diag([1, sign, sign]), atol=1e-15)
+    with pytest.raises(ValueError, match="requires thumb IP"):
+        map_grasp_landmarks(points, np.ones((1, 2), bool), settings)
+
+
+def test_opening_matches_user_selected_iphone_examples(settings):
+    # Measured right-hand tip distances at source frames 92 and 119.
+    points = landmarks([0.02107880248989149, 0.12549593759450284])
+    result = map_grasp_landmarks(points, np.ones((2, 2), bool), settings)
+    np.testing.assert_allclose(result["gripper_action"], [[.03, .03], [.33, .33]], atol=1e-12)
+    # Distances below/above the fitted range still obey the action contract.
+    points = landmarks([0., settings["open_distance_m"] + .01])
+    result = map_grasp_landmarks(points, np.ones((2, 2), bool), settings)
+    np.testing.assert_array_equal(result["gripper_action"], [[0., 0.], [1., 1.]])
 
 
 def test_frame_equivariance_and_local_offsets(settings):
@@ -70,9 +98,9 @@ def test_invalid_geometry_and_missing_hand_isolation(settings):
     observed = np.ones((6, 2), bool)
     observed[0, 0] = False
     points[1, 0, 2] = points[1, 0, 1]  # Zero closing direction.
-    points[2, 0, 0] = points[2, 0, 1]  # Zero forward direction.
-    points[3, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 0, 0]]
-    points[4, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 1e-8, 0]]
+    points[2, 0, 5] = points[2, 0, 1]  # Zero forward direction.
+    points[3, 0, [1, 2, 5]] = [[0, 0, 0], [.1, 0, 0], [.2, 0, 0]]
+    points[4, 0, [1, 2, 5]] = [[0, 0, 0], [.1, 0, 0], [.2, 1e-8, 0]]
     points[5, 0, 4] = np.nan
     mapped = map_grasp_landmarks(points, observed, settings)
     assert not mapped["mapping_valid"][:, 0].any()
@@ -87,6 +115,7 @@ def test_invalid_geometry_and_missing_hand_isolation(settings):
     {"open_distance_m": 0.}, {"closed_distance_m": -.1}, {"open_distance_m": float("nan")},
     {"minimum_axis_sine": 0.}, {"minimum_axis_length_m": -1.},
     {"tcp_offset_grasp_m": [[0, 0, 0]]}, {"tcp_rotation_grasp_xyz_rad": [[0, 0, 0], [0, 0, float("inf")]]},
+    {"forward_axis": "unknown"},
 ])
 def test_reject_invalid_configuration(settings, change):
     with pytest.raises(ValueError):
@@ -198,7 +227,8 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings)
         points = arrays["landmarks_aligned_m"][1,hand]
         # Float32 MANO evaluation can round differently with different batch sizes.
         np.testing.assert_allclose(points[:3], joints[2,[0,14,1]], atol=1e-7, rtol=0)
-        np.testing.assert_allclose(points[3:], vertices[2,[vertex_ids["mano"]["thumb"],vertex_ids["mano"]["index"]]], atol=1e-7, rtol=0)
+        np.testing.assert_allclose(points[3:5], vertices[2,[vertex_ids["mano"]["thumb"],vertex_ids["mano"]["index"]]], atol=1e-7, rtol=0)
+        np.testing.assert_allclose(points[5], joints[2,15], atol=1e-7, rtol=0)
     decoded = review_rgb(report, arrays["frame_index"])
     np.testing.assert_allclose(decoded.mean(axis=(1,2,3)), [30,60,90,120], atol=2)
     tuned = copy.deepcopy(settings)

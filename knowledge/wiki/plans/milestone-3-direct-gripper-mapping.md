@@ -1,6 +1,6 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 1 · 2026-10-27 · User approval recorded as `20261027-gripper-implementation-001` in the [action log](../logs/2026-10.jsonl).
+Approved revision 2 · 2026-10-27 · User-requested forward-axis refinement recorded as `20261027-gripper-refinement-001` in the [action log](../logs/2026-10.jsonl). Revision 1 remains in Git (`319c486`); opening-anchor correction is recorded as `20261027-gripper-refinement-002`.
 
 ## Objective and deliverable
 
@@ -24,17 +24,19 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
   label gaps. Document and visually check MANO wrist/MCP/tip landmark selection.
 - **First mapping:** implement the user's humanEgo-inspired description. Grasp
   center is the thumbtip/index-tip midpoint. Set +Y to normalized thumb-MCP →
-  index-MCP (closing axis). Project wrist → thumb-MCP perpendicular to +Y and
+  index-MCP (closing axis). Project thumb-MCP → thumb-IP perpendicular to +Y and
   normalize for +X (forward); +Z = +X × +Y. Mark near-zero/collinear constructions
   invalid instead of inventing a pose. Verify handedness and axis signs on both
   hands. Initially align the URDF's nominal TCP with the human grasp center;
   expose a fixed local translation/rotation correction for alignment tuning.
   Label the TCP as nominal, not a calibrated contact center.
 - **Opening:** interpret normalized action as continuous **[0,1]**, with **0
-  closed, 1 open**. Initially use `clip(d / 0.10 m, 0, 1)`, where `d` is fingertip
-  separation. Keep closed/open distances configurable; 10 cm is a provisional
-  guess, not measured calibration. Map action through the existing EZGripper
-  joint command, respecting coupling and bounds.
+  closed, 1 open**. Use a clipped linear normalization of fingertip separation,
+  with configurable closed/open distances. Fit right frame **92** below
+  approximately **0.05** (choose 0.03) and right frame **119** near **0.33**, as
+  corrected by the user. Apply the same rule to both hands. The fully-open
+  threshold is extrapolated, not a physical calibration. Map action through the
+  existing EZGripper command, respecting coupling and bounds.
 - **Viewer:** reuse the existing visualization stack for play/pause, scrubbing,
   synchronized RGB, both-hand closeups, visibility/opacity controls, landmark and
   axis overlays, separation/action readouts, and alignment/opening adjustments.
@@ -49,6 +51,8 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
 - Check standalone/full-model gripper geometry agreement at representative
   openings, mimic coupling, limits, center placement, proper rotations, rigid-frame
   equivariance, action clipping, left/right identity and invalid-data isolation.
+- Preserve reload of revision-1 results. Verify the revised thumb-IP forward axis
+  and user-confirmed opening anchors.
 - Replay all 296 frames without invoking IK. Inspect both hands at representative
   opening/closing poses, region endpoints and missing-data transitions; verify
   RGB/frame synchronization and viewer controls.

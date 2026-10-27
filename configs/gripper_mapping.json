@@ -1,7 +1,8 @@
 {
-  "closed_distance_m": 0.0,
-  "open_distance_m": 0.10,
-  "minimum_axis_length_m": 0.000001,
+  "forward_axis": "thumb_mcp_to_ip",
+  "closed_distance_m": 0.010637088979430357,
+  "open_distance_m": 0.3586942059948014,
+  "minimum_axis_length_m": 1e-06,
   "minimum_axis_sine": 0.001,
   "tcp_offset_grasp_m": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
   "tcp_rotation_grasp_xyz_rad": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
