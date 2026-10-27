@@ -444,3 +444,38 @@ command still defaults to its original expanded workspace workflow; use
 `--regions-only` for an individual baseline comparison run. See the
 [contract and limitations](knowledge/wiki/topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
 and [bundled evidence](knowledge/wiki/experiments/joint-base-bundled.md).
+
+## Direct hand-to-gripper review
+
+Prepare detached EZGrippers directly from the original MANO geometry, independently
+of arm IK. The following selects the first retained iPhone region, frames [0,296).
+Reuse the workspace environment, licensed MANO models and pinned Purdue assets.
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/map_gripper.py \
+    --alignment-directory outputs/retargeting/iphone-20261021/gravity \
+    --output-directory outputs/retargeting/gripper-example \
+    --frame-start 0 --frame-stop 296
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-example --port 8091
+```
+
+Open the printed local URL. Use **Left closeup** / **Right closeup**, per-side
+visibility, and the **Mapping adjustments** folder to inspect alignment and tune
+opening. **Save mapping snapshot** preserves each adjustment in a new child
+directory; reopen that directory with the same viewer command. **Manual grippers**
+enables independent position, orientation and opening controls without IK.
+
+The initial grasp center is the fingertip midpoint; closing direction is thumb
+MCP→index MCP, with wrist→thumb MCP defining the orthogonalized forward direction.
+Opening is continuous, 0 closed / 1 open, with a guessed 10 cm fully-open distance.
+The default settings are in [gripper_mapping.json](configs/gripper_mapping.json).
+Missing/infilled hands are hidden. Original MANO geometry and timestamps are
+preserved; the nominal TCP is not a calibrated contact center.
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests/test_gripper_mapping.py -q
+```
+
+See the [mapping contract](knowledge/wiki/topics/direct-gripper-mapping.md) and
+[first-region evidence](knowledge/wiki/experiments/direct-gripper-iphone.md).

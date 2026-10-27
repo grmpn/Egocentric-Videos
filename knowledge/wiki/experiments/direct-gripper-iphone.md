@@ -1,0 +1,112 @@
+# Direct gripper mapping — first iPhone region
+
+Approved scope fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
+landmark, action and viewer contracts. All linked run artifacts are local-only.
+
+## Input and direct mapping
+
+Reused the [original iPhone reconstruction/alignment](retargeting-iphone.md#reconstruction-and-alignment),
+without filtering or inference reruns, for frames **[0,296)** (0–9.8667 s at
+30 FPS; last frame timestamp 9.8333 s). No base, arm or IK solution is consumed.
+The [mapping report](../../../outputs/retargeting/gripper-mapping-20261027/mapping/mapping_report.json),
+[arrays](../../../outputs/retargeting/gripper-mapping-20261027/mapping/gripper_mapping.npz),
+[settings](../../../outputs/retargeting/gripper-mapping-20261027/mapping/settings.json),
+and standalone [left](../../../outputs/retargeting/gripper-mapping-20261027/mapping/left_gripper.urdf)/[right](../../../outputs/retargeting/gripper-mapping-20261027/mapping/right_gripper.urdf)
+URDFs reproduce the first-pass result.
+
+| Measurement | Left | Right |
+| --- | ---: | ---: |
+| Eligible and mapped hand samples | 228 | 242 |
+| Missing/infilled samples | 68 | 54 |
+| Degenerate mapping frames | 0 | 0 |
+| Minimum fingertip distance | 1.088 cm | 0.372 cm |
+| Maximum fingertip distance | 15.052 cm | 12.947 cm |
+| Samples clipped fully open at 10 cm | 68 | 40 |
+| Samples clipped fully closed at 0 cm | 0 | 0 |
+
+All 470 eligible hand samples map successfully. This establishes finite direct
+poses, not grasp accuracy. The opening scale remains a guess, and the nominal
+TCP stays fixed relative to the palm while the physical fingers curl.
+
+## Numerical and entry-point verification
+
+The [12 focused tests](../../../outputs/retargeting/gripper-mapping-20261027/tests-final.log)
+pass. They cover analytic centers/axes, opposing left/right closing signs, proper
+rotations under a rigid world-frame change, local correction direction, continuous
+action/clipping, missing/degenerate isolation, invalid settings, and actual
+standalone/full-model geometry agreement at five openings. Free TCP placement,
+joint bounds and mimic propagation pass for both assets. The production CLI test
+checks a nonzero frame-start interval, original MANO landmark selection, source
+fields/timestamps, decoded RGB and snapshot reload/no-overwrite behavior.
+
+The [full-region audit](../../../outputs/retargeting/gripper-mapping-20261027/audit-mapping.json)
+checks all 296 frames and 470 eligible hand samples. All 11 selected source fields
+are byte-preserved. The maximum ordinary-FK versus saved TCP transform discrepancy
+is **2.78e−17**, palm discrepancy is zero, mimic-joint discrepancy is zero, and
+rotation orthogonality error is **6.66e−16**. Every opening respects URDF bounds.
+All 296 RGB frames decode; nine independent PNG decodes agree exactly with the
+viewer RGB buffer. Video presentation timestamps differ from saved timestamps by
+at most **3.34e−7 s**, consistent with ffprobe's decimal formatting.
+
+Initial checks and fixes are preserved: the installed older FFmpeg requires
+`-vsync 0`; local socket startup needed execution outside the sandbox. A strict
+MANO bit-equality test differed by 7.45e−9 m across float32 batch sizes and was
+replaced with a 1e−7 m tolerance. Browser automation timed out after playback;
+an interaction trace isolated a fast numeric-fill operation that emitted no GUI
+update, while normal keyboard entry worked. Acceptance now uses keyboard entry.
+User scrubbing also pauses playback and the loop advances from the current frame.
+Manual mode hides the frame slider because this Viser version does not disable
+its companion numeric box when the slider is disabled.
+See the [initial tests](../../../outputs/retargeting/gripper-mapping-20261027/tests-initial.log),
+[initial viewer log](../../../outputs/retargeting/gripper-mapping-20261027/viewer.log),
+and [browser failure](../../../outputs/retargeting/gripper-mapping-20261027/browser-frame-pause-failure.log).
+
+## Interactive review
+
+The [browser acceptance](../../../outputs/retargeting/gripper-mapping-20261027/browser/browser.json)
+passes all 296 source frames and per-hand observation/action labels, playback
+through the loop boundary, isolated closeups, visibility/opacity, local
+translation/rotation and opening adjustments, snapshot export, invalid-setting
+handling/reset, and independent manual pose/opening at 0, 0.5 and 1. No page
+errors occurred. Capture uses software WebGL; the browser's renderer notice is
+not an IK/geometry failure.
+
+[Visual inspection](../../../outputs/retargeting/gripper-mapping-20261027/visual-review.json)
+covers both original hand meshes and their landmarks, direct grippers, opening
+extrema, missing-data transitions and endpoints. Examples: isolated
+[left pinch](../../../outputs/retargeting/gripper-mapping-20261027/browser/left-closeup-frame-193.png),
+[right pinch](../../../outputs/retargeting/gripper-mapping-20261027/browser/right-closeup-frame-127.png),
+[open hands](../../../outputs/retargeting/gripper-mapping-20261027/browser/frame-0119.png),
+and manual [closed](../../../outputs/retargeting/gripper-mapping-20261027/browser/manual-opening-0.png)/[open](../../../outputs/retargeting/gripper-mapping-20261027/browser/manual-opening-1.png)
+grippers. The requested mapping is visible, but hand/gripper silhouettes and
+physical contact centers do not coincide throughout articulation. No alignment
+or opening refinement has been adopted; the baseline retains the 10 cm guess and
+zero TCP corrections.
+
+The [review-artifact audit](../../../outputs/retargeting/gripper-mapping-20261027/audit-review.json)
+checks 16 RGB images actually displayed in the browser against their source frames
+(maximum mean absolute pixel difference 2.95/255, from JPEG transport).
+It also verifies all fields of the exported tuning snapshot, which changes only
+opening distance to 0.20 m, left local X offset to 0.02 m and right local X rotation
+to 15°. This is a control-validation example, not a tuning recommendation.
+Both baseline and snapshot independently [reload successfully](../../../outputs/retargeting/gripper-mapping-20261027/browser/reload.json)
+with their own saved settings; the viewer checks reconstructed landmarks and
+recomputed mapping against saved outputs. The initial image audit required
+converting browser-canvas RGBA to RGB; the corrected comparison passes.
+
+The final baseline viewer is available at **http://localhost:8091**. The temporary
+snapshot viewer was stopped after reload verification. The approved first-pass
+review deliverable is complete; next is user review of alignment and opening
+before authorizing the deferred landmark/region comparisons.
+
+To reopen the baseline:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-mapping-20261027/mapping --port 8091
+```
+
+Thumb-IP/index-PIP comparison and later regions remain deferred. Physical metric
+scale, gravity, contact accuracy, collision clearance and dynamic execution are
+unverified. This review does not establish the roadmap simulation deliverable.
