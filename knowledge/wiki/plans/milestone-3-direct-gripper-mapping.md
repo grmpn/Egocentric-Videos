@@ -1,6 +1,6 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 2 · 2026-10-27 · User-requested forward-axis refinement recorded as `20261027-gripper-refinement-001` in the [action log](../logs/2026-10.jsonl). Revision 1 remains in Git (`319c486`); opening-anchor correction is recorded as `20261027-gripper-refinement-002`.
+Approved revision 4 · 2026-10-27 · User-requested wrist-to-MCP-midpoint direction recorded as `20261027-gripper-midpoint-001` in the [action log](../logs/2026-10.jsonl). The preceding index-axis trial is preserved in local evidence. Opening normalization is unchanged.
 
 ## Objective and deliverable
 
@@ -24,7 +24,7 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
   label gaps. Document and visually check MANO wrist/MCP/tip landmark selection.
 - **First mapping:** implement the user's humanEgo-inspired description. Grasp
   center is the thumbtip/index-tip midpoint. Set +Y to normalized thumb-MCP →
-  index-MCP (closing axis). Project thumb-MCP → thumb-IP perpendicular to +Y and
+  index-MCP (closing axis). Project wrist → midpoint(thumb-MCP, index-MCP) perpendicular to +Y and
   normalize for +X (forward); +Z = +X × +Y. Mark near-zero/collinear constructions
   invalid instead of inventing a pose. Verify handedness and axis signs on both
   hands. Initially align the URDF's nominal TCP with the human grasp center;
@@ -51,7 +51,7 @@ first retained manipulation region: frames **[0,296)**, approximately **0–9.87
 - Check standalone/full-model gripper geometry agreement at representative
   openings, mimic coupling, limits, center placement, proper rotations, rigid-frame
   equivariance, action clipping, left/right identity and invalid-data isolation.
-- Preserve reload of revision-1 results. Verify the revised thumb-IP forward axis
+- Preserve reload of earlier results. Verify the revised wrist-to-MCP-midpoint forward axis
   and user-confirmed opening anchors.
 - Replay all 296 frames without invoking IK. Inspect both hands at representative
   opening/closing poses, region endpoints and missing-data transitions; verify

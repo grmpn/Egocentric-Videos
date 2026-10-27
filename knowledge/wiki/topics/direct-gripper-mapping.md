@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 2](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 4](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -18,7 +18,7 @@ existing nominal kinematic opening rule, not a physical contact simulation.
 
 [Landmark reconstruction and mapping](../../../src/egocentric_pipeline/gripper_mapping.py)
 use the original aligned MANO root poses, articulation and shape. The physical
-wrist is joint 0, index MCP is joint 1, and thumb MCP is joint **14**, not the
+wrist is joint 0, index MCP/PIP are joints 1/2, and thumb MCP is joint **14**, not the
 thumb CMC at joint 13. The thumb chain is 13/14/15 (CMC/MCP/IP). This interpretation
 matches the [manopth native-to-21-joint ordering](https://github.com/hassony2/manopth/blob/master/manopth/manolayer.py)
 and [named 21-joint convention](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/python/solutions/hands.py).
@@ -26,10 +26,14 @@ Fingertips use the installed SMPL-X MANO vertex definitions: thumb 744 and index
 320, on both hands. These are mesh landmarks, not separate regressed tip joints.
 
 The human grasp frame has its origin at the fingertip midpoint. +Y points from
-thumb MCP to index MCP. +X is thumb MCP→thumb IP projected perpendicular to +Y;
+thumb MCP to index MCP. +X is wrist→midpoint(thumb MCP, index MCP) projected perpendicular to +Y;
 +Z = +X × +Y. Both hands use this rule without a reflection or temporal sign
 flip. Near-zero axes or near-collinearity invalidate the mapping; thresholds live
 in [configuration](../../../configs/gripper_mapping.json). No gap is filled.
+The projected wrist→MCP-midpoint direction equals the original projected
+wrist→thumb-MCP direction: their difference is half the closing vector, which
+the perpendicular projection removes. The viewer draws the explicit midpoint
+construction requested by the user.
 
 Transforms use column vectors in the existing gravity-aligned frame, metres and
 radians. `T_aligned_from_TCP = T_aligned_from_grasp @ T_grasp_from_TCP`; configurable
@@ -56,7 +60,7 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 
 | Field | Contract |
 | --- | --- |
-| `landmarks_aligned_m` | `[T,2,6,3]`, wrist/thumb MCP/index MCP/thumbtip/index tip/thumb IP (joint 15), NaN for missing/infilled observations |
+| `landmarks_aligned_m` | `[T,2,7,3]`, wrist/thumb MCP/index MCP/thumbtip/index tip/thumb IP (joint 15)/index PIP (joint 2), NaN for missing/infilled observations |
 | `observation_valid`, `mapping_valid` | `[T,2]` bool; the second additionally rejects invalid geometry |
 | `transform_aligned_from_grasp`, `transform_aligned_from_tcp`, `transform_aligned_from_palm` | `[T,2,4,4]` rigid transforms; entire matrix NaN when mapping-invalid |
 | `transform_palm_from_tcp` | `[2,4,4]` fixed nominal URDF reference |
@@ -64,10 +68,12 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
 left/right URDFs are saved in a new output directory. Existing outputs are refused.
-Older five-landmark runs remain readable: settings without `forward_axis` retain
-wrist→thumb MCP. New settings use `forward_axis: thumb_mcp_to_ip` and append thumb
-IP to the original landmark order. The viewer labels the active direction and
-draws that segment; it never silently changes an older saved mapping.
+Older five- and six-landmark runs remain readable: settings without `forward_axis`
+retain wrist→thumb MCP; `thumb_mcp_to_ip` retains the thumb-based direction. New
+seven-point results also support `index_mcp_to_pip`. The current default is
+`forward_axis: wrist_to_mcp_midpoint`. Index PIP is retained after thumb IP to
+preserve the preceding reviewed trial and its overlay. The viewer labels the
+active direction and draws that segment; it never silently changes an older saved mapping.
 Reports record the source, asset revision/configuration, landmark convention and
 per-hand missing/degenerate/opening-saturation counts. Licensed models and generated
 geometry remain local inputs/evidence, outside Git.

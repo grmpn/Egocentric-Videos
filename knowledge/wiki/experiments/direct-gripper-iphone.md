@@ -1,14 +1,69 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 2 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 4 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
-## Thumb-IP forward direction and opening refinement
+## Wrist→MCP-midpoint forward direction
+
+Revision 4 follows the user's subsequent request: forward points from wrist to
+midpoint(thumb MCP, index MCP), projected perpendicular to the closing axis.
+The closing axis, fingertip grasp center and fitted opening normalization remain
+unchanged. The [current viewer](http://localhost:8091) loads the
+[midpoint result](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/mapping/mapping_report.json).
+
+[17 focused tests](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/tests.log)
+and the [296-frame / 470-sample audit](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/audit.json)
+pass. All opening actions and grasp centers are unchanged; right frames 92/119
+remain **0.03/0.33**. The new rotation agrees with the original wrist→thumb-MCP
+construction to numerical precision, as expected from the projection identity
+explained in the [mapping contract](../topics/direct-gripper-mapping.md).
+The maximum rotation-element difference is **3.34e−16**.
+[Browser playback](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/browser.json),
+[snapshot reload and both displayed forward segments](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/reload.json)
+pass. Visually inspected [frame 92](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/right-frame-92.png),
+[the midpoint construction](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/right-landmarks-119.png)
+and the [both-hand view at frame 119](../../../outputs/retargeting/gripper-mcp-midpoint-20261027/final-viewer.png).
+The live viewer is paused at frame 119. Physical contact calibration remains unverified.
+
+To reopen:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-mcp-midpoint-20261027/mapping --port 8091
+```
+
+## Previous index MCP→PIP trial
+
+Revision 3 uses native MANO index joints **1→2**, projected perpendicular to the
+unchanged closing axis. The shared opening fit, fingertip grasp centers and local
+TCP corrections are unchanged. Its viewer loaded
+[the index-axis result](../../../outputs/retargeting/gripper-index-20261027/mapping/mapping_report.json).
+
+[16 focused tests](../../../outputs/retargeting/gripper-index-20261027/tests.log)
+and the [full-region audit](../../../outputs/retargeting/gripper-index-20261027/audit.json)
+pass for **296 frames / 470 eligible samples**. All original source fields, previous
+six landmarks, tip distances, centers and opening actions are preserved. Right
+frames **92/119 remain 0.03/0.33**. Median orientation change from the thumb-axis
+mapping is **15.66°**, maximum **54.98°**. Maximum ordinary-FK TCP discrepancy is
+**5.56e−17**. Older wrist- and thumb-axis results remain supported.
+[Browser playback and snapshots](../../../outputs/retargeting/gripper-index-20261027/browser.json),
+[reload checks](../../../outputs/retargeting/gripper-index-20261027/reload.json), and
+[visual review](../../../outputs/retargeting/gripper-index-20261027/right-landmarks-119.png)
+passed before the user selected the midpoint direction.
+
+To reopen:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-index-20261027/mapping --port 8091
+```
+
+## Previous thumb-IP forward direction and opening refinement
 
 The user requested thumb MCP→thumb IP as the forward direction and corrected
 opening examples to **right frame 92 <~0.05** and **right frame 119 ~0.33**.
-The [current configuration](../../../configs/gripper_mapping.json) projects that
+The [saved thumb-axis settings](../../../outputs/retargeting/gripper-refinement-20261027/mapping/settings.json) project that
 forward direction perpendicular to the unchanged MCP closing axis. Grasp centers
 remain the tip midpoint. The [mapping contract](../topics/direct-gripper-mapping.md)
 owns the exact shared normalization and old-result compatibility.
@@ -46,9 +101,9 @@ reached the previous viewer because it still owned port 8091; its
 is retained. Stopping that task-owned process and restarting the revised viewer
 resolved it; the numerical checks were unaffected.
 
-The current [viewer](http://localhost:8091) uses the
+The previous thumb-axis viewer used the
 [refined result](../../../outputs/retargeting/gripper-refinement-20261027/mapping/mapping_report.json)
-and is paused at frame **119**. To reopen it:
+and was reviewed at frame **119**. To reopen it:
 
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
@@ -149,7 +204,7 @@ recomputed mapping against saved outputs. The initial image audit required
 converting browser-canvas RGBA to RGB; the corrected comparison passes.
 
 The original baseline remains saved at the paths above; the live viewer now
-shows revision 2 described earlier. Its first-pass review deliverable was complete,
+shows revision 4 described earlier. Its first-pass review deliverable was complete,
 with later user feedback addressed by the refinement. The temporary baseline
 snapshot viewer was stopped after its reload verification.
 

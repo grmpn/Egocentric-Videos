@@ -24,15 +24,14 @@ def settings():
 
 
 def landmarks(distances):
-    """Analytic thumb geometry: +X forward; opposite left/right closing signs."""
-    points = np.zeros((len(distances), 2, 6, 3))
+    """Analytic MCP midpoint geometry: +X forward; opposite closing signs."""
+    points = np.zeros((len(distances), 2, 7, 3))
     for i, distance in enumerate(distances):
         for hand, sign in enumerate((-1, 1)):
-            # Wrist direction differs from thumb MCP→IP, so axes cannot pass by
-            # accidentally using the original forward definition.
-            points[i, hand] = [[0, 0, -.04], [.06, -.02 * sign, 0], [.06, .02 * sign, 0],
+            # Finger-segment directions differ from wrist→MCP midpoint.
+            points[i, hand] = [[0, 0, 0], [.06, -.02 * sign, 0], [.06, .02 * sign, 0],
                                [.15, -distance / 2 * sign, 0], [.15, distance / 2 * sign, 0],
-                               [.10, -.01 * sign, 0]]
+                               [.10, -.01 * sign, .02], [.10, .01 * sign, -.03]]
     return points
 
 
@@ -59,8 +58,31 @@ def test_original_five_landmark_mapping_remains_reproducible(settings):
     for hand, sign in enumerate((-1, 1)):
         np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
                                    np.diag([1, sign, sign]), atol=1e-15)
-    with pytest.raises(ValueError, match="requires thumb IP"):
-        map_grasp_landmarks(points, np.ones((1, 2), bool), settings)
+    with pytest.raises(ValueError, match="requires index PIP"):
+        map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+
+
+def test_six_landmark_thumb_mapping_remains_reproducible(settings):
+    points = landmarks([.03])[..., :6, :]
+    legacy = {**settings, "forward_axis": "thumb_mcp_to_ip"}
+    mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), legacy)
+    x = np.array([2., 0., 1.]) / np.sqrt(5.)
+    for hand, sign in enumerate((-1, 1)):
+        y = np.array([0., sign, 0.])
+        np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
+                                   np.stack([x, y, np.cross(x, y)], axis=-1), atol=1e-15)
+    with pytest.raises(ValueError, match="requires index PIP"):
+        map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+
+
+def test_index_segment_mapping_remains_reproducible(settings):
+    points = landmarks([.03])
+    mapped = map_grasp_landmarks(points, np.ones((1, 2), bool), {**settings, "forward_axis": "index_mcp_to_pip"})
+    x = np.array([.8, 0., -.6])
+    for hand, sign in enumerate((-1, 1)):
+        y = np.array([0., sign, 0.])
+        np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][0, hand, :3, :3],
+                                   np.stack([x, y, np.cross(x, y)], axis=-1), atol=1e-15)
 
 
 def test_opening_matches_user_selected_iphone_examples(settings):
@@ -98,9 +120,9 @@ def test_invalid_geometry_and_missing_hand_isolation(settings):
     observed = np.ones((6, 2), bool)
     observed[0, 0] = False
     points[1, 0, 2] = points[1, 0, 1]  # Zero closing direction.
-    points[2, 0, 5] = points[2, 0, 1]  # Zero forward direction.
-    points[3, 0, [1, 2, 5]] = [[0, 0, 0], [.1, 0, 0], [.2, 0, 0]]
-    points[4, 0, [1, 2, 5]] = [[0, 0, 0], [.1, 0, 0], [.2, 1e-8, 0]]
+    points[2, 0, 0] = (points[2, 0, 1] + points[2, 0, 2]) / 2  # Zero forward direction.
+    points[3, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 0, 0]]
+    points[4, 0, :3] = [[0, 0, 0], [.1, 0, 0], [.2, 1e-8, 0]]
     points[5, 0, 4] = np.nan
     mapped = map_grasp_landmarks(points, observed, settings)
     assert not mapped["mapping_valid"][:, 0].any()
@@ -229,6 +251,7 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings)
         np.testing.assert_allclose(points[:3], joints[2,[0,14,1]], atol=1e-7, rtol=0)
         np.testing.assert_allclose(points[3:5], vertices[2,[vertex_ids["mano"]["thumb"],vertex_ids["mano"]["index"]]], atol=1e-7, rtol=0)
         np.testing.assert_allclose(points[5], joints[2,15], atol=1e-7, rtol=0)
+        np.testing.assert_allclose(points[6], joints[2,2], atol=1e-7, rtol=0)
     decoded = review_rgb(report, arrays["frame_index"])
     np.testing.assert_allclose(decoded.mean(axis=(1,2,3)), [30,60,90,120], atol=2)
     tuned = copy.deepcopy(settings)

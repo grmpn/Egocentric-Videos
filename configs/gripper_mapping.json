@@ -1,5 +1,5 @@
 {
-  "forward_axis": "thumb_mcp_to_ip",
+  "forward_axis": "wrist_to_mcp_midpoint",
   "closed_distance_m": 0.010637088979430357,
   "open_distance_m": 0.3586942059948014,
   "minimum_axis_length_m": 1e-06,

@@ -47,10 +47,14 @@ class GripperMappingViewer:
         self.report["mano_models"] = [str(Path(p).resolve()) for p in (mano_models or self.report["mano_models"])]
         self.report["asset_root"] = str(Path(asset_root or self.report["asset_root"]).resolve())
         point_count = self.arrays["landmarks_aligned_m"].shape[2]
-        landmarks, self.meshes = reconstruct_grasp_geometry(self.arrays, self.report["mano_models"], include_thumb_ip=point_count == 6)
-        thumb_forward = self.settings.get("forward_axis", "wrist_to_thumb_mcp") == "thumb_mcp_to_ip"
-        forward_label = "thumb MCP → thumb IP" if thumb_forward else "wrist → thumb MCP"
-        self.landmark_segments = [[1, 5] if thumb_forward else [0, 1], [1, 2], [3, 4]]
+        landmarks, self.meshes = reconstruct_grasp_geometry(self.arrays, self.report["mano_models"], landmark_count=point_count)
+        forward_axis = self.settings.get("forward_axis", "wrist_to_thumb_mcp")
+        self.midpoint_forward = forward_axis == "wrist_to_mcp_midpoint"
+        forward_label, segment = {"wrist_to_thumb_mcp": ("wrist → thumb MCP", [0, 1]),
+                                  "thumb_mcp_to_ip": ("thumb MCP → thumb IP", [1, 5]),
+                                  "index_mcp_to_pip": ("index MCP → index PIP", [2, 6]),
+                                  "wrist_to_mcp_midpoint": ("wrist → thumb/index MCP midpoint", [0, 1])}[forward_axis]
+        self.landmark_segments = [segment, [1, 2], [3, 4]]
         if not np.allclose(landmarks, self.arrays["landmarks_aligned_m"], atol=1e-6, rtol=0, equal_nan=True):
             raise ValueError("Saved landmarks disagree with MANO reconstruction; use the original model assets")
         self.grippers = load_grippers(self.report["asset_root"], self.report["robot_settings"])
@@ -93,7 +97,7 @@ class GripperMappingViewer:
             self.show_landmarks = gui.add_checkbox("Landmarks", initial_value=True)
             self.show_axes = gui.add_checkbox("Grasp and TCP axes", initial_value=True)
             gui.add_markdown("Axes: X red (forward), Y green (closing), Z blue.\n\n"
-                             "Landmarks: wrist white, MCPs yellow, thumbtip pink, index tip green, thumb IP orange when present. "
+                             "Landmarks: wrist white, MCPs yellow, thumbtip pink, index tip green; thumb IP orange and index PIP purple when present. "
                              "Small cyan sphere: nominal gripper TCP.")
         with gui.add_folder("Mapping adjustments", expand_by_default=False):
             gui.add_markdown("Offsets are relative to each human grasp frame. "
@@ -140,7 +144,7 @@ class GripperMappingViewer:
             self.tcp_axes.append(self.server.scene.add_frame(f"/{side}/tcp", axes_length=.025, axes_radius=.001, visible=False))
             self.tcp_markers.append(self.server.scene.add_icosphere(f"/{side}/tcp_marker", radius=.004, color=(70, 240, 230), visible=False))
             self.landmarks.append(self.server.scene.add_point_cloud(f"/{side}/landmarks", points=np.zeros((point_count, 3), np.float32),
-                colors=np.array([[255,255,255],[255,220,70],[255,220,70],[255,90,170],[80,255,130],[255,140,30]], np.uint8)[:point_count], point_size=.008, visible=False))
+                colors=np.array([[255,255,255],[255,220,70],[255,220,70],[255,90,170],[80,255,130],[255,140,30],[180,110,255]], np.uint8)[:point_count], point_size=.008, visible=False))
             self.lines.append(self.server.scene.add_line_segments(f"/{side}/landmark_lines", points=np.zeros((3, 2, 3), np.float32),
                 colors=(240, 215, 95), line_width=2, visible=False))
             gizmo = self.server.scene.add_transform_controls(f"/{side}/manual_tcp", scale=.15, visible=False)
@@ -308,7 +312,10 @@ class GripperMappingViewer:
                 if observed:
                     points = self.arrays["landmarks_aligned_m"][i, hand]
                     self.landmarks[hand].points = points
-                    self.lines[hand].points = points[self.landmark_segments]
+                    segments = points[self.landmark_segments]
+                    if self.midpoint_forward:
+                        segments[0, 1] = (points[1] + points[2]) / 2
+                    self.lines[hand].points = segments
                 if self.manual.value:
                     detail = f"manual opening **{action:.3f}**"
                 elif valid:
