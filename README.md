@@ -460,21 +460,20 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gr
     outputs/retargeting/gripper-example --port 8091
 ```
 
-Open the printed local URL. Use **Left closeup** / **Right closeup**, per-side
-visibility, and the **Mapping adjustments** folder to inspect alignment and tune
-opening. **Save mapping snapshot** preserves each adjustment in a new child
-directory; reopen that directory with the same viewer command. **Manual grippers**
-enables independent position, orientation and opening controls without IK.
+Open the printed local URL. Use **Left closeup** / **Right closeup** and the
+visibility controls to inspect both tip correspondences. **Save mapping snapshot**
+preserves the mapping in a new child directory; reopen it with the same command.
+**Manual grippers** enables independent pose/opening controls without arm IK.
 
-The grasp center is the fingertip midpoint. Shift the wrist construction point
-2.5 cm toward the thumb, then preserve its direction to the thumb/index MCP
-midpoint as forward. Project the MCP closing direction perpendicular to forward.
-Adjust **Wrist shift toward thumb (m)** in the viewer; snapshots preserve it.
-Opening is continuous, 0 closed / 1 open, fitted to right iPhone frame 92 → 0.03
-and frame 119 → 0.33. The fully-open distance is extrapolated from these examples.
-The default settings are in [gripper_mapping.json](configs/gripper_mapping.json).
-Missing/infilled hands are hidden. Original MANO geometry and timestamps are
-preserved; the nominal TCP is not a calibrated contact center.
+The default solves opening from actual gripper tip separation, then places both
+mesh tip markers on the human thumbtip and index tip. The true wrist→thumb MCP
+direction resolves rotation around the fingertip line. The fixed nominal TCP may
+move relative to the human tip midpoint. No model scaling or opening clipping is
+used; unreachable/degenerate mappings are hidden and labeled. The viewer shows
+tip markers and positional errors. Older runs retain their prior tuning controls.
+
+Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original MANO
+geometry and timestamps are preserved; physical contact remains uncalibrated.
 
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests/test_gripper_mapping.py -q

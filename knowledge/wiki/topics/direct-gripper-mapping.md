@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 5](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 6](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -25,40 +25,47 @@ and [named 21-joint convention](https://github.com/google-ai-edge/mediapipe/blob
 Fingertips use the installed SMPL-X MANO vertex definitions: thumb 744 and index
 320, on both hands. These are mesh landmarks, not separate regressed tip joints.
 
-The human grasp frame has its origin at the fingertip midpoint. Define the raw
-closing direction `c = normalize(index_MCP - thumb_MCP)`. Shift the wrist
-construction point to `w_shifted = wrist - wrist_thumb_offset_m * c`, initially
-**0.025 m** toward the thumb. This hand-relative shift uses index→thumb on both
-hands; it is not a global leftward translation or a change to the MANO wrist.
+The default mode is `fingertip_correspondence`. A marker at
+**[0.057395, 0, 0.009680] m** in each distal (L2) link is the center of the mesh's
+most distal edge (maximum local X). This is an explicit nominal tip definition,
+not a calibrated pad contact. Finger **2 maps to the thumb**, finger **1 to the
+index**, on both hands; their uncrossed difference follows native palm +Y.
 
-With `orientation_priority: forward`, +X is exactly the normalized direction from
-`w_shifted` to midpoint(thumb MCP, index MCP). Project the raw closing direction
-perpendicular to +X and normalize for +Y; +Z = +X × +Y. The user explicitly chose
-this priority because preserving the old closing axis would remove the lateral
-shift during orthogonalization. The grasp center and opening rule are unchanged.
+First solve the existing scalar opening command so the FK tip separation equals
+the human fingertip separation. The pinned mechanism's markers cross slightly at
+command 0 and reach maximum separation before command 1. Use the uncrossed,
+increasing-separation branch: commands approximately **0.001741–0.947485**, spanning
+**0–0.280114 m**. This preserves the original command convention; it does not
+renormalize the branch. Out-of-range separation invalidates the mapping; there is
+no clipping or model scaling. The earlier fitted opening anchors are superseded
+for this trial. Right frames 92 and 119 now command **0.063020 / 0.327544**.
 
-Both hands use this rule without a reflection or temporal sign flip. Near-zero
-axes or near-collinearity invalidate the mapping; thresholds and shift distance
-live in [configuration](../../../configs/gripper_mapping.json). No gap is filled.
-The [shared forward-segment calculation](../../../src/egocentric_pipeline/gripper_mapping.py)
-drives both poses and the viewer's construction line. The viewer shows a white
-sphere at the shifted wrist and a short segment back to the original wrist.
+The human grasp frame has origin `h = (thumb_tip + index_tip) / 2` and axes:
 
-Transforms use column vectors in the existing gravity-aligned frame, metres and
-radians. `T_aligned_from_TCP = T_aligned_from_grasp @ T_grasp_from_TCP`; configurable
-local translation and XYZ Euler rotation define the correction, initially identity.
-`T_aligned_from_palm = T_aligned_from_TCP @ inverse(T_palm_from_TCP)` positions the
-detached model. The URDF nominal TCP is 0.160804 m along palm +X. It remains fixed
-as the fingers curl, so it must not be described as the actual fingertip/contact
-center at every opening.
+- `y = normalize(index_tip - thumb_tip)` — preserve the two-tip line.
+- `v = thumb_MCP - wrist` — use the true wrist, with no lateral shift.
+- `x = normalize(v - dot(v, y) * y)` and `z = x × y` — resolve twist.
 
-Action is continuous **0 closed / 1 open**:
-`clip((tip_distance - closed_distance) / (open_distance - closed_distance), 0, 1)`.
-Defaults are **0.010637088979430357 m** closed and **0.3586942059948014 m** open.
-The shared rule fits the user-selected right-hand examples: frame 92 (2.108 cm)
-→ **0.03**, and frame 119 (12.550 cm) → **0.33**. The first target is within the
-requested <~0.05 range. Fully open is extrapolated; this fit does not imply
-physical jaw separation equals human fingertip separation.
+Construct the gripper tip frame from its opening-dependent tip midpoint and
+thumb-side→index-side marker line. Its forward axis is native palm +X projected
+perpendicular to that line. With column-vector transforms,
+`T_aligned_from_palm = T_aligned_from_grasp @ inverse(T_palm_from_tip_frame)`.
+Consequently each gripper marker maps to its corresponding human fingertip.
+`T_aligned_from_TCP = T_aligned_from_palm @ T_palm_from_TCP` retains the fixed URDF
+reference, 0.160804 m along palm +X. That nominal TCP need not equal the tip center.
+All positions use aligned metres; rotations are proper, without reflection.
+
+Near-zero fingertip/forward vectors and near-collinear constructions are invalid;
+thresholds live in [configuration](../../../configs/gripper_mapping.json). No gap
+is filled. The [shared forward segment](../../../src/egocentric_pipeline/gripper_mapping.py)
+drives the mapper and the displayed true-wrist→thumb-MCP construction line.
+
+Earlier settings without `mapping_mode` retain the `landmark_frame` rule: MCP
+closing direction, configurable forward direction/axis priority, fixed local TCP
+corrections and clipped linear distance normalization. Revision 5 used a 0.025 m
+thumbward wrist shift with forward priority; its prior settings and all earlier
+trials remain reproducible. See [historical evidence](../experiments/direct-gripper-iphone.md)
+for their measured results. They are not silently converted to exact-tip mapping.
 
 ## Input/output and review
 
@@ -74,20 +81,20 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 | `transform_aligned_from_grasp`, `transform_aligned_from_tcp`, `transform_aligned_from_palm` | `[T,2,4,4]` rigid transforms; entire matrix NaN when mapping-invalid |
 | `transform_palm_from_tcp` | `[2,4,4]` fixed nominal URDF reference |
 | `fingertip_distance_m`, `gripper_action` | `[T,2]`; action is NaN when mapping-invalid; distance can remain available for a degenerate orientation |
+| `opening_reachable` | Exact mode: `[T,2]` bool, observed finite distance within the selected branch |
+| `gripper_tips_aligned_m`, `tip_error_m` | Exact mode: `[T,2,2,3]` marker positions and `[T,2,2]` Euclidean errors in metres, thumb then index; NaN when invalid |
+| `tip_action_range`, `tip_distance_range_m` | Exact mode: `[2,2]`, per-hand lower/upper reachable branch bounds |
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
 left/right URDFs are saved in a new output directory. Existing outputs are refused.
-Older five- and six-landmark runs remain readable: settings without `forward_axis`
-retain wrist→thumb MCP; `thumb_mcp_to_ip` retains the thumb-based direction. New
-seven-point results also support `index_mcp_to_pip`. The current default is
-`forward_axis: wrist_to_mcp_midpoint`, `orientation_priority: forward` and
-`wrist_thumb_offset_m: 0.025`. Settings missing the last two keys retain closing
-priority and zero shift. A nonzero shift is supported only for the MCP-midpoint
-forward rule. Index PIP is retained after thumb IP to
-preserve the preceding reviewed trial and its overlay. The viewer labels the
-active direction and draws that segment; it never silently changes an older saved mapping.
+Older five- and six-landmark runs remain readable. Missing `forward_axis` means
+wrist→thumb MCP; explicit thumb MCP→IP, index MCP→PIP and wrist→MCP-midpoint rules
+retain their original behavior. Missing `orientation_priority` means closing
+priority, and missing `wrist_thumb_offset_m` means zero shift. Nonzero shift is
+supported only for the legacy MCP-midpoint forward rule. Current seven-point
+landmarks retain thumb IP and index PIP for compatibility and display.
 Reports record the source, asset revision/configuration, landmark convention and
-per-hand missing/degenerate/opening-saturation counts. Licensed models and generated
+per-hand missing/degenerate/unreachable counts, reachable ranges and tip errors. Licensed models and generated
 geometry remain local inputs/evidence, outside Git.
 
 The [viewer](../../../src/egocentric_pipeline/gripper_visualization.py) reconstructs
@@ -97,12 +104,13 @@ frame with both mappings available, while retaining every frame and missing-data
 transition in the slider. Playback uses the saved timestamp differences.
 
 Controls provide both-hand/individual closeups, per-side visibility, hand/gripper
-opacity, landmark/axis overlays, opening thresholds, thumbward wrist shift and
-per-hand local TCP offsets. The wrist-shift control is shown for MCP-midpoint runs.
-The GUI uses degrees for editable rotations; saved settings use radians.
-**Save mapping snapshot** writes a new timestamped child directory containing all
-mapped frames and settings. It does not alter the original run. Invalid opening
-thresholds disable saving and retain the last valid preview until corrected.
+opacity and landmark/axis overlays. In exact mode, small cyan spheres attach to
+the articulated gripper tips and coincide with the pink/green human tip landmarks.
+Readouts show separation, derived action and maximum tip error. Legacy opening,
+wrist-shift and TCP-offset controls are hidden because changing them independently
+would violate correspondence. Earlier runs retain their original tuning controls.
+**Save mapping snapshot** writes all frames/settings into a new timestamped child
+directory and refuses to overwrite an existing result.
 
 **Manual grippers** pauses playback, seeds each available gripper from the current
 mapped pose and enables independent position, rotation, opening and drag gizmos.

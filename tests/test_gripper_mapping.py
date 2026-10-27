@@ -20,7 +20,78 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def settings():
-    return read_json(ROOT / "configs/gripper_mapping.json")
+    # Preserve the revision-5 mapping contract for historical output reloads.
+    return {"forward_axis": "wrist_to_mcp_midpoint", "orientation_priority": "forward",
+            "wrist_thumb_offset_m": .025, "closed_distance_m": .010637088979430357,
+            "open_distance_m": .3586942059948014, "minimum_axis_length_m": 1e-6,
+            "minimum_axis_sine": .001, "tcp_offset_grasp_m": [[0.,0.,0.], [0.,0.,0.]],
+            "tcp_rotation_grasp_xyz_rad": [[0.,0.,0.], [0.,0.,0.]]}
+
+
+@pytest.fixture
+def grippers():
+    from egocentric_pipeline.gripper_model import load_grippers
+
+    assets = ROOT / "data/models/purdue-alex-assets"
+    if not assets.exists():
+        pytest.skip("Pinned robot assets are local inputs")
+    return load_grippers(assets, read_json(ROOT / "configs/robot_workspace.json"))
+
+
+def test_exact_tip_mapping_fk_twist_and_equivariance(grippers):
+    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    # Includes observed extrema and the user's two reference frames.
+    points = landmarks([.003720637467527735, .02107880248989149, .12549593759450284, .15052035605268244, .2799])
+    observed = np.ones(points.shape[:2], bool)
+    result = map_grasp_landmarks(points, observed, settings, grippers)
+    assert result["mapping_valid"].all()
+    assert result["tip_error_m"].max() < 1e-10
+    for hand, g in enumerate(grippers):
+        marker = settings["distal_tip_local_m"]
+        mesh = g.links[f"{g.side}_ezgripper_finger_l2_1"].concatenated_visual_mesh
+        # Marker is the center of the most distal mesh edge, not the fixed TCP.
+        edge = mesh.vertices[np.isclose(mesh.vertices[:,0], mesh.vertices[:,0].max(), atol=1e-9, rtol=0)]
+        np.testing.assert_allclose(marker, np.unique(edge, axis=0).mean(axis=0), atol=1e-12)
+        for frame in range(len(points)):
+            g.set_opening(result["gripper_action"][frame, hand])
+            g.place_tcp(result["transform_aligned_from_tcp"][frame, hand])
+            np.testing.assert_allclose(g.tip_positions(marker), points[frame,hand,3:5], atol=1e-10)
+            assert all(j.min_angle <= j.joint_angle() <= j.max_angle for j in g.joints.values())
+        rotation = result["transform_aligned_from_grasp"][:,hand,:3,:3]
+        np.testing.assert_allclose(np.linalg.det(rotation), 1., atol=1e-14)
+        y = points[:,hand,4] - points[:,hand,3]
+        y /= np.linalg.norm(y, axis=-1, keepdims=True)
+        forward = points[:,hand,1] - points[:,hand,0]
+        x = forward - np.sum(forward*y, axis=-1, keepdims=True)*y
+        x /= np.linalg.norm(x, axis=-1, keepdims=True)
+        np.testing.assert_allclose(rotation[:,:,0], x, atol=1e-14)
+        np.testing.assert_allclose(rotation[:,:,1], y, atol=1e-14)
+    transform = np.eye(4)
+    transform[:3,:3] = Rotation.from_euler('xyz', [.4, -.6, 2.]).as_matrix()
+    transform[:3,3] = [.5, -.9, .2]
+    moved = map_grasp_landmarks(points @ transform[:3,:3].T + transform[:3,3], observed, settings, grippers)
+    for key in ("transform_aligned_from_grasp", "transform_aligned_from_tcp"):
+        np.testing.assert_allclose(moved[key], transform @ result[key], atol=1e-10)
+    np.testing.assert_allclose(moved["gripper_action"], result["gripper_action"], atol=1e-10)
+
+
+def test_tip_mapping_rejects_unreachable_degenerate_and_missing(grippers):
+    settings = read_json(ROOT / "configs/gripper_mapping.json")
+    points = landmarks([.05]*5)
+    observed = np.ones((5,2), bool)
+    observed[0,0] = False
+    points[1,0,4] = points[1,0,3]  # Coincident tips cannot determine an axis.
+    points[2,0,1] = points[2,0,0] + [0., 1., 0.]  # Twist vector parallel to tips.
+    points[3,0,4] = points[3,0,3] + [0., 1., 0.]  # Beyond maximum jaw span.
+    points[4,0,1] = np.nan
+    result = map_grasp_landmarks(points, observed, settings, grippers)
+    assert not result["mapping_valid"][:,0].any()
+    assert result["mapping_valid"][:,1].all()
+    assert not result["opening_reachable"][3,0]
+    for key in ("transform_aligned_from_tcp", "gripper_action", "gripper_tips_aligned_m"):
+        assert np.isnan(result[key][:,0]).all()
+    with pytest.raises(ValueError, match="requires left/right"):
+        map_grasp_landmarks(points, observed, settings)
 
 
 def landmarks(distances):
@@ -212,7 +283,8 @@ def test_detached_gripper_matches_full_model_and_free_tcp_pose():
             gripper.place_tcp(np.zeros((4, 4)))
 
 
-def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings):
+@pytest.mark.parametrize("exact", [False, True])
+def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings, exact, grippers):
     from egocentric_pipeline.hand_geometry import load_mano_model, reconstruct_mano
     from egocentric_pipeline.gripper_visualization import review_rgb
     from smplx.vertex_ids import vertex_ids
@@ -259,8 +331,12 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings)
         "inputs":{"clip_metadata":{"path":str(clip_path)},"prepared_video":{"path":str(video)},
                   "mano_left":{"path":str(models[0])},"mano_right":{"path":str(models[1])}}}))
     output = tmp_path / "mapping"
+    if exact:
+        settings = read_json(ROOT / "configs/gripper_mapping.json")
+    config = tmp_path / "mapping-config.json"
+    config.write_text(json.dumps(settings))
     command = [sys.executable,str(ROOT / "scripts/map_gripper.py"),"--alignment-directory",str(alignment),
-               "--output-directory",str(output),"--frame-start","1","--frame-stop","5"]
+               "--output-directory",str(output),"--frame-start","1","--frame-stop","5","--config",str(config)]
     subprocess.run(command, check=True, env={**os.environ,"PYTHONPATH":str(ROOT / "src")}, capture_output=True, text=True)
     arrays, report = load_mapping(output)
     np.testing.assert_array_equal(arrays["frame_index"], [1,2,3,4])
@@ -280,11 +356,12 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings)
     decoded = review_rgb(report, arrays["frame_index"])
     np.testing.assert_allclose(decoded.mean(axis=(1,2,3)), [30,60,90,120], atol=2)
     tuned = copy.deepcopy(settings)
-    tuned["open_distance_m"] = .2
+    if not exact:
+        tuned["open_distance_m"] = .2
     snapshot = tmp_path / "tuned"
     save_mapping(snapshot, arrays, report, tuned)
     saved, saved_report = load_mapping(snapshot)
-    assert saved_report["settings"]["open_distance_m"] == .2
-    np.testing.assert_allclose(saved["gripper_action"], map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["mapping_valid"], tuned)["gripper_action"], equal_nan=True)
+    assert saved_report["settings"] == tuned
+    np.testing.assert_allclose(saved["gripper_action"], map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["mapping_valid"], tuned, grippers)["gripper_action"], equal_nan=True)
     with pytest.raises(FileExistsError):
         save_mapping(snapshot, arrays, report, tuned)

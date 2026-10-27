@@ -1,16 +1,62 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 5 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 6 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
-## Thumbward wrist shift with forward priority
+## Exact fingertip correspondence
+
+Revision 6 follows the user's request to place both gripper tips on the human
+fingertips and resolve the remaining rotation using true wrist→thumb MCP.
+Opening is solved from real gripper FK; the earlier empirical normalization is
+superseded for this trial. See the [mapping contract](../topics/direct-gripper-mapping.md)
+for marker definitions, transform construction and reachable-branch selection.
+The [current viewer](http://localhost:8091) loads the
+[tip-matching result](../../../outputs/retargeting/gripper-tip-match-20261027/mapping/mapping_report.json).
+
+[25 focused tests](../../../outputs/retargeting/gripper-tip-match-20261027/tests.log)
+pass, including real FK correspondence, twist, frame equivariance, missing and
+unreachable cases, a separation near maximum opening, production CLI, snapshots
+and legacy mappings. The [full-region audit](../../../outputs/retargeting/gripper-tip-match-20261027/audit.json)
+checks **296 frames / 470 eligible hand samples** (228 left, 242 right). Every
+eligible sample maps; none is unreachable or degenerate. Maximum actual FK tip
+error is **5.25e−15 m**. Source fields and landmarks are byte-preserved. Rotations,
+axis signs, joint bounds and mimic coupling pass; all five previous mappings
+recompute unchanged.
+
+The nominal reachable separation is **0–28.0114 cm**. Observed commands span
+**0.012973–0.389845**. Right frame **92**, separation 2.108 cm, now commands
+**0.063020**; right frame **119**, separation 12.550 cm, commands **0.327544**.
+These are geometry-derived commands, so the old frame-92 <0.05 anchor is no longer
+imposed. The model is not scaled or shifted away from either matched tip.
+
+[Browser verification](../../../outputs/retargeting/gripper-tip-match-20261027/browser.json)
+passes playback through the interval and loop, representative frames/gaps,
+closeups, visible residuals, hidden legacy adjustments, snapshot saving and manual
+mode restoration, without page errors. Inspected
+[right frame 92](../../../outputs/retargeting/gripper-tip-match-20261027/right-frame-92.png),
+[right frame 119](../../../outputs/retargeting/gripper-tip-match-20261027/right-frame-119.png)
+and [left frame 119](../../../outputs/retargeting/gripper-tip-match-20261027/left-frame-119.png).
+[Reload checks](../../../outputs/retargeting/gripper-tip-match-20261027/reload.json)
+verify the original five-landmark viewer and new snapshot, including displayed
+marker positions and the true-wrist construction vector. The live viewer is
+paused at **119**, showing both hands. Physical scale/contact, collisions and
+dynamics remain unverified; this is geometric correspondence between mesh markers.
+
+To reopen:
+
+```bash
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+    outputs/retargeting/gripper-tip-match-20261027/mapping --port 8091
+```
+
+## Previous thumbward wrist shift with forward priority
 
 Revision 5 shifts the wrist construction point **2.5 cm toward the thumb** along
 index-MCP→thumb-MCP, then aims at the MCP midpoint. The user explicitly selected
 preserving forward and making closing perpendicular. The shared implementation
 and compatibility rules are in the [mapping contract](../topics/direct-gripper-mapping.md).
-The [current viewer](http://localhost:8091) loads the
+The previous viewer loaded the
 [shifted result](../../../outputs/retargeting/gripper-wrist-offset-20261027/mapping/mapping_report.json).
 
 [22 focused tests](../../../outputs/retargeting/gripper-wrist-offset-20261027/tests.log)
@@ -35,7 +81,7 @@ and [both hands](../../../outputs/retargeting/gripper-wrist-offset-20261027/fina
 A [reload check](../../../outputs/retargeting/gripper-wrist-offset-20261027/reload.json)
 verifies the original five-landmark run and a new 0.03 m control-validation
 snapshot. Both displayed markers/segments match the selected offset and forward
-direction. The live baseline remains **0.025 m**, paused at frame **119**;
+direction. That reviewed baseline used **0.025 m**, paused at frame **119**;
 the 0.03 m snapshot is validation evidence, not an adopted tuning change.
 
 To reopen:

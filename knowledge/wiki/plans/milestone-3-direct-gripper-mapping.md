@@ -1,64 +1,54 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 5 · 2026-10-27 · User-requested thumbward wrist shift and explicit forward-axis priority recorded as `20261027-gripper-offset-001` in the [action log](../logs/2026-10.jsonl). Opening normalization is unchanged.
+Approved revision 6 · 2026-10-27 · User-directed two-tip correspondence trial recorded as `20261027-gripper-tips-001` in the [action log](../logs/2026-10.jsonl). This supersedes the shifted wrist and empirical opening fit for the new trial.
 
 ## Objective and deliverable
 
-Isolate hand-to-gripper mapping from arm IK. Deliver independently positionable,
-orientable and actuated EZGrippers, plus a reusable interactive viewer showing
-the original MANO hands and directly mapped grippers on the iPhone demonstration's
-first retained manipulation region: frames **[0,296)**, approximately **0–9.87 s**
-([input evidence](../experiments/retargeting-iphone.md)).
+Refine the detached-gripper mapping independently of arm IK. Deliver independently
+positionable, orientable and actuated EZGrippers, with a reusable synchronized
+viewer of the original MANO hands and mapped grippers for iPhone frames **[0,296)**.
 
 ## Scope and boundaries
 
-- **Detached grippers:** derive palm-rooted left/right grippers from the pinned
-  Purdue URDF's existing subtrees, preserving meshes, joint limits and mimic
-  coupling. Leave source assets intact. Support arbitrary rigid poses and one
-  normalized opening command, reusing the asset package's existing command rule.
-  Check closed, intermediate and open geometry before hand playback.
-- **Input:** reuse existing iPhone reconstruction/gravity alignment and MANO
-  reconstruction. Work in the shared gravity-aligned frame, with metres, radians,
-  original frame indices/timestamps and left/right identity. Use unfiltered hand
-  geometry and `export_valid & ~motion_infilled`; hide missing hands/grippers and
-  label gaps. Document and visually check MANO wrist/MCP/tip landmark selection.
-- **First mapping:** implement the user's humanEgo-inspired description. Grasp
-  center is the thumbtip/index-tip midpoint. Shift the wrist **0.025 m toward
-  the thumb**, along index-MCP → thumb-MCP. Set +X to the normalized direction
-  from that shifted wrist to midpoint(thumb-MCP, index-MCP). Preserve +X; project
-  thumb-MCP → index-MCP perpendicular to it for +Y; +Z = +X × +Y. Mark near-zero/collinear constructions
-  invalid instead of inventing a pose. Verify handedness and axis signs on both
-  hands. Initially align the URDF's nominal TCP with the human grasp center;
-  expose a fixed local translation/rotation correction for alignment tuning.
-  Label the TCP as nominal, not a calibrated contact center.
-- **Opening:** interpret normalized action as continuous **[0,1]**, with **0
-  closed, 1 open**. Use a clipped linear normalization of fingertip separation,
-  with configurable closed/open distances. Fit right frame **92** below
-  approximately **0.05** (choose 0.03) and right frame **119** near **0.33**, as
-  corrected by the user. Apply the same rule to both hands. The fully-open
-  threshold is extrapolated, not a physical calibration. Map action through the
-  existing EZGripper command, respecting coupling and bounds.
-- **Viewer:** reuse the existing visualization stack for play/pause, scrubbing,
-  synchronized RGB, both-hand closeups, visibility/opacity controls, landmark and
-  axis overlays, separation/action readouts, and alignment/opening adjustments.
-  Save settings and derived poses/actions with validity for repeatable review.
-  Manual pose/opening controls verify the detached gripper independently.
-- No arm/base fitting, IK, filtering or reconstruction reruns, collision/dynamics
-  certification, or hardware control. Thumb-IP/index-PIP center comparison and
-  later regions follow this first-pass review; they are deferred.
+- Reuse the pinned Purdue URDF subtrees, meshes, joint limits, mimic coupling and
+  existing normalized opening command. Preserve source assets and raw aligned
+  MANO geometry, metres, radians, left/right identity, frame indices and timestamps.
+  Eligible observations remain `export_valid & ~motion_infilled`.
+- Define explicit markers at the center of each distal gripper tip edge. Solve
+  opening from the actual FK separation, then compute a rigid transform mapping
+  those markers onto the thumbtip and index tip respectively. Do not scale the
+  robot or retain an independently fitted opening that prevents correspondence.
+- Preserve the thumbtip→index-tip line. Resolve rotation around it using the
+  **true wrist→thumb MCP** direction, projected perpendicular to that line. Align
+  the projected native palm forward direction with this projected human direction.
+  Use a proper rotation and the opening-dependent gripper tip midpoint to place
+  the model. The fixed nominal TCP need not coincide with the fingertip midpoint.
+- Use the uncrossed, increasing-separation branch of the existing opening rule.
+  Report the reachable range. Mark unreachable or degenerate observations invalid
+  rather than silently clipping, stretching, or claiming an exact match. Verify
+  whether all eligible samples in this region are reachable.
+- Show both hands, articulated grippers, matched tip markers, the true wrist
+  construction vector, and tip residuals. Retain playback, scrubbing, synchronized
+  RGB, closeups, visibility/opacity, snapshot export and independent manual gripper
+  controls. Hide legacy alignment/normalization adjustments in exact-match mode
+  because they would break the requested correspondence. Preserve earlier runs
+  and their original mapping rules.
+- No arm IK, reconstruction reruns, filtering, hardware control, collision or
+  dynamics verification. Later manipulation regions and alternative human contact
+  landmarks remain deferred. Mesh markers are a nominal geometric definition,
+  not a physical pad/contact calibration.
 
 ## Acceptance
 
-- Check standalone/full-model gripper geometry agreement at representative
-  openings, mimic coupling, limits, center placement, proper rotations, rigid-frame
-  equivariance, action clipping, left/right identity and invalid-data isolation.
-- Preserve reload of earlier results. Verify the thumbward shift, preserved forward direction, proper perpendicular closing
-  axis and unchanged opening anchors.
-- Replay all 296 frames without invoking IK. Inspect both hands at representative
-  opening/closing poses, region endpoints and missing-data transitions; verify
-  RGB/frame synchronization and viewer controls.
-- Save reproducible settings, derived mapping, validation logs and representative
-  screenshots under a new `outputs/retargeting/` run. Record alignment issues and
-  opening saturation for user review; document behavior and commit verified work.
-  Acceptance establishes an inspectable direct mapping, not physical grasp
-  accuracy or completion of the roadmap's simulation deliverable.
+- Verify real FK places both gripper markers on their respective human tips to
+  numerical tolerance at every valid sample, with correct hand/tip identity,
+  proper rotations, rigid-frame equivariance, joint limits and mimic coupling.
+  Check missing, degenerate and unreachable input behavior.
+- Test the production preparation/snapshot workflow and compatibility with earlier
+  saved runs. Preserve all source fields and confirm the opening changes at the
+  user's reference frames 92 and 119.
+- Replay the full 296-frame region; inspect both hands, endpoints, gaps and
+  representative poses in the browser. Save settings, mapping arrays, reports,
+  test logs and screenshots in a new local output directory. Record remaining
+  physical limitations and commit verified code/documentation. This completes
+  the direct-mapping trial, not the roadmap simulation demonstration.

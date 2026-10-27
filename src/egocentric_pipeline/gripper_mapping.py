@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from scipy.optimize import brentq
 from scipy.spatial.transform import Rotation
 
 from .gripper_model import load_grippers
@@ -16,6 +17,18 @@ LANDMARK_NAMES = ("wrist", "thumb_mcp", "index_mcp", "thumb_tip", "index_tip", "
 
 
 def validate_settings(settings):
+    mode = settings.get("mapping_mode", "landmark_frame")
+    if mode not in ("landmark_frame", "fingertip_correspondence"):
+        raise ValueError("mapping_mode must be landmark_frame or fingertip_correspondence")
+    if not np.isfinite(settings["minimum_axis_length_m"]) or settings["minimum_axis_length_m"] <= 0:
+        raise ValueError("minimum_axis_length_m must be positive and finite")
+    if not 0 < settings["minimum_axis_sine"] < 1:
+        raise ValueError("minimum_axis_sine must be between 0 and 1")
+    if mode == "fingertip_correspondence":
+        tip = np.asarray(settings["distal_tip_local_m"])
+        if tip.shape != (3,) or not np.isfinite(tip).all() or tip[1] != 0.:
+            raise ValueError("distal_tip_local_m must be finite [3], centered on the distal mesh y=0 plane")
+        return
     if settings.get("forward_axis", "wrist_to_thumb_mcp") not in (
             "wrist_to_thumb_mcp", "thumb_mcp_to_ip", "index_mcp_to_pip", "wrist_to_mcp_midpoint"):
         raise ValueError("forward_axis must be wrist_to_thumb_mcp, thumb_mcp_to_ip, index_mcp_to_pip or wrist_to_mcp_midpoint")
@@ -29,10 +42,6 @@ def validate_settings(settings):
     closed, opened = settings["closed_distance_m"], settings["open_distance_m"]
     if not np.isfinite([closed, opened]).all() or not 0 <= closed < opened:
         raise ValueError("Require 0 <= closed_distance_m < open_distance_m")
-    if not np.isfinite(settings["minimum_axis_length_m"]) or settings["minimum_axis_length_m"] <= 0:
-        raise ValueError("minimum_axis_length_m must be positive and finite")
-    if not 0 < settings["minimum_axis_sine"] < 1:
-        raise ValueError("minimum_axis_sine must be between 0 and 1")
     for key in ("tcp_offset_grasp_m", "tcp_rotation_grasp_xyz_rad"):
         value = np.asarray(settings[key])
         if value.shape != (2, 3) or not np.isfinite(value).all():
@@ -80,11 +89,13 @@ def reconstruct_grasp_geometry(arrays, model_paths, *, landmark_count=7):
 def grasp_forward_segment(landmarks, settings):
     """Start/end positions [...,3] in aligned metres, shared by mapping/display.
 
-    Shift the wrist toward the thumb along index-MCP→thumb-MCP. This is a
-    construction point; the original MANO wrist and fingertip center stay fixed.
+    Exact-tip mode uses the true wrist→thumb MCP. Legacy midpoint mode may
+    shift a construction point thumbward without changing the MANO wrist.
     """
     points = np.asarray(landmarks, dtype=float)
     wrist, thumb, index = (points[..., i, :] for i in range(3))
+    if settings.get("mapping_mode") == "fingertip_correspondence":
+        return wrist, thumb
     axis = settings.get("forward_axis", "wrist_to_thumb_mcp")
     if axis == "wrist_to_mcp_midpoint":
         closing = index - thumb
@@ -102,16 +113,19 @@ def grasp_forward_segment(landmarks, settings):
     return wrist, thumb
 
 
-def map_grasp_landmarks(landmarks, observed, settings):
+def map_grasp_landmarks(landmarks, observed, settings, grippers=None):
     """Map [T,2,7,3] aligned landmarks to [T,2,4,4] column-vector transforms.
 
-    +X follows the configured forward segment; +Y follows thumb MCP→index MCP.
+    In fingertip_correspondence mode, +Y follows thumbtip→index tip and +X
+    projects true wrist→thumb MCP. FK solves opening and both tip constraints.
+    Legacy +X follows the configured segment; +Y follows thumb MCP→index MCP.
     The priority axis is preserved and the other projected perpendicular to it;
     +Z=X×Y. Older settings default to closing priority, zero wrist shift and
     wrist→thumb MCP. Local corrections are T_grasp_from_TCP. No interpolation,
     filtering, sign flips or IK. Missing/degenerate outputs are NaN.
     """
     validate_settings(settings)
+    exact = settings.get("mapping_mode") == "fingertip_correspondence"
     points = np.asarray(landmarks, dtype=float)
     observed = np.asarray(observed)
     if (observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool
@@ -120,11 +134,11 @@ def map_grasp_landmarks(landmarks, observed, settings):
     _, thumb, index, thumb_tip, index_tip = np.moveaxis(points[..., :5, :], 2, 0)
     start, end = grasp_forward_segment(points, settings)
     forward = end - start
-    closing = index - thumb
+    closing = index_tip - thumb_tip if exact else index - thumb
     lengths = np.linalg.norm(closing, axis=-1)
     forward_lengths = np.linalg.norm(forward, axis=-1)
     eps = settings["minimum_axis_length_m"]
-    if settings.get("orientation_priority", "closing") == "forward":
+    if not exact and settings.get("orientation_priority", "closing") == "forward":
         x = forward / np.maximum(forward_lengths[..., None], eps)
         orthogonal = closing - np.sum(closing * x, axis=-1)[..., None] * x
         y = orthogonal / np.maximum(np.linalg.norm(orthogonal, axis=-1, keepdims=True), eps)
@@ -143,17 +157,67 @@ def map_grasp_landmarks(landmarks, observed, settings):
     rotation = np.stack((x, y, np.cross(x, y)), axis=-1)
     grasp[..., :3, :3][valid] = rotation[valid]
     grasp[..., :3, 3][valid] = ((thumb_tip + index_tip) / 2)[valid]
+    separation = np.linalg.norm(thumb_tip - index_tip, axis=-1)
+    separation[~observed | ~np.isfinite(points[..., 3:5, :]).all(axis=(-1, -2))] = np.nan
+    if exact:
+        return map_tip_correspondences(points, observed, grasp, valid, separation, settings, grippers)
     correction = np.tile(np.eye(4), (2, 1, 1))
     correction[:, :3, 3] = settings["tcp_offset_grasp_m"]
     correction[:, :3, :3] = Rotation.from_euler("xyz", settings["tcp_rotation_grasp_xyz_rad"]).as_matrix()
-    separation = np.linalg.norm(thumb_tip - index_tip, axis=-1)
-    separation[~observed | ~np.isfinite(points[..., 3:5, :]).all(axis=(-1, -2))] = np.nan
     action = np.clip((separation - settings["closed_distance_m"]) /
                      (settings["open_distance_m"] - settings["closed_distance_m"]), 0., 1.)
     action[~valid] = np.nan
     return {"observation_valid": observed.copy(), "mapping_valid": valid,
             "transform_aligned_from_grasp": grasp, "transform_aligned_from_tcp": grasp @ correction,
             "fingertip_distance_m": separation, "gripper_action": action}
+
+
+def map_tip_correspondences(points, observed, grasp, valid, separation, settings, grippers):
+    """Match two fixed mesh markers; true wrist→thumb MCP resolves line twist.
+
+    Scalar root finding in the existing opening command is ordinary gripper FK,
+    not arm IK. Out-of-range samples have no pose/action; no scaling or clipping.
+    """
+    if grippers is None or [g.side for g in grippers] != ["left", "right"]:
+        raise ValueError("Fingertip correspondence requires left/right detached grippers")
+    tip_local = settings["distal_tip_local_m"]
+    action = np.full(observed.shape, np.nan)
+    tcp = np.full_like(grasp, np.nan)
+    matched = np.full((*observed.shape, 2, 3), np.nan)
+    reachable = np.zeros_like(observed)
+    action_ranges, distance_ranges = [], []
+    for hand, gripper in enumerate(grippers):
+        action_range, distance_range = gripper.tip_opening_range(tip_local)
+        action_ranges.append(action_range)
+        distance_ranges.append(distance_range)
+        reachable[:, hand] = (observed[:, hand] & (separation[:, hand] >= distance_range[0])
+                              & (separation[:, hand] <= distance_range[1]))
+        valid[:, hand] &= reachable[:, hand]
+        for frame in np.flatnonzero(valid[:, hand]):
+            def residual(a):
+                tips = gripper.tips_in_palm(a, tip_local)
+                return tips[1, 1] - tips[0, 1] - separation[frame, hand]
+
+            a = brentq(residual, *action_range, xtol=1e-13)
+            tips = gripper.tips_in_palm(a, tip_local)
+            y = tips[1] - tips[0]
+            y /= np.linalg.norm(y)
+            x = np.array([1., 0., 0.]) - y[0] * y
+            x /= np.linalg.norm(x)
+            palm_from_tip_frame = np.eye(4)
+            palm_from_tip_frame[:3, :3] = np.stack([x, y, np.cross(x, y)], axis=-1)
+            palm_from_tip_frame[:3, 3] = tips.mean(axis=0)
+            palm = grasp[frame, hand] @ np.linalg.inv(palm_from_tip_frame)
+            tcp[frame, hand] = palm @ gripper.transform_palm_from_tcp
+            action[frame, hand] = a
+            matched[frame, hand] = tips @ palm[:3, :3].T + palm[:3, 3]
+    grasp[~valid] = np.nan
+    return {"observation_valid": observed.copy(), "mapping_valid": valid,
+            "opening_reachable": reachable, "transform_aligned_from_grasp": grasp,
+            "transform_aligned_from_tcp": tcp, "fingertip_distance_m": separation,
+            "gripper_action": action, "gripper_tips_aligned_m": matched,
+            "tip_error_m": np.linalg.norm(matched - points[..., 3:5, :], axis=-1),
+            "tip_action_range": np.array(action_ranges), "tip_distance_range_m": np.array(distance_ranges)}
 
 
 def mapping_summary(arrays):
@@ -169,12 +233,21 @@ def mapping_summary(arrays):
                          "distance_min_m": float(d.min()) if len(d) else None,
                          "distance_max_m": float(d.max()) if len(d) else None,
                          "closed_saturated": int((a == 0).sum()), "open_saturated": int((a == 1).sum())}
+        if "tip_error_m" in arrays:
+            unreachable = arrays["observation_valid"][:, hand] & ~arrays["opening_reachable"][:, hand]
+            summary[side].update(unreachable=int(unreachable.sum()),
+                                 degenerate=int((arrays["observation_valid"][:, hand] & ~valid & ~unreachable).sum()),
+                                 max_tip_error_m=float(arrays["tip_error_m"][valid, hand].max()) if valid.any() else None,
+                                 tip_distance_range_m=arrays["tip_distance_range_m"][hand].tolist(),
+                                 tip_action_range=arrays["tip_action_range"][hand].tolist())
     return summary
 
 
-def save_mapping(directory, arrays, report, settings):
+def save_mapping(directory, arrays, report, settings, grippers=None):
     """Save a new review result; never replace source data or earlier tuning."""
-    mapped = map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["export_valid"] & ~arrays["motion_infilled"], settings)
+    if settings.get("mapping_mode") == "fingertip_correspondence" and grippers is None:
+        grippers = load_grippers(report["asset_root"], report["robot_settings"])
+    mapped = map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["export_valid"] & ~arrays["motion_infilled"], settings, grippers)
     saved = {**arrays, **mapped}
     saved["transform_aligned_from_palm"] = (mapped["transform_aligned_from_tcp"] @
                                           np.linalg.inv(arrays["transform_palm_from_tcp"]))
@@ -224,7 +297,11 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
               "pose_convention": "column vectors; T_destination_from_source; gravity-aligned frame",
               "action_convention": "continuous 0 closed / 1 open; uncalibrated distance scale",
               "limitations": "Nominal TCP; uncalibrated contact/metric scale. Direct mapping only, no IK, collision or dynamics checks."}
-    result = save_mapping(output_directory, arrays, report, settings)
+    if settings.get("mapping_mode") == "fingertip_correspondence":
+        report.update(action_convention="continuous 0 closed / 1 open; FK-derived on uncrossed increasing-separation branch",
+                      tip_correspondence="finger_l2_2 → thumbtip; finger_l2_1 → index tip; common distal-link local marker in settings",
+                      limitations="Nominal mesh tip markers; uncalibrated physical contact/metric scale. No arm IK, collision or dynamics checks.")
+    result = save_mapping(output_directory, arrays, report, settings, grippers)
     for gripper in grippers:
         (Path(output_directory) / f"{gripper.side}_gripper.urdf").write_text(gripper.xml)
     return result

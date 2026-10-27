@@ -77,6 +77,39 @@ class EZGripper:
             joint.joint_angle(angle)
         return {name: float(joint.joint_angle()) for name, joint in self.joints.items()}
 
+    def tip_positions(self, tip_local_m):
+        """World-frame distal markers [2,3], thumb/finger 2 then index/finger 1.
+
+        The same local point is attached to each L2 mesh. This ordering makes
+        thumb→index follow native palm +Y on the uncrossed opening branch.
+        """
+        return np.array([self.links[f"{self.side}_ezgripper_finger_l2_{finger}"].worldcoords().T()
+                         @ np.r_[tip_local_m, 1.] for finger in (2, 1)])[:, :3]
+
+    def tips_in_palm(self, action, tip_local_m):
+        """Evaluate ordinary FK, independent of this gripper's current world pose."""
+        self.set_opening(action)
+        palm = self.model.root_link.worldcoords().T()
+        return (self.tip_positions(tip_local_m) - palm[:3, 3]) @ palm[:3, :3]
+
+    def tip_opening_range(self, tip_local_m):
+        """Uncrossed, increasing tip-separation branch of the pinned command.
+
+        At action 0 the distal markers slightly cross; the separation peaks
+        before action 1. Select the first physical branch without relabeling tips.
+        Returns (action_min, action_max), (gap_min, gap_max), in metres.
+        """
+        from scipy.optimize import brentq, minimize_scalar
+
+        def gap(action):
+            tips = self.tips_in_palm(action, tip_local_m)
+            return tips[1, 1] - tips[0, 1]
+
+        peak = minimize_scalar(lambda a: -gap(a), bounds=(0., 1.), method="bounded",
+                               options={"xatol": 1e-12}).x
+        start = brentq(gap, 0., peak, xtol=1e-14) if gap(0.) < 0. else 0.
+        return np.array([start, peak]), np.array([max(0., gap(start)), gap(peak)])
+
     def place_tcp(self, transform_aligned_from_tcp):
         """Position/orient the free palm so its nominal TCP matches this pose."""
         from skrobot.coordinates import Coordinates
