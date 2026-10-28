@@ -1,8 +1,74 @@
-# Direct gripper mapping — first iPhone region
+# Direct gripper mapping — iPhone comparisons
 
-Revision 9 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 10 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
+
+## Full-video Configs 2/3/4 (2026-10-28)
+
+The user requested an interpolated-thumb Config 4 and saved RGB overlay MP4s for
+all three configurations over the complete prepared video. All outputs cover
+**1,286 frames, 42.8667 seconds, 960×540, 30 fps**, with blue left/orange right
+meshes at opacity 0.7. Existing viewers on 8091–8095 remain available.
+
+| Configuration | Full RGB overlay | Encoding/projection validation |
+| --- | --- | --- |
+| 2: wrist anchor, fingertip forward | [MP4](../../../outputs/retargeting/gripper-full-20261028/config2-overlay.mp4) | [Report](../../../outputs/retargeting/gripper-full-20261028/config2-overlay.json) |
+| 3: rotation blend | [MP4](../../../outputs/retargeting/gripper-full-20261028/config3-overlay.mp4) | [Report](../../../outputs/retargeting/gripper-full-20261028/config3-overlay.json) |
+| 4: interpolated thumb plane | [MP4](../../../outputs/retargeting/gripper-full-20261028/config4-overlay.mp4) | [Report](../../../outputs/retargeting/gripper-full-20261028/config4-overlay.json) |
+
+Config 4 uses `q=(1-w)*thumb_IP+w*thumb_MCP`, with the same absolute-roll
+30°–45° smoothstep as Config 3. Jaw direction is **index MCP→q**, as requested;
+its MCP endpoint has the original plane with Y/Z reversed. The
+[mapping contract](../topics/direct-gripper-mapping.md#comparison-configurations)
+owns the exact axes, FK placement and validity rules.
+
+All three map **873 left + 929 right = 1,802 eligible hand samples**, without
+unreachable opening or degenerate geometry. Original source fields/timestamps
+and inter-configuration opening commands are unchanged. Config 4 uses pure IP
+for **695 samples**, interpolates for **707**, and uses pure MCP for **400**.
+Independent ordinary-FK anchor errors are below **1.15e−16 m** (Config 2 wrist)
+and **4.40e−15 m** (Configs 3/4 tip midpoint); separation errors are below
+1.80e−14 m. These measure internal geometric agreement, not physical accuracy.
+
+The first 296 frames reproduce the previous Config 2/3 results within float32
+MANO batch roundoff: landmark maximum difference 5.96e−8 m, transform element
+maximum 9.38e−7, opening maximum 1.57e−7, roll maximum 8.25e−7 rad. They are not
+claimed byte-identical after changing reconstruction batch size.
+
+| Mapping | Largest left observed step | Largest right observed step |
+| --- | --- | --- |
+| Config 2 | 38.21° at frame 272 | 69.08° at frame 1265 |
+| Config 3 | 41.98° at frame 272 | 56.29° at frame 736 |
+| Config 4 | 42.11° at frame 272 | 56.29° at frame 736 |
+
+No adjacent observed step exceeds 90°. These are pose-dependent mappings with
+no temporal smoothing. Missing/infilled observations stay hidden; RGB continues
+through every gap. Scene-depth occlusion, contact, physical scale and arm IK
+remain unverified or deferred. No final default has been selected.
+
+Local validation under `outputs/retargeting/gripper-full-20261028/`:
+
+- [45 tests](../../../outputs/retargeting/gripper-full-20261028/tests.log) pass,
+  including Config 4 endpoints/interior, directed axes, FK, rigid equivariance,
+  invalid geometry/thresholds, CLI/snapshot and CV/OpenGL camera conventions.
+- [Full-sample audit](../../../outputs/retargeting/gripper-full-20261028/audit.json)
+  verifies source preservation, ordinary FK/joint limits, weights/axes, earlier
+  results and aligned/native-world camera consistency (maximum 7.78e−16 m).
+- Each video report above verifies every frame timestamp, dimensions, frame rate
+  and complete decoding. Render/encode/verification times were **36.24 / 36.22 /
+  35.24 seconds** for Configs 2/3/4 in this execution; Configs 2/3 ran concurrently,
+  so these are not isolated performance benchmarks.
+- [Visual inspection](../../../outputs/retargeting/gripper-full-20261028/visual-review.json)
+  covers open/pinch, object interaction and missing-hand frames 92/119/350/600/
+  900/1200/1285. Comparison sheets: [open](../../../outputs/retargeting/gripper-full-20261028/review-frame-119.jpg),
+  [pinch](../../../outputs/retargeting/gripper-full-20261028/review-frame-92.jpg),
+  [later interaction](../../../outputs/retargeting/gripper-full-20261028/review-frame-1200.jpg).
+- [Browser checks](../../../outputs/retargeting/gripper-full-20261028/browser.json)
+  verify Config 4 construction/threshold controls, invalid-setting rejection,
+  reset and a full snapshot. [Snapshot reload](../../../outputs/retargeting/gripper-full-20261028/snapshot-reload.json)
+  verifies all fields at tuned 60°/70° thresholds. Temporary validation viewers
+  were stopped; original sessions were checked without changing controls.
 
 ## Fingertip forward and roll blend (2026-10-28)
 

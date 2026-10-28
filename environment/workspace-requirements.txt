@@ -10,6 +10,8 @@ torch @ https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manyl
 pytest==8.4.2
 # Source-video overlays; already installed through the viewer dependencies.
 Pillow==12.3.0
+# Offscreen gripper mesh overlays; already supplied by scikit-robot.
+pyrender==0.1.50
 # Original MANO comparison; same evaluator/pickle compatibility as gravity alignment.
 smplx==0.1.28
 chumpy @ git+https://github.com/mattloper/chumpy@580566eafc9ac68b2614b64d6f7aaa84eebb70da

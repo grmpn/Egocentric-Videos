@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 9](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 10](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -127,8 +127,23 @@ The viewer exposes both thresholds, signed roll, original weight, both construct
 planes and the final axes. Invalid threshold edits keep the last valid preview
 and disable saving; reset restores the loaded settings and snapshots retain tuning.
 
+[Config 4](../../../configs/gripper_thumb_point_blend.json), `thumb_point_blend`,
+uses the same roll measurement and smoothstep thresholds as Config 3, but blends
+a landmark before constructing axes. With MCP weight `w`, the thumb point is
+`q = (1-w)*thumb_IP + w*thumb_MCP`. Set `y = normalize(q-index_MCP)`, project
+`index_PIP-index_MCP` perpendicular to `y` for +X, then +Z=X×Y. The plane passes
+through index MCP, index PIP and `q`; FK retains fingertip midpoint and separation.
+At weight 0 it exactly matches standalone Config 1. At weight 1 it uses the
+original plane with Y/Z reversed, as required by the user's index→thumb jaw
+choice. It does not inherit Config 3's endpoint jaw reversal. Consequently the
+fixed finger 2→thumb / finger 1→index error labels can report large assigned-tip
+offsets even when the unordered fingertip geometry looks close. No relabeling or
+orientation sign guessing occurs. Undefined interpolated planes remain invalid.
+The viewer displays this triangle and jaw segment, signed roll and MCP weight;
+its thresholds, reset and snapshots work as for Config 3.
+
 All modes use original observations, units, timestamps and opening limits.
-The [latest comparison evidence](../experiments/direct-gripper-iphone.md#fingertip-forward-and-roll-blend-2026-10-28)
+The [latest comparison evidence](../experiments/direct-gripper-iphone.md#full-video-configs-234-2026-10-28)
 owns measured results, viewer links and remaining selection work.
 
 ## Historical mappings
@@ -166,6 +181,8 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 | `zero_roll_rotation_aligned` | Roll modes: `[T,2,3,3]`, aligned-from-zero-roll basis at measurement forward, NaN where mapping-invalid; in Config 3 this measures roll, not the blended orientation |
 | `gripper_roll_rad` | Roll modes: `[T,2]`, signed MCP-line roll about measurement forward relative to that basis, [-π,π], invalid NaN |
 | `blend_original_weight` | Config 3: `[T,2]`, original weight in [0,1]; 0 means aligned Config 1, invalid NaN |
+| `thumb_mcp_weight` | Config 4: `[T,2]`, interpolation weight in [0,1], 0=thumb IP, 1=thumb MCP; invalid NaN |
+| `interpolated_thumb_aligned_m` | Config 4: `[T,2,3]`, interpolated plane point in aligned metres; invalid NaN |
 | `blend_endpoint_angle_rad` | Config 3: `[T,2]`, shortest rotation angle between aligned endpoint frames, invalid NaN |
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
@@ -210,6 +227,27 @@ hidden during mapped playback; manual inspection can show a gripper without a ha
 
 See the [README commands](../../../README.md#direct-hand-to-gripper-review) and
 [first-region acceptance evidence](../experiments/direct-gripper-iphone.md).
-Default selection, alternative position targets, later regions and reintegration
-with IK remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
+Configs 2/3/4 now cover the full iPhone recording. Default selection, alternative
+position targets and reintegration with IK remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
 dynamics are unverified.
+
+## Saved RGB overlays
+
+[render_gripper_overlay.py](../../../scripts/render_gripper_overlay.py) consumes a
+saved mapping and writes a new MP4 plus a JSON validation report. It reuses the
+alignment's original pinhole intrinsics and per-frame aligned-from-camera poses;
+CV camera axes (+X right, +Y down, +Z forward) become OpenGL (+X right, +Y up,
+−Z forward) with `diag(1,-1,-1)`. Gripper meshes follow ordinary FK and the saved
+TCP poses/openings. Installed **pyrender 0.1.50** (already a scikit-robot dependency,
+now explicitly pinned) supplies EGL mesh rasterization and depth testing;
+FFmpeg decodes/encodes the source at its original dimensions and frame rate.
+No custom rasterizer or new package installation was needed.
+
+Left/right meshes are blue/orange at default opacity 0.7. Invalid mappings are
+hidden and labeled. The top banner identifies method, original frame/time and
+hand availability. Meshes depth-test against each other, but there is no real
+scene-depth occlusion. Physical contact and reconstruction accuracy are not
+established by this visualization. The output covers every selected frame,
+including gaps; timestamps start at zero for a selected interval. Frame count,
+dimensions, frame rate, timestamps and full decoding are verified before the
+completion report is written. Existing outputs are refused.

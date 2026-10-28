@@ -477,15 +477,18 @@ Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original M
 geometry and timestamps are preserved; physical contact remains uncalibrated.
 
 For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1),
-`--config configs/gripper_wrist_roll.json` (Config 2), or
-`--config configs/gripper_roll_blend.json` (Config 3) to `map_gripper.py`, with
+`--config configs/gripper_wrist_roll.json` (Config 2),
+`--config configs/gripper_roll_blend.json` (Config 3), or
+`--config configs/gripper_thumb_point_blend.json` (Config 4) to `map_gripper.py`, with
 a different output directory for each. Open each saved directory with
 `view_gripper_mapping.py --port PORT --open-browser`, choosing a free port to
 preserve existing viewers. Config 1 changes the plane/jaw landmarks; Config 2
 fixes the rear palm to the wrist, aims at fingertip midpoint and follows MCP
 roll. Config 3 blends aligned Config 1 toward the original plane as |roll|
 increases from 30° to 45°. Its **Mapping adjustments** controls tune these
-thresholds; snapshots retain them. See the [mapping contracts](knowledge/wiki/topics/direct-gripper-mapping.md#comparison-configurations).
+thresholds; snapshots retain them. Config 4 uses those weights to move the
+thumb plane point from IP to MCP, with jaw pointing index MCP→thumb point.
+See the [mapping contracts](knowledge/wiki/topics/direct-gripper-mapping.md#comparison-configurations).
 These variants do not change the default.
 
 ```bash
@@ -493,4 +496,18 @@ env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests
 ```
 
 See the [mapping contract](knowledge/wiki/topics/direct-gripper-mapping.md) and
-[first-region evidence](knowledge/wiki/experiments/direct-gripper-iphone.md).
+[comparison evidence](knowledge/wiki/experiments/direct-gripper-iphone.md).
+
+To render a saved mapping onto source RGB (all three full iPhone comparisons are
+linked in the [review evidence](knowledge/wiki/experiments/direct-gripper-iphone.md#full-video-configs-234-2026-10-28)):
+
+```bash
+PYTHONPATH=src .venv-workspace/bin/python scripts/render_gripper_overlay.py \
+  outputs/retargeting/gripper-full-20261028/config4 \
+  --output outputs/retargeting/gripper-full-20261028/config4-review.mp4
+```
+
+Use `--frame-stop 1286` when mapping the full prepared iPhone recording. The
+renderer keeps source dimensions/frame rate, hides invalid/infilled observations,
+and writes an MP4 plus frame/timestamp/decode validation JSON. It uses installed
+pyrender/EGL and FFmpeg; `--opacity` controls mesh opacity (default 0.7).

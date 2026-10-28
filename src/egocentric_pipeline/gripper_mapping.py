@@ -15,8 +15,9 @@ from .run_metadata import read_json, utc_now, write_json
 
 LANDMARK_NAMES = ("wrist", "thumb_mcp", "index_mcp", "thumb_tip", "index_tip", "thumb_ip", "index_pip")
 PLANE_MODES = ("mcp_plane", "thumb_ip_plane")
-KINEMATIC_MODES = ("fingertip_correspondence", *PLANE_MODES, "wrist_roll", "roll_blend")
-ROLL_MODES = ("wrist_roll", "roll_blend")
+BLEND_MODES = ("roll_blend", "thumb_point_blend")
+ROLL_MODES = ("wrist_roll", *BLEND_MODES)
+KINEMATIC_MODES = ("fingertip_correspondence", *PLANE_MODES, *ROLL_MODES)
 
 
 def validate_settings(settings):
@@ -34,7 +35,7 @@ def validate_settings(settings):
         if mode in ROLL_MODES and settings.get("forward_axis", "wrist_to_mcp_midpoint") not in (
                 "wrist_to_mcp_midpoint", "wrist_to_tip_midpoint"):
             raise ValueError("Roll forward_axis must be wrist_to_mcp_midpoint or wrist_to_tip_midpoint")
-        if mode == "roll_blend":
+        if mode in BLEND_MODES:
             low, high = settings["blend_open_roll_degrees"], settings["blend_pinch_roll_degrees"]
             if not np.isfinite([low, high]).all() or not 0 <= low < high <= 180:
                 raise ValueError("Require 0 <= blend_open_roll_degrees < blend_pinch_roll_degrees <= 180")
@@ -226,6 +227,13 @@ def landmark_rotation(points, observed, settings):
     return np.stack((x, y, np.cross(x, y)), axis=-1), valid
 
 
+def roll_blend_weight(roll, settings):
+    """Smooth MCP-endpoint weight from absolute signed roll, preserving NaNs."""
+    low, high = settings["blend_open_roll_degrees"], settings["blend_pinch_roll_degrees"]
+    fraction = np.clip((np.abs(np.rad2deg(roll)) - low) / (high-low), 0., 1.)
+    return fraction**2 * (3 - 2*fraction)
+
+
 def blend_plane_rotations(open_rotation, pinch_rotation, roll, valid, settings):
     """SO(3) interpolation with smoothstep weight from absolute MCP roll.
 
@@ -238,9 +246,7 @@ def blend_plane_rotations(open_rotation, pinch_rotation, roll, valid, settings):
     weights = np.full(valid.shape, np.nan)
     angles = np.full(valid.shape, np.nan)
     if valid.any():
-        low, high = settings["blend_open_roll_degrees"], settings["blend_pinch_roll_degrees"]
-        fraction = np.clip((np.abs(np.rad2deg(roll[valid])) - low) / (high-low), 0., 1.)
-        weights[valid] = fraction**2 * (3 - 2*fraction)
+        weights[valid] = roll_blend_weight(roll[valid], settings)
         opened = Rotation.from_matrix(open_rotation[valid] @ np.diag([1., -1., -1.]))
         relative = opened.inv() * Rotation.from_matrix(pinch_rotation[valid])
         angles[valid] = relative.magnitude()
@@ -259,6 +265,8 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     rear palm origin at the wrist, preserves its configured forward +X and
     projects thumb MCP→index MCP as +Y. roll_blend uses this measured roll to
     transition aligned Config 1→original plane rotations at fingertip midpoint.
+    thumb_point_blend instead moves the thumb plane point IP→MCP with the same
+    weight, preserving the user's index MCP→thumb-point jaw direction.
     Legacy +X follows the configured segment; +Y follows thumb MCP→index MCP.
     The priority axis is preserved and the other projected perpendicular to it;
     +Z=X×Y. Older settings default to closing priority, zero wrist shift and
@@ -283,6 +291,14 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
         pinch, pinch_valid = landmark_rotation(points, observed, {**settings, "mapping_mode": "mcp_plane"})
         valid &= open_valid & pinch_valid
         rotation, weights, angles = blend_plane_rotations(opened, pinch, roll, valid, settings)
+    elif mode == "thumb_point_blend":
+        if points.shape[-2] != 7:
+            raise ValueError("Thumb point blend requires thumb IP and index PIP landmarks")
+        weights = roll_blend_weight(roll, settings)
+        thumb_point = (1 - weights[..., None]) * points[..., 5, :] + weights[..., None] * points[..., 1, :]
+        construction = points.copy()
+        construction[..., 5, :] = thumb_point
+        rotation, valid = landmark_rotation(construction, valid, {**settings, "mapping_mode": "thumb_ip_plane"})
     grasp = np.full((*observed.shape, 4, 4), np.nan)
     grasp[valid] = np.eye(4)
     grasp[..., :3, :3][valid] = rotation[valid]
@@ -300,6 +316,10 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
             weights[~mapped["mapping_valid"]] = np.nan
             angles[~mapped["mapping_valid"]] = np.nan
             mapped.update(blend_original_weight=weights, blend_endpoint_angle_rad=angles)
+        elif mode == "thumb_point_blend":
+            weights[~mapped["mapping_valid"]] = np.nan
+            thumb_point[~mapped["mapping_valid"]] = np.nan
+            mapped.update(thumb_mcp_weight=weights, interpolated_thumb_aligned_m=thumb_point)
         return mapped
     correction = np.tile(np.eye(4), (2, 1, 1))
     correction[:, :3, 3] = settings["tcp_offset_grasp_m"]
@@ -385,7 +405,7 @@ def mapping_summary(arrays):
                                  tip_action_range=arrays["tip_action_range"][hand].tolist())
             center_error = np.linalg.norm(arrays["gripper_tips_aligned_m"][valid, hand].mean(axis=1)
                                           - arrays["transform_aligned_from_grasp"][valid, hand, :3, 3], axis=-1)
-            if "gripper_roll_rad" in arrays and "blend_original_weight" not in arrays:
+            if "gripper_roll_rad" in arrays and not any(k in arrays for k in ("blend_original_weight", "thumb_mcp_weight")):
                 error = np.linalg.norm(arrays["transform_aligned_from_palm"][valid, hand, :3, 3]
                                        - arrays["landmarks_aligned_m"][valid, hand, 0], axis=-1)
                 roll = np.rad2deg(arrays["gripper_roll_rad"][valid, hand])
@@ -398,6 +418,11 @@ def mapping_summary(arrays):
                 summary[side].update(full_config1_samples=int((weights == 0).sum()),
                                      transition_samples=int(((weights > 0) & (weights < 1)).sum()),
                                      full_original_samples=int((weights == 1).sum()))
+            if "thumb_mcp_weight" in arrays:
+                weights = arrays["thumb_mcp_weight"][valid, hand]
+                summary[side].update(thumb_ip_samples=int((weights == 0).sum()),
+                                     transition_samples=int(((weights > 0) & (weights < 1)).sum()),
+                                     thumb_mcp_samples=int((weights == 1).sum()))
     return summary
 
 
@@ -473,6 +498,9 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
             if settings["mapping_mode"] == "roll_blend":
                 report.update(tip_correspondence="Tip midpoint/separation matched; Config 1 jaw aligned thumb→index; individual offsets expected",
                               blend_convention="Config 1 @ diag(1,-1,-1) → original MCP plane; shortest SO(3) arc; smoothstep of absolute roll; thresholds in settings")
+            elif settings["mapping_mode"] == "thumb_point_blend":
+                report.update(tip_correspondence="Tip midpoint/separation matched; jaw index MCP→interpolated thumb point; individual offsets expected",
+                              blend_convention="Thumb point (1-w)*IP+w*MCP; w is smoothstep of absolute roll; index MCP/PIP/thumb-point plane; thresholds in settings")
     result = save_mapping(output_directory, arrays, report, settings, grippers)
     for gripper in grippers:
         (Path(output_directory) / f"{gripper.side}_gripper.urdf").write_text(gripper.xml)

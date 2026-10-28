@@ -1,52 +1,50 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 9 · 2026-10-28 · User-requested fingertip-forward Config 2 and roll-weighted Config 3, with explicit jaw-alignment choice, recorded as `20261028-gripper-blend-001` in the [action log](../logs/2026-10.jsonl). Earlier comparison results remain preserved.
+Approved revision 10 · 2026-10-28 · User requested Config 4 and full iPhone
+comparison, then selected saved overlay MP4s. Recorded as
+`20261028-gripper-full-001` in the [action log](../logs/2026-10.jsonl).
+Earlier comparisons remain preserved.
 
 ## Objective and deliverable
 
-Extend the first-region comparison to refine Config 2's forward direction and
-try a smooth transition between Config 1 for open hands and the original MCP
-plane for pinches. Deliver two independently reloadable results and new viewers
-for iPhone frames **[0,296)**, retaining the existing three review windows.
+Compare Configs 2, 3 and 4 across the entire prepared iPhone recording:
+**1,286 frames, 42.87 seconds**. Deliver three saved MP4s with posed gripper meshes
+projected onto the source RGB, plus reloadable mappings and validation evidence.
+Keep existing interactive comparison windows available.
 
 ## Scope and boundaries
 
-- Preserve pinned Purdue gripper assets, coupling/limits, original aligned MANO
-  geometry, metres, radians, timestamps and left/right identity. Use
-  `export_valid & ~motion_infilled`; do not interpolate missing observations.
-- Updated Config 2: rear palm origin stays at the physical hand wrist. Forward
-  becomes wrist→midpoint(thumbtip,index tip); project thumb MCP→index MCP
-  perpendicular to forward for the jaw. Retain signed roll from an ideal open
-  hand with matching shape and wrist orientation. Its open forward also uses
-  fingertip midpoint, transported by the shortest rotation to current forward.
-  Preserve earlier MCP-forward results when reloading their saved settings.
-- Config 3: measure MCP-line roll using updated Config 2 and interpolate proper
-  rotations between the thumb-IP and original MCP planes using existing SciPy
-  rotation operations. The user approved aligning jaw directions within this
-  blend: reverse Config 1's +Y/+Z while preserving +X, so its jaw points from
-  thumb side toward index side. Standalone Config 1 stays unchanged.
-- Start with original weight 0 at |roll|≤30°, weight 1 at ≥45°, and smoothstep
-  between. Expose both thresholds and current roll/weight in the viewer. Config 3
-  retains fingertip-midpoint placement and existing FK-derived opening; Config 2
-  retains wrist attachment. Reject undefined axes/references without inventing
-  poses or bridging missing data.
-- Preserve opening branch, playback, closeups, snapshots, manual controls and
-  historical mappings. Show endpoint planes, blended axes and anchor diagnostics.
-- No arm IK, reconstruction reruns, filtering, hardware control, physical contact,
-  collision or dynamics validation. Later regions and selecting a new default
-  remain deferred until the user's comparison review.
+- Config 4 forms a plane from index MCP, index PIP and a thumb point interpolated
+  from thumb IP when open to thumb MCP when pinching. Use the same fingertip-forward,
+  ideal-open MCP roll reference and absolute-roll smoothstep weights as Config 3:
+  weight 0 at ≤30°, weight 1 at ≥45°. Jaw +Y points index MCP→interpolated thumb
+  point; +X projects index MCP→PIP perpendicular to it, +Z=X×Y. Preserve this
+  explicitly requested direction: the pinch endpoint has the original plane but
+  reversed Y/Z. Preserve fingertip-midpoint placement and geometry-derived opening.
+- Keep Config 2's rear-palm wrist anchor/fingertip forward and Config 3's aligned
+  rotation blend unchanged. Reuse existing original aligned MANO and pinned robot
+  assets. Do not rerun HaWoR, solve arm IK or smooth trajectories.
+- Process all source frames with unchanged timestamps, metres, rotations and
+  left/right identity. Eligibility remains `export_valid & ~motion_infilled`;
+  reject degenerate/unreachable geometry and draw no gripper for those samples.
+- Render each saved mapping with the existing aligned camera poses/intrinsics
+  and ordinary gripper FK, using installed rendering/encoding dependencies.
+  Retain full source image dimensions and frame rate. Distinguish configurations
+  and missing-hand states in overlays; preserve inputs and previous outputs.
+- Keep Config 4's construction/weights inspectable in the existing viewer and
+  saved arrays. No new full-length viewer windows are required by this request.
+  Physical contact, scene occlusion, collision/dynamics and final default selection
+  remain outside this geometric comparison.
 
 ## Acceptance
 
-- Test updated forward/wrist placement, unchanged opening/source fields,
-  zero/±90° roll, blend endpoints/interior, proper rotations and rigid-frame
-  equivariance. Exercise invalid thresholds, missing/degenerate inputs, historical
-  settings and saved snapshots through production commands.
-- Generate both results and audit all eligible samples, original fields and
-  timestamps, ordinary FK, anchors, weights, endpoint angles and adjacent-frame
-  rotation changes. Inspect both hands, especially open/pinch frames 92/119.
-  Verify playback, threshold adjustment, snapshots/reload, manual controls and
-  existing viewer availability. Save settings, logs, audits and screenshots under a new
-  local comparison directory; update wiki/status/log and commit verified work.
-  Acceptance establishes an inspectable geometric comparison, not simulation
-  execution or physical contact accuracy.
+- Focused tests verify interpolated positions, endpoint direction, intermediate
+  axes, FK midpoint/opening, rigid-frame equivariance, missing/degenerate samples
+  and snapshot/CLI compatibility. Exercise camera transform/projection direction.
+- Generate all three full mappings; audit frame/timestamp/source preservation,
+  mapping coverage, anchors, Config 4 weights/axes and adjacent orientation changes.
+  Confirm prior Config 2/3 first-region results remain unchanged.
+- Render all three videos, verify frame count, dimensions, timestamps and decoding,
+  and inspect representative open/pinch/late/missing-observation frames.
+  Save reports, logs and review images under a new local output directory.
+  Update canonical documentation/status/action log and commit verified work.
