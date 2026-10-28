@@ -476,6 +476,15 @@ are hidden and labeled; older runs retain their original behavior.
 Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original MANO
 geometry and timestamps are preserved; physical contact remains uncalibrated.
 
+For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1)
+or `--config configs/gripper_wrist_roll.json` (Config 2) to `map_gripper.py`, with
+a different output directory for each. Open each saved directory with
+`view_gripper_mapping.py --port 8092 --open-browser` or `--port 8093 --open-browser`
+to keep the baseline viewer on 8091. Config 1 changes the plane/jaw landmarks;
+Config 2 fixes the rear palm origin to the wrist and follows hand-relative MCP
+roll. See the [mapping contracts](knowledge/wiki/topics/direct-gripper-mapping.md#comparison-configurations).
+These variants do not change the default.
+
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python -m pytest tests/test_gripper_mapping.py -q
 ```

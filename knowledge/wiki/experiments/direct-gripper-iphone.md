@@ -1,8 +1,65 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 7 fulfilled · 2026-10-27 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 8 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
+
+## Two-method comparison (2026-10-28)
+
+The user requested two additional configurations while retaining the original
+window. Both reuse frames **[0,296)** and unchanged observed MANO estimates and
+FK opening; there was no reconstruction, filtering or arm-IK rerun. The user
+clarified Config 2's anchor as the rear palm origin, and zero roll as an ideal
+open hand carried by the current wrist orientation. The
+[mapping contract](../topics/direct-gripper-mapping.md#comparison-configurations)
+defines axes, sign, reference transport and validity.
+
+| Viewer | Configuration | Anchor | Maximum audited anchor error |
+| --- | --- | --- | --- |
+| [Current baseline :8091](http://localhost:8091) | Revision-7 MCP plane | Fingertip midpoint | Prior evidence below |
+| [Config 1 :8092](http://localhost:8092) | Index MCP/index PIP/thumb IP plane; jaw index MCP→thumb IP | Fingertip midpoint | 1.32e−15 m |
+| [Config 2 :8093](http://localhost:8093) | Wrist→MCP-midpoint forward; MCP-line roll | Rear palm at hand wrist | 1.12e−16 m |
+
+Both new configurations map **470/470 eligible hand samples** (228 left / 242
+right), with no degenerate/unreachable samples. Original selected source arrays,
+timestamps and actions match the baseline exactly. Right frames 92/119 retain
+commands **0.063020 / 0.327544**. Config 2's roll ranges are **−3.76° to +58.15°**
+left and **−53.23° to +5.22°** right; right 92/119 are **−34.83° / −23.71°**.
+These are measured angles, without forcing pinches to 90°.
+
+Assigned per-tip offsets (median / maximum) are **27.68 / 149.50 mm** for
+Config 1 and **50.74 / 90.50 mm** for Config 2. Config 1 reverses the directed
+jaw relative to the baseline but keeps finger-2→thumb/finger-1→index diagnostic
+labels; these numbers are not minimum distances over interchangeable tips.
+Config 2 fixes the wrist instead of the fingertip midpoint. Neither offset
+summary is a common-objective ranking or a physical contact measurement.
+
+Local evidence under `outputs/retargeting/gripper-comparison-20261028/`:
+
+- [34 focused tests](../../../outputs/retargeting/gripper-comparison-20261028/tests.log)
+  pass, including both CLI/snapshot paths, plane sign, real FK, zero/±90° roll,
+  shortest-forward transport, rigid-frame equivariance and invalid inputs.
+- [All-sample audit](../../../outputs/retargeting/gripper-comparison-20261028/audit.json)
+  passes axes, proper rotations, ordinary FK, anchors, opening, joint bounds,
+  source preservation and all seven earlier mappings recomputed unchanged.
+- [Browser check](../../../outputs/retargeting/gripper-comparison-20261028/browser.json)
+  passes 11.5 s playback per viewer (including loop), frames 0/33/92/119/245/295,
+  both closeups, manual-mode restoration and snapshots, with no page errors.
+  The original viewer is reachable and its controls were not changed.
+- [Reload check](../../../outputs/retargeting/gripper-comparison-20261028/reload.json)
+  passes both new snapshots and the legacy, exact-tip and baseline plane modes.
+- [Visual inspection](../../../outputs/retargeting/gripper-comparison-20261028/visual-review.json)
+  covers both sides at frame 119, both methods at frame 92 and Config 2's
+  missing-left endpoint. [Config 1](../../../outputs/retargeting/gripper-comparison-20261028/config1-right-119.png)
+  and [Config 2](../../../outputs/retargeting/gripper-comparison-20261028/config2-right-119.png)
+  show their different anchors, orientations and diagnostics.
+
+Both new viewers are left at **119** with both hands visible. Saved results are
+[Config 1](../../../outputs/retargeting/gripper-comparison-20261028/config1/mapping_report.json)
+and [Config 2](../../../outputs/retargeting/gripper-comparison-20261028/config2/mapping_report.json).
+The default remains revision 7 pending the user's selection. The accepted result
+is this comparison; physical contact, collisions/dynamics, later regions and
+integration with arm IK remain unverified or deferred.
 
 ## MCP/index-PIP plane orientation
 
@@ -12,7 +69,7 @@ in-plane and perpendicular toward PIP, and +Z = +X × +Y. The gripper tip midpoi
 stays at the human fingertip midpoint. Geometry-derived opening is unchanged;
 individual tip correspondence is superseded by the new jaw direction. See the
 [mapping contract](../topics/direct-gripper-mapping.md) for the transform.
-The [current viewer](http://localhost:8091) loads the
+The [preserved baseline viewer](http://localhost:8091) loads the
 [plane result](../../../outputs/retargeting/gripper-mcp-plane-20261027/mapping/mapping_report.json).
 
 [28 focused tests](../../../outputs/retargeting/gripper-mcp-plane-20261027/tests.log)
@@ -39,8 +96,8 @@ readouts, snapshots and manual-mode restoration with no page errors. Inspected
 and [left frame 119](../../../outputs/retargeting/gripper-mcp-plane-20261027/left-frame-119.png).
 [Reload checks](../../../outputs/retargeting/gripper-mcp-plane-20261027/reload.json)
 verify the original viewer, exact-tip viewer and new plane snapshot, including
-triangle vertices, displayed forward segment and midpoint. The live viewer is
-paused at **119**, showing both hands. Physical contact, scale, collisions and
+triangle vertices, displayed forward segment and midpoint. At the revision-7
+handoff the viewer was paused at **119**, showing both hands. Physical contact, scale, collisions and
 dynamics remain unverified.
 
 To reopen:

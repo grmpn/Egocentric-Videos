@@ -106,8 +106,9 @@ def landmarks(distances):
     return points
 
 
-def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers):
-    settings = read_json(ROOT / "configs/gripper_mapping.json")
+@pytest.mark.parametrize("mode", ["mcp_plane", "thumb_ip_plane"])
+def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers, mode):
+    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
     points = landmarks([.02107880248989149, .12549593759450284])
     # Tilt the fingertip line away from the MCP jaw line: individual tips must
     # differ, while their midpoint and distance remain exact.
@@ -120,6 +121,10 @@ def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers):
     np.testing.assert_allclose(mapped["gripper_action"], previous["gripper_action"], atol=1e-12)
     for hand, sign in enumerate((-1, 1)):
         x, y = np.array([.8, 0., -.6]), np.array([0., sign, 0.])
+        if mode == "thumb_ip_plane":
+            # Analytic directions for index MCP→thumb IP and projected index PIP.
+            y = np.array([4., -3.*sign, 2.]) / np.sqrt(29)
+            x = np.array([64., 10.*sign, -113.]) / np.sqrt(16965)
         rotation = np.stack([x, y, np.cross(x, y)], axis=-1)
         for frame in range(2):
             np.testing.assert_allclose(mapped["transform_aligned_from_grasp"][frame,hand,:3,:3], rotation, atol=1e-14)
@@ -139,14 +144,18 @@ def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers):
         np.testing.assert_allclose(moved[key], transform @ mapped[key], atol=1e-10)
 
 
-def test_mcp_plane_degenerate_and_missing_observations(grippers):
-    settings = read_json(ROOT / "configs/gripper_mapping.json")
+@pytest.mark.parametrize("mode", ["mcp_plane", "thumb_ip_plane"])
+def test_mcp_plane_degenerate_and_missing_observations(grippers, mode):
+    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
     points = landmarks([.05]*5)
     observed = np.ones((5,2), bool)
     observed[0,0] = False
     points[1,0,2] = points[1,0,1]  # Coincident MCPs.
     points[2,0,6] = points[2,0,2]  # Coincident index MCP/PIP.
     points[3,0,6] = points[3,0,2] + (points[3,0,2]-points[3,0,1])  # Collinear plane.
+    if mode == "thumb_ip_plane":
+        points[1,0,5] = points[1,0,2]
+        points[3,0,6] = points[3,0,2] + (points[3,0,5]-points[3,0,2])
     points[4,0,4] = points[4,0,3] + [0., 1., 0.]  # Unreachable opening.
     result = map_grasp_landmarks(points, observed, settings, grippers)
     assert not result["mapping_valid"][:,0].any()
@@ -154,6 +163,62 @@ def test_mcp_plane_degenerate_and_missing_observations(grippers):
     assert np.isnan(result["transform_aligned_from_tcp"][:,0]).all()
     with pytest.raises(ValueError, match="requires index PIP"):
         map_grasp_landmarks(points[:,:,:6], observed, settings, grippers)
+
+
+def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers):
+    settings = read_json(ROOT / "configs/gripper_wrist_roll.json")
+    angles = np.array([0., np.pi/2, -np.pi/2])
+    points = landmarks([.05]*3)
+    open_points = points[..., :3, :].copy()
+    observed = np.ones((3,2), bool)
+    swing = Rotation.from_euler("y", .35).as_matrix()
+    for i, angle in enumerate(angles):
+        points[i] = points[i] @ (swing @ Rotation.from_euler("x", angle).as_matrix()).T
+    mapped = map_grasp_landmarks(points, observed, settings, grippers, open_hand_landmarks=open_points)
+    assert mapped["mapping_valid"].all()
+    np.testing.assert_allclose(mapped["gripper_roll_rad"], np.repeat(angles[:,None], 2, axis=1), atol=1e-14)
+    for hand, sign in enumerate((-1, 1)):
+        zero_rotation = swing @ np.diag([1., sign, sign])
+        np.testing.assert_allclose(mapped["zero_roll_rotation_aligned"][:,hand], np.tile(zero_rotation, (3,1,1)), atol=1e-14)
+        for i, angle in enumerate(angles):
+            g = grippers[hand]
+            g.set_opening(mapped["gripper_action"][i,hand])
+            g.place_tcp(mapped["transform_aligned_from_tcp"][i,hand])
+            np.testing.assert_allclose(g.model.root_link.worldpos(), points[i,hand,0], atol=1e-12)
+            expected = swing @ Rotation.from_euler("x", angle).as_matrix() @ np.diag([1., sign, sign])
+            np.testing.assert_allclose(g.model.root_link.worldrot(), expected, atol=1e-12)
+            assert np.linalg.det(g.model.root_link.worldrot()) == pytest.approx(1.)
+            tips = g.tip_positions(settings["distal_tip_local_m"])
+            assert np.linalg.norm(tips[1]-tips[0]) == pytest.approx(.05, abs=1e-12)
+    transform = np.eye(4)
+    transform[:3,:3] = Rotation.from_euler("xyz", [.4,-.6,2.]).as_matrix()
+    transform[:3,3] = [.5,-.9,.2]
+    moved = map_grasp_landmarks(points @ transform[:3,:3].T + transform[:3,3], observed, settings, grippers,
+                               open_hand_landmarks=open_points @ transform[:3,:3].T + transform[:3,3])
+    np.testing.assert_allclose(moved["transform_aligned_from_tcp"], transform @ mapped["transform_aligned_from_tcp"], atol=1e-12)
+    np.testing.assert_allclose(moved["gripper_roll_rad"], mapped["gripper_roll_rad"], atol=1e-12)
+    np.testing.assert_allclose(moved["gripper_action"], mapped["gripper_action"], atol=1e-12)
+
+
+def test_wrist_roll_missing_degenerate_and_unreachable(grippers):
+    settings = read_json(ROOT / "configs/gripper_wrist_roll.json")
+    points = landmarks([.05]*7)
+    open_points = points[..., :3, :].copy()
+    observed = np.ones((7,2), bool)
+    observed[0,0] = False
+    points[1,0,0] = points[1,0,1:3].mean(axis=0)  # No forward direction.
+    points[2,0,1:3] = [[.04,0,0],[.08,0,0]]  # Jaw parallel to forward.
+    points[3,0,4] = points[3,0,3] + [0.,1.,0.]  # Unreachable opening.
+    open_points[4,0] = np.nan
+    open_points[5,0,1:3] *= -1  # No unique shortest rotation for opposite X.
+    open_points[6,0,1:3] = [[.04,0,0],[.08,0,0]]  # Degenerate reference jaw.
+    result = map_grasp_landmarks(points, observed, settings, grippers, open_hand_landmarks=open_points)
+    assert not result["mapping_valid"][:,0].any()
+    assert result["mapping_valid"][:,1].all()
+    for key in ("gripper_roll_rad", "zero_roll_rotation_aligned", "transform_aligned_from_tcp", "gripper_action"):
+        assert np.isnan(result[key][:,0]).all()
+    with pytest.raises(ValueError, match="requires open hand landmarks"):
+        map_grasp_landmarks(points, observed, settings, grippers)
 
 
 def test_analytic_axes_center_and_continuous_opening(settings):
@@ -333,7 +398,7 @@ def test_detached_gripper_matches_full_model_and_free_tcp_pose():
             gripper.place_tcp(np.zeros((4, 4)))
 
 
-@pytest.mark.parametrize("mode", ["landmark_frame", "fingertip_correspondence", "mcp_plane"])
+@pytest.mark.parametrize("mode", ["landmark_frame", "fingertip_correspondence", "mcp_plane", "thumb_ip_plane", "wrist_roll"])
 def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings, mode, grippers):
     from egocentric_pipeline.hand_geometry import load_mano_model, reconstruct_mano
     from egocentric_pipeline.gripper_visualization import review_rgb
@@ -394,6 +459,11 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
         if name in arrays:
             np.testing.assert_array_equal(arrays[name], source[name][1:5])
     assert not arrays["mapping_valid"][0,0] and not arrays["mapping_valid"][3,1]
+    if mode == "wrist_roll":
+        # Source uses identity articulation, exactly the ideal-open reference.
+        np.testing.assert_allclose(arrays["gripper_roll_rad"][arrays["mapping_valid"]], 0., atol=1e-12)
+        np.testing.assert_allclose(arrays["transform_aligned_from_palm"][arrays["mapping_valid"], :3, 3],
+                                   arrays["wrist_position_aligned_m"][arrays["mapping_valid"]], atol=1e-7)
     assert np.isnan(arrays["landmarks_aligned_m"][0,0]).all()
     for hand in range(2):
         joints, vertices = expected[hand]
@@ -412,6 +482,10 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
     save_mapping(snapshot, arrays, report, tuned)
     saved, saved_report = load_mapping(snapshot)
     assert saved_report["settings"] == tuned
-    np.testing.assert_allclose(saved["gripper_action"], map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["mapping_valid"], tuned, grippers)["gripper_action"], equal_nan=True)
+    np.testing.assert_allclose(saved["gripper_action"], map_grasp_landmarks(arrays["landmarks_aligned_m"], arrays["mapping_valid"], tuned, grippers,
+        open_hand_landmarks=arrays.get("open_hand_landmarks_aligned_m"))["gripper_action"], equal_nan=True)
+    if mode == "wrist_roll":
+        for key in ("gripper_roll_rad", "zero_roll_rotation_aligned", "open_hand_landmarks_aligned_m"):
+            np.testing.assert_allclose(saved[key], arrays[key], equal_nan=True)
     with pytest.raises(FileExistsError):
         save_mapping(snapshot, arrays, report, tuned)

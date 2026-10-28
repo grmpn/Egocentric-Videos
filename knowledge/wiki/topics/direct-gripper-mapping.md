@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 7](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 8](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -68,6 +68,45 @@ is filled. The [shared forward segment](../../../src/egocentric_pipeline/gripper
 drives the mapper and displayed index-MCP→PIP construction line. A translucent
 triangle shows the three points defining the orientation plane.
 
+## Comparison configurations
+
+The default remains `mcp_plane` until the user selects a method.
+[Config 1](../../../configs/gripper_thumb_ip_plane.json), `thumb_ip_plane`, uses
+the index MCP/index PIP/thumb IP plane. Its +Y points **index MCP→thumb IP**;
++X projects index MCP→index PIP perpendicular to +Y, toward PIP; +Z = +X × +Y.
+It retains the opening-dependent tip-midpoint placement and opening above.
+This deliberately reverses the general jaw direction relative to the baseline's
+thumb→index direction. Tip-offset diagnostics retain finger 2→thumb / finger
+1→index labels; they do not minimize distance over swapped tip assignments.
+
+[Config 2](../../../configs/gripper_wrist_roll.json), `wrist_roll`, puts the
+gripper **rear palm origin** at the physical hand wrist, with no translational
+offset. +X is normalized wrist→midpoint(thumb MCP,index MCP). +Y projects
+thumb MCP→index MCP perpendicular to +X, and +Z = +X × +Y. This preserves
+forward exactly and lets the MCP line determine roll. Here the human grasp
+transform is the palm transform; the fixed TCP follows from ordinary FK.
+Opening still matches fingertip distance, but fingertip-midpoint placement is
+not a constraint. Tip offsets therefore measure both orientation and attachment.
+
+Config 2's zero-roll reference is the same MANO model/shape/root pose evaluated
+with identity local joint rotations. The installed `MANOLayer` matrix interface
+does not add a pose mean, so this is the ideal open hand, not the learned mean
+articulation. Construct open forward and projected MCP jaw axes, then apply the
+shortest rotation taking open forward to current forward. If its transported
+jaw axis is `y0`, current jaw is `y`, and current forward is `x`, signed roll is
+`atan2(dot(x,cross(y0,y)), dot(y0,y))`, in [-π,π]. Applying that X rotation to
+the zero-roll frame reproduces the mapped palm. Whole-hand motion carries the
+reference with it; left/right can have opposite signed roll. The scalar wraps
+at ±π without changing the rotation matrix. Degenerate reference axes and
+near-antiparallel forward directions are invalid, using the axis thresholds.
+No frame interpolation, physical calibration or artificial 90° gain is applied.
+
+Both modes use original observations, units, timestamps and opening limits.
+The [comparison evidence](../experiments/direct-gripper-iphone.md#two-method-comparison-2026-10-28)
+owns measured results, viewer links and remaining selection work.
+
+## Historical mappings
+
 Earlier `fingertip_correspondence` runs remain exact: +Y uses thumbtip→index tip,
 +X projects true wrist→thumb MCP, and the same opening-dependent placement maps
 each tip individually. Revision 7 intentionally changes the orientation constraint
@@ -97,6 +136,9 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 | `opening_reachable` | Geometry-derived opening modes: `[T,2]` bool, observed finite distance within the selected branch |
 | `gripper_tips_aligned_m`, `tip_error_m` | Geometry-derived opening modes: `[T,2,2,3]` marker positions and `[T,2,2]` Euclidean tip offsets in metres, thumb then index; expected nonzero in plane mode; NaN when invalid |
 | `tip_action_range`, `tip_distance_range_m` | Geometry-derived opening modes: `[2,2]`, per-hand lower/upper reachable branch bounds |
+| `open_hand_landmarks_aligned_m` | Wrist-roll only: `[T,2,3,3]`, ideal-open wrist/thumb MCP/index MCP in aligned metres; missing observations NaN |
+| `zero_roll_rotation_aligned` | Wrist-roll only: `[T,2,3,3]`, aligned-from-zero-roll basis at current forward, NaN where mapping-invalid |
+| `gripper_roll_rad` | Wrist-roll only: `[T,2]`, signed rotation about current forward X relative to that basis, [-π,π], invalid NaN |
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
 left/right URDFs are saved in a new output directory. Existing outputs are refused.
@@ -108,7 +150,7 @@ supported only for the legacy MCP-midpoint forward rule. Current seven-point
 landmarks retain thumb IP and index PIP for compatibility and display.
 Reports record the source, asset revision/configuration, landmark convention and
 per-hand missing/degenerate/unreachable counts, reachable ranges, tip offsets and
-maximum tip-midpoint error. Licensed models and generated geometry remain local
+maximum tip-midpoint or wrist-anchor error and roll range. Licensed models and generated geometry remain local
 inputs/evidence, outside Git.
 
 The [viewer](../../../src/egocentric_pipeline/gripper_visualization.py) reconstructs
@@ -119,9 +161,12 @@ transition in the slider. Playback uses the saved timestamp differences.
 
 Controls provide both-hand/individual closeups, per-side visibility, hand/gripper
 opacity and landmark/axis overlays. Small cyan spheres attach to the articulated
-gripper tips. Plane mode displays the thumb-MCP/index-MCP/index-PIP triangle and
+gripper tips. Plane modes display their selected three-landmark triangle and
 reports midpoint error separately from individual tip offsets; exact-tip mode
-retains coincident tip markers and its original error readout. Legacy opening,
+retains coincident tip markers and its original error readout. Wrist-roll mode
+shows wrist-anchor error, signed roll and tip offsets. Its longer thin axes at
+the wrist show zero roll; shorter axes show the mapped palm. Method names
+distinguish comparison windows. Legacy opening,
 wrist-shift and TCP-offset controls remain hidden for geometry-derived modes.
 Earlier landmark-frame runs retain their original tuning controls.
 **Save mapping snapshot** writes all frames/settings into a new timestamped child
@@ -135,6 +180,6 @@ hidden during mapped playback; manual inspection can show a gripper without a ha
 
 See the [README commands](../../../README.md#direct-hand-to-gripper-review) and
 [first-region acceptance evidence](../experiments/direct-gripper-iphone.md).
-Thumb-IP/index-PIP center comparison, later regions and reintegration with IK
-remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
+Default selection, alternative position targets, later regions and reintegration
+with IK remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
 dynamics are unverified.
