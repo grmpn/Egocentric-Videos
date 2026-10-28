@@ -48,6 +48,8 @@ class GripperMappingViewer:
         self.mcp_plane = self.settings.get("mapping_mode") in PLANE_MODES
         self.thumb_ip_plane = self.settings.get("mapping_mode") == "thumb_ip_plane"
         self.wrist_roll = self.settings.get("mapping_mode") == "wrist_roll"
+        self.roll_blend = self.settings.get("mapping_mode") == "roll_blend"
+        self.has_roll = self.wrist_roll or self.roll_blend
         self.kinematic_opening = self.settings.get("mapping_mode") in KINEMATIC_MODES
         self.plane_indices = [2, 5, 6] if self.thumb_ip_plane else [1, 2, 6]
         self.report["mano_models"] = [str(Path(p).resolve()) for p in (mano_models or self.report["mano_models"])]
@@ -55,11 +57,12 @@ class GripperMappingViewer:
         point_count = self.arrays["landmarks_aligned_m"].shape[2]
         landmarks, self.meshes = reconstruct_grasp_geometry(self.arrays, self.report["mano_models"], landmark_count=point_count)
         forward_axis = self.settings.get("forward_axis", "wrist_to_thumb_mcp")
-        self.midpoint_forward = forward_axis == "wrist_to_mcp_midpoint"
+        self.midpoint_forward = forward_axis == "wrist_to_mcp_midpoint" and not self.kinematic_opening
         forward_label = {"wrist_to_thumb_mcp": "wrist → thumb MCP",
                          "thumb_mcp_to_ip": "thumb MCP → thumb IP",
                          "index_mcp_to_pip": "index MCP → index PIP",
-                         "wrist_to_mcp_midpoint": "thumb-side wrist → thumb/index MCP midpoint"}[forward_axis]
+                         "wrist_to_mcp_midpoint": "thumb-side wrist → thumb/index MCP midpoint",
+                         "wrist_to_tip_midpoint": "wrist → thumb/index fingertip midpoint"}[forward_axis]
         if not np.allclose(landmarks, self.arrays["landmarks_aligned_m"], atol=1e-6, rtol=0, equal_nan=True):
             raise ValueError("Saved landmarks disagree with MANO reconstruction; use the original model assets")
         self.grippers = load_grippers(self.report["asset_root"], self.report["robot_settings"])
@@ -86,7 +89,8 @@ class GripperMappingViewer:
         gui.add_markdown("## Hand → gripper\nDirect mapping · original MANO · no IK\n\n"
                          "Blue: left hand · Orange: right hand · Gray: grippers\n\nOpening: 0 closed · 1 open")
         method = {"mcp_plane": "Baseline · MCP plane", "thumb_ip_plane": "Config 1 · Thumb-IP plane",
-                  "wrist_roll": "Config 2 · Wrist anchor and roll"}.get(self.settings.get("mapping_mode"))
+                  "wrist_roll": "Config 2 · Wrist anchor and roll",
+                  "roll_blend": "Config 3 · Roll-weighted plane blend"}.get(self.settings.get("mapping_mode"))
         if method:
             gui.add_markdown(f"**{method}**")
         priority = self.settings.get("orientation_priority", "closing")
@@ -98,8 +102,12 @@ class GripperMappingViewer:
             forward_label = "index MCP → index PIP, projected in " + ("thumb-IP plane" if self.thumb_ip_plane else "MCP plane")
             rule = "Jaw: " + ("index MCP → thumb IP" if self.thumb_ip_plane else "thumb MCP → index MCP") + ". Tip midpoint matched."
         if self.wrist_roll:
-            forward_label = "wrist → thumb/index MCP midpoint"
+            forward_label = "wrist → thumb/index " + ("fingertip midpoint" if forward_axis == "wrist_to_tip_midpoint" else "MCP midpoint")
             rule = "Rear palm origin fixed to wrist. Roll follows thumb MCP → index MCP, measured from the hand-relative open pose."
+        if self.roll_blend:
+            forward_label = "blend of the two plane orientations"
+            roll_direction = "fingertip midpoint" if forward_axis == "wrist_to_tip_midpoint" else "MCP midpoint"
+            rule = "Low |roll|: Config 1 with aligned jaw direction. High |roll|: original MCP plane. Tip midpoint matched. " + f"Roll measured about wrist → {roll_direction}."
         gui.add_markdown(f"Forward direction: **{forward_label}**\n\n{rule}")
         first, last = self.arrays["frame_index"][[0, -1]]
         self.frame = gui.add_slider("Source frame", min=int(first), max=int(last), step=1,
@@ -122,12 +130,15 @@ class GripperMappingViewer:
                              "Small cyan sphere: nominal gripper TCP. " +
                              (("Yellow triangle: index MCP / thumb IP / index PIP plane. " if self.thumb_ip_plane else
                                "Yellow triangle: thumb MCP / index MCP / index PIP plane. ") + "Cyan spheres: gripper tips; individual offsets are expected." if self.mcp_plane else
+                              "Yellow: original MCP plane. Orange: thumb-IP plane. Grasp axes show their blend; long wrist axes show the zero-roll reference." if self.roll_blend else
                               "Long wrist axes: zero-roll open reference. Short wrist axes: mapped palm. Cyan spheres: gripper tips; offsets are expected." if self.wrist_roll else
                               "Cyan tip spheres: gripper tip markers, coincident with human fingertips." if self.exact_tips else
                               "White sphere: shifted wrist construction point."))
         with gui.add_folder("Mapping adjustments", expand_by_default=False):
             gui.add_markdown("Jaw and forward follow the displayed construction plane. "
                              "Tip midpoint and separation follow the fingertips." if self.mcp_plane else
+                             "Smooth transition from aligned Config 1 to the original mapping as absolute MCP roll increases. "
+                             "The thresholds below apply to both hands; snapshots retain them." if self.roll_blend else
                              "Rear palm origin follows the hand wrist. Opening matches fingertip separation. "
                              "Roll is signed about forward X; zero uses the ideal open hand with current shape and wrist orientation." if self.wrist_roll else
                              "Opening and pose are solved from both fingertips. "
@@ -138,11 +149,13 @@ class GripperMappingViewer:
             self.opened = gui.add_number("Open distance (m)", initial_value=self.settings.get("open_distance_m", .1), min=.001, step=.005, visible=not self.kinematic_opening)
             self.wrist_offset = gui.add_number("Wrist shift toward thumb (m)", initial_value=self.settings.get("wrist_thumb_offset_m", 0.),
                                                min=0., step=.005, visible=self.midpoint_forward)
+            self.blend_low = gui.add_number("Full Config 1 below |roll| (deg)", initial_value=self.settings.get("blend_open_roll_degrees", 30.), min=0., max=180., step=1., visible=self.roll_blend)
+            self.blend_high = gui.add_number("Full original above |roll| (deg)", initial_value=self.settings.get("blend_pinch_roll_degrees", 45.), min=0., max=180., step=1., visible=self.roll_blend)
             self.offsets, self.rotations = [], []
             for hand, side in enumerate(("Left", "Right")):
                 self.offsets.append(gui.add_vector3(f"{side} TCP offset (m)", initial_value=self.settings.get("tcp_offset_grasp_m", np.zeros((2,3)))[hand], step=.005, visible=not self.kinematic_opening))
                 self.rotations.append(gui.add_vector3(f"{side} TCP rotation (deg)", initial_value=np.rad2deg(self.settings.get("tcp_rotation_grasp_xyz_rad", np.zeros((2,3)))[hand]), step=5., visible=not self.kinematic_opening))
-            self.reset = gui.add_button("Reset to saved settings", visible=not self.kinematic_opening)
+            self.reset = gui.add_button("Reset to saved settings", visible=not self.kinematic_opening or self.roll_blend)
             self.save = gui.add_button("Save mapping snapshot")
             self.save_status = gui.add_markdown("Snapshots preserve the current settings and all mapped frames in a new directory.")
         with gui.add_folder("Detached gripper controls", expand_by_default=False):
@@ -163,7 +176,7 @@ class GripperMappingViewer:
                          "Physical grasp accuracy remains unverified.")
         self.hand_handles, self.robot_handles, self.grasp_axes, self.tcp_axes = [], [], [], []
         self.landmarks, self.lines, self.tcp_markers, self.gizmos, self.wrist_markers = [], [], [], [], []
-        self.tip_markers, self.plane_handles, self.reference_axes = [], [], []
+        self.tip_markers, self.plane_handles, self.reference_axes, self.blend_plane_handles = [], [], [], []
         for hand, side in enumerate(("left", "right")):
             verts, faces = self.meshes[hand]
             self.hand_handles.append(self.server.scene.add_mesh_simple(f"/{side}/mano", vertices=np.zeros_like(verts[0]), faces=faces,
@@ -179,6 +192,9 @@ class GripperMappingViewer:
             self.plane_handles.append(self.server.scene.add_mesh_simple(f"/{side}/mcp_plane",
                 vertices=np.zeros((3, 3), np.float32), faces=np.array([[0, 1, 2]]),
                 color=(255, 220, 70), opacity=.22, side="double", visible=False))
+            self.blend_plane_handles.append(self.server.scene.add_mesh_simple(f"/{side}/thumb_ip_plane",
+                vertices=np.zeros((3, 3), np.float32), faces=np.array([[0, 1, 2]]),
+                color=(255, 140, 30), opacity=.22, side="double", visible=False))
             self.grasp_axes.append(self.server.scene.add_frame(f"/{side}/grasp", axes_length=.045, axes_radius=.0015, visible=False))
             self.reference_axes.append(self.server.scene.add_frame(f"/{side}/zero_roll", axes_length=.07, axes_radius=.0007, visible=False))
             self.tcp_axes.append(self.server.scene.add_frame(f"/{side}/tcp", axes_length=.025, axes_radius=.001, visible=False))
@@ -210,7 +226,7 @@ class GripperMappingViewer:
                         self.show_landmarks, self.show_axes, *self.side_visible,
                         *self.manual_positions, *self.manual_rotations, *self.manual_actions):
             control.on_update(lambda _: self.render())
-        for control in (self.closed, self.opened, self.wrist_offset, *self.offsets, *self.rotations):
+        for control in (self.closed, self.opened, self.wrist_offset, self.blend_low, self.blend_high, *self.offsets, *self.rotations):
             control.on_update(lambda _: self.remap())
         self.reset.on_click(lambda _: self.reset_settings())
         self.save.on_click(lambda _: self.save_snapshot())
@@ -250,11 +266,13 @@ class GripperMappingViewer:
 
     def remap(self):
         with self.lock:
-            if self.kinematic_opening:
+            if self.kinematic_opening and not self.roll_blend:
                 self.save.disabled = self.manual.value
                 self.render()
                 return
-            settings = {**self.settings, "closed_distance_m": float(self.closed.value), "open_distance_m": float(self.opened.value),
+            settings = {**self.settings, "blend_open_roll_degrees": float(self.blend_low.value),
+                        "blend_pinch_roll_degrees": float(self.blend_high.value)} if self.roll_blend else {
+                        **self.settings, "closed_distance_m": float(self.closed.value), "open_distance_m": float(self.opened.value),
                         "wrist_thumb_offset_m": float(self.wrist_offset.value),
                         "tcp_offset_grasp_m": [list(c.value) for c in self.offsets],
                         "tcp_rotation_grasp_xyz_rad": [np.deg2rad(c.value).tolist() for c in self.rotations]}
@@ -265,13 +283,19 @@ class GripperMappingViewer:
                 self.save_status.content = f"**Invalid settings:** {error}. Preview retains the last valid mapping."
                 return
             self.settings = settings
-            self.mapping = map_grasp_landmarks(self.arrays["landmarks_aligned_m"], self.mapping["observation_valid"], settings)
+            self.mapping = map_grasp_landmarks(self.arrays["landmarks_aligned_m"], self.mapping["observation_valid"], settings,
+                self.grippers, open_hand_landmarks=self.arrays.get("open_hand_landmarks_aligned_m"))
             self.save.disabled = self.manual.value
             self.save_status.content = "Current settings applied. Save a snapshot to preserve this mapping."
             self.render()
 
     def reset_settings(self):
         settings = self.report["settings"]
+        if self.roll_blend:
+            self.blend_low.value = settings["blend_open_roll_degrees"]
+            self.blend_high.value = settings["blend_pinch_roll_degrees"]
+            self.remap()
+            return
         self.closed.value, self.opened.value = settings["closed_distance_m"], settings["open_distance_m"]
         self.wrist_offset.value = settings.get("wrist_thumb_offset_m", 0.)
         for hand in range(2):
@@ -355,7 +379,7 @@ class GripperMappingViewer:
                     if axes.visible:
                         axes.position = transform[:3, 3]
                         axes.wxyz = Rotation.from_matrix(transform[:3, :3]).as_quat(scalar_first=True)
-                self.reference_axes[hand].visible = enabled and valid and self.wrist_roll and self.show_axes.value
+                self.reference_axes[hand].visible = enabled and valid and self.has_roll and self.show_axes.value
                 if self.reference_axes[hand].visible:
                     self.reference_axes[hand].position = self.arrays["landmarks_aligned_m"][i, hand, 0]
                     self.reference_axes[hand].wxyz = Rotation.from_matrix(self.mapping["zero_roll_rotation_aligned"][i, hand]).as_quat(scalar_first=True)
@@ -368,12 +392,15 @@ class GripperMappingViewer:
                         marker.position = self.grippers[hand].tip_positions(self.settings["distal_tip_local_m"])[tip]
                 self.landmarks[hand].visible = self.lines[hand].visible = enabled and observed and self.show_landmarks.value
                 self.wrist_markers[hand].visible = self.landmarks[hand].visible and self.midpoint_forward and self.settings.get("wrist_thumb_offset_m", 0.) > 0
-                self.plane_handles[hand].visible = self.landmarks[hand].visible and self.mcp_plane
+                self.plane_handles[hand].visible = self.landmarks[hand].visible and (self.mcp_plane or self.roll_blend)
+                self.blend_plane_handles[hand].visible = self.landmarks[hand].visible and self.roll_blend
                 if observed:
                     points = self.arrays["landmarks_aligned_m"][i, hand]
                     self.landmarks[hand].points = points
-                    if self.mcp_plane:
+                    if self.mcp_plane or self.roll_blend:
                         self.plane_handles[hand].vertices = points[self.plane_indices]
+                    if self.roll_blend:
+                        self.blend_plane_handles[hand].vertices = points[[2, 5, 6]]
                     start, end = grasp_forward_segment(points, self.settings)
                     segments = np.array([[start, end], points[[1, 2]], points[[3, 4]], [points[0], start]])
                     if self.mcp_plane:
@@ -390,10 +417,14 @@ class GripperMappingViewer:
                     detail = f"{distance * 100:.2f} cm · action **{action:.3f}**" + (" · fully open (clipped)" if action == 1 else "")
                     if self.kinematic_opening:
                         error = self.mapping["tip_error_m"][i, hand].max() * 1000
-                        if self.mcp_plane:
+                        if self.mcp_plane or self.roll_blend:
                             center = self.mapping["gripper_tips_aligned_m"][i, hand].mean(axis=0)
                             target = self.mapping["transform_aligned_from_grasp"][i, hand, :3, 3]
                             detail += f" · center error **{np.linalg.norm(center - target) * 1000:.4f} mm** · tip offset **{error:.2f} mm**"
+                            if self.roll_blend:
+                                angle = np.rad2deg(self.mapping["gripper_roll_rad"][i, hand])
+                                weight = self.mapping["blend_original_weight"][i, hand]
+                                detail += f" · MCP roll **{angle:+.1f}°** · original weight **{weight:.0%}**"
                         elif self.wrist_roll:
                             palm = self.grippers[hand].model.root_link.worldpos()
                             wrist = self.arrays["landmarks_aligned_m"][i, hand, 0]

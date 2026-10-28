@@ -1,11 +1,11 @@
 # Project status
 
 - Current milestone: **3 — Hand-to-gripper mapping**, isolated from arm IK for this refinement.
-- Stage: **Validating** — comparison revision 8 fulfilled; user method selection pending.
-- Active plan: [Direct hand-to-gripper comparison, approved revision 8](plans/milestone-3-direct-gripper-mapping.md). Earlier approved plans remain in the [index](index.md).
-- Deliverable: original detached-gripper viewer plus two independent configuration viewers for iPhone frames **[0,296)**, supporting method selection.
-- Completed outcome: thumb-IP plane and wrist-anchor/roll variants verified for **470 eligible samples each**, retaining opening/source data and historical mappings. [Evidence](experiments/direct-gripper-iphone.md#two-method-comparison-2026-10-28).
-- Current work: compare [baseline :8091](http://localhost:8091), [Config 1 :8092](http://localhost:8092) and [Config 2 :8093](http://localhost:8093). Both new viewers are paused at frame 119; original window preserved. Default remains baseline.
+- Stage: **Validating** — revision 9 comparison fulfilled; user method selection pending.
+- Active plan: [Direct hand-to-gripper comparison, approved revision 9](plans/milestone-3-direct-gripper-mapping.md). Earlier approved plans remain in the [index](index.md).
+- Deliverable: preserved comparison viewers plus updated Config 2 and adjustable Config 3 for iPhone frames **[0,296)**.
+- Completed outcome: fingertip-forward wrist mapping and roll blend verified for **470 eligible samples each**, preserving opening/source fields and nine historical mappings. [Evidence](experiments/direct-gripper-iphone.md#fingertip-forward-and-roll-blend-2026-10-28).
+- Current work: review [updated Config 2 :8094](http://localhost:8094) and [Config 3 :8095](http://localhost:8095), verified at frame 119. Config 3 transitions at |roll| 30°–45° with adjustable thresholds. Existing viewers 8091–8093 and baseline default remain.
 - Blockers or decisions: no implementation blocker. Mesh tip markers and physical scale/contact remain uncalibrated; collisions/dynamics, prior IK failures and Milestone 2 [pilot acceptance](plans/milestone-2-lerobot-pilot.md)/Eidon review remain unresolved.
-- Next action: user compares the three methods and selects or requests refinement. Later regions and IK integration remain deferred. Focused repository cleanup remains due before another milestone.
-- Last verification: **2026-10-28**, 34 focused tests, all-sample FK/axis/anchor/roll audit, browser playback/manual controls/snapshots, old/new reload and representative visual inspection pass. [Acceptance evidence](experiments/direct-gripper-iphone.md#two-method-comparison-2026-10-28).
+- Next action: user compares/tunes configurations and selects or requests refinement. The left frame-272 orientation step remains; later regions/IK are deferred. Focused repository cleanup remains due before another milestone.
+- Last verification: **2026-10-28**, 41 tests; full FK/roll/blend/source audit, motion comparison, browser threshold/manual/snapshot checks, old/new reload and representative visual inspection pass. [Acceptance evidence](experiments/direct-gripper-iphone.md#fingertip-forward-and-roll-blend-2026-10-28).

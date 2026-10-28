@@ -476,13 +476,16 @@ are hidden and labeled; older runs retain their original behavior.
 Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original MANO
 geometry and timestamps are preserved; physical contact remains uncalibrated.
 
-For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1)
-or `--config configs/gripper_wrist_roll.json` (Config 2) to `map_gripper.py`, with
+For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1),
+`--config configs/gripper_wrist_roll.json` (Config 2), or
+`--config configs/gripper_roll_blend.json` (Config 3) to `map_gripper.py`, with
 a different output directory for each. Open each saved directory with
-`view_gripper_mapping.py --port 8092 --open-browser` or `--port 8093 --open-browser`
-to keep the baseline viewer on 8091. Config 1 changes the plane/jaw landmarks;
-Config 2 fixes the rear palm origin to the wrist and follows hand-relative MCP
-roll. See the [mapping contracts](knowledge/wiki/topics/direct-gripper-mapping.md#comparison-configurations).
+`view_gripper_mapping.py --port PORT --open-browser`, choosing a free port to
+preserve existing viewers. Config 1 changes the plane/jaw landmarks; Config 2
+fixes the rear palm to the wrist, aims at fingertip midpoint and follows MCP
+roll. Config 3 blends aligned Config 1 toward the original plane as |roll|
+increases from 30° to 45°. Its **Mapping adjustments** controls tune these
+thresholds; snapshots retain them. See the [mapping contracts](knowledge/wiki/topics/direct-gripper-mapping.md#comparison-configurations).
 These variants do not change the default.
 
 ```bash

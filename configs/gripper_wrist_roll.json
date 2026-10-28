@@ -1,5 +1,6 @@
 {
   "mapping_mode": "wrist_roll",
+  "forward_axis": "wrist_to_tip_midpoint",
   "distal_tip_local_m": [0.057395, 0.0, 0.00968],
   "minimum_axis_length_m": 1e-6,
   "minimum_axis_sine": 0.001

@@ -1,8 +1,71 @@
 # Direct gripper mapping — first iPhone region
 
-Revision 8 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
+Revision 9 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-direct-gripper-mapping.md).
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
+
+## Fingertip forward and roll blend (2026-10-28)
+
+The user requested wrist→fingertip-midpoint forward for Config 2 and a roll-driven
+transition from Config 1 when open to the original plane when pinching. The
+original directed endpoint rotations differed by 161–180°. The user explicitly
+approved aligning jaw directions inside Config 3; its Config 1 endpoint reverses
++Y/+Z, retaining +X. This is a different directed endpoint orientation, with the
+same midpoint/opening, while standalone Config 1 remains unchanged. The
+[contract](../topics/direct-gripper-mapping.md#comparison-configurations) defines
+the ideal-open reference, rotation interpolation and missing-data behavior.
+
+| New viewer | Behavior | Maximum ordinary-FK anchor error |
+| --- | --- | --- |
+| [Updated Config 2 :8094](http://localhost:8094) | Rear palm at wrist, forward wrist→fingertip midpoint | 1.12e−16 m |
+| [Config 3 :8095](http://localhost:8095) | Aligned Config 1→original plane, fingertip-midpoint placement | 1.29e−15 m |
+
+Each result maps **470/470 eligible samples** over **296 frames**, with original
+source fields/timestamps and opening commands preserved exactly. Nine historical
+mappings reproduce unchanged. Earlier viewers on **8091–8093** remain available.
+The new viewers were verified at frame 119 with both hands visible; default method
+selection remains pending.
+
+Config 3 uses original weight 0 for **|roll|≤30°**, 1 for **|roll|≥45°**, and
+smoothstep between; both thresholds are adjustable in **Mapping adjustments**.
+The roll is measured using updated Config 2, not the earlier MCP-forward axis.
+
+| Frame | Left / right roll | Left / right original weight |
+| --- | --- | --- |
+| 92, pinch example | +45.80° / −41.39° | 100% / 85.44% |
+| 119, open example | +14.41° / −29.36° | 0% / 0% |
+
+Across both hands, **127 samples** use aligned Config 1 fully, **108** lie in the
+transition, and **235** use the original fully. Aligned endpoint rotation angles
+range **20.63–39.84°** (median 32.14°). Consecutive observed-frame rotation changes
+never exceed 90°. Config 3's maximum is **41.98° left at frame 272**, versus
+39.16° original / 40.97° Config 1 at the same frame; right maximum is 20.35°.
+These are descriptive motion metrics, not a temporal-smoothing guarantee or
+physical accuracy gate. [Motion comparison](../../../outputs/retargeting/gripper-blend-20261028/motion-comparison.json).
+
+Local evidence under `outputs/retargeting/gripper-blend-20261028/`:
+
+- [41 tests](../../../outputs/retargeting/gripper-blend-20261028/tests.log) pass:
+  both forward rules, wrist/center FK, 0/±90° roll, blend endpoints/interior,
+  equivariance, invalid geometry/thresholds and CLI/snapshot paths.
+- [All-sample audit](../../../outputs/retargeting/gripper-blend-20261028/audit.json)
+  independently verifies forward/roll, SciPy SLERP agreement, midpoint/wrist,
+  opening, joint bounds, source preservation and historical reproduction.
+- [Browser check](../../../outputs/retargeting/gripper-blend-20261028/browser.json)
+  verifies playback, frames 0/33/92/119/245/295, closeups/manual mode, threshold
+  edits (60°/70°), invalid-threshold rejection, reset to 30°/45° and snapshots.
+  No page errors. [Reloads](../../../outputs/retargeting/gripper-blend-20261028/reload.json)
+  verify both new modes, both threshold snapshots and earlier viewer formats.
+- [Visual review](../../../outputs/retargeting/gripper-blend-20261028/visual-review.json)
+  covers both-hand pinch examples and right open-hand comparisons:
+  [updated Config 2](../../../outputs/retargeting/gripper-blend-20261028/config2-tips-right-119.png),
+  [Config 3 open](../../../outputs/retargeting/gripper-blend-20261028/config3-right-119.png),
+  [Config 3 pinch](../../../outputs/retargeting/gripper-blend-20261028/config3-frame-92.png).
+
+Saved reports: [updated Config 2](../../../outputs/retargeting/gripper-blend-20261028/config2-tips/mapping_report.json),
+[Config 3](../../../outputs/retargeting/gripper-blend-20261028/config3/mapping_report.json).
+Physical contact/scale, collision/dynamics, later regions and arm IK remain
+unverified or deferred. This completes the requested comparison trial.
 
 ## Two-method comparison (2026-10-28)
 

@@ -15,7 +15,8 @@ from .run_metadata import read_json, utc_now, write_json
 
 LANDMARK_NAMES = ("wrist", "thumb_mcp", "index_mcp", "thumb_tip", "index_tip", "thumb_ip", "index_pip")
 PLANE_MODES = ("mcp_plane", "thumb_ip_plane")
-KINEMATIC_MODES = ("fingertip_correspondence", *PLANE_MODES, "wrist_roll")
+KINEMATIC_MODES = ("fingertip_correspondence", *PLANE_MODES, "wrist_roll", "roll_blend")
+ROLL_MODES = ("wrist_roll", "roll_blend")
 
 
 def validate_settings(settings):
@@ -30,6 +31,13 @@ def validate_settings(settings):
         tip = np.asarray(settings["distal_tip_local_m"])
         if tip.shape != (3,) or not np.isfinite(tip).all() or tip[1] != 0.:
             raise ValueError("distal_tip_local_m must be finite [3], centered on the distal mesh y=0 plane")
+        if mode in ROLL_MODES and settings.get("forward_axis", "wrist_to_mcp_midpoint") not in (
+                "wrist_to_mcp_midpoint", "wrist_to_tip_midpoint"):
+            raise ValueError("Roll forward_axis must be wrist_to_mcp_midpoint or wrist_to_tip_midpoint")
+        if mode == "roll_blend":
+            low, high = settings["blend_open_roll_degrees"], settings["blend_pinch_roll_degrees"]
+            if not np.isfinite([low, high]).all() or not 0 <= low < high <= 180:
+                raise ValueError("Require 0 <= blend_open_roll_degrees < blend_pinch_roll_degrees <= 180")
         return
     if settings.get("forward_axis", "wrist_to_thumb_mcp") not in (
             "wrist_to_thumb_mcp", "thumb_mcp_to_ip", "index_mcp_to_pip", "wrist_to_mcp_midpoint"):
@@ -88,38 +96,45 @@ def reconstruct_grasp_geometry(arrays, model_paths, *, landmark_count=7):
     return landmarks, meshes
 
 
-def reconstruct_open_hand_landmarks(arrays, model_paths):
-    """Ideal open wrist/thumb-MCP/index-MCP positions [T,2,3,3], aligned metres.
+def reconstruct_open_hand_landmarks(arrays, model_paths, *, include_tips=False):
+    """Ideal open aligned-metre positions [T,2,3,3], optionally tips [T,2,5,3].
 
     Identity local joint rotations in MANOLayer are the unposed hand (no pose
     mean is added by its matrix interface). Retain each sample's shape and root
     pose so roll is hand-relative, independent of camera/world orientation.
     """
+    from smplx.vertex_ids import vertex_ids
+
     observed = arrays["export_valid"] & ~arrays["motion_infilled"]
-    points = np.full((*observed.shape, 3, 3), np.nan, np.float32)
+    points = np.full((*observed.shape, 5 if include_tips else 3, 3), np.nan, np.float32)
     for hand, path in enumerate(model_paths):
         indices = np.flatnonzero(observed[:, hand])
         if len(indices):
             model = load_mano_model(path, hand)
-            joints, _ = reconstruct_mano(model, arrays["root_translation_aligned_m"][indices, hand],
+            joints, vertices = reconstruct_mano(model, arrays["root_translation_aligned_m"][indices, hand],
                 arrays["root_orientation_aligned_axis_angle"][indices, hand],
                 np.zeros((len(indices), 45), np.float32), arrays["mano_betas"][indices, hand])
-            points[indices, hand] = joints[:, [0, 14, 1]]
+            points[indices, hand, :3] = joints[:, [0, 14, 1]]
+            if include_tips:
+                points[indices, hand, 3:5] = vertices[:, [vertex_ids["mano"]["thumb"], vertex_ids["mano"]["index"]]]
     return points
 
 
 def wrist_roll_reference(open_points, rotation, valid, settings):
     """Transport open-hand axes to current forward and measure signed X roll.
 
-    Inputs: open landmarks [T,2,3,3] in metres, current rotations [T,2,3,3].
+    Inputs: open landmarks [T,2,3|5,3] in metres, current rotations [T,2,3,3].
     Returns zero-roll rotations, angles [T,2] in [-pi,pi], and valid mask.
     Antiparallel forward axes have no unique shortest rotation and are invalid.
     """
     points = np.asarray(open_points, dtype=float)
-    if points.shape != (*valid.shape, 3, 3):
-        raise ValueError("wrist_roll requires open hand landmarks [T,2,3,3]")
+    tips_forward = settings.get("forward_axis") == "wrist_to_tip_midpoint"
+    counts = (5,) if tips_forward else (3, 5)
+    if points.shape not in [(*valid.shape, count, 3) for count in counts]:
+        raise ValueError(f"Roll mapping requires open hand landmarks [T,2,{5 if tips_forward else '3|5'},3]")
     eps = settings["minimum_axis_length_m"]
-    x0 = points[..., 1:3, :].mean(axis=-2) - points[..., 0, :]
+    midpoint = points[..., 3:5, :] if tips_forward else points[..., 1:3, :]
+    x0 = midpoint.mean(axis=-2) - points[..., 0, :]
     x_length = np.linalg.norm(x0, axis=-1, keepdims=True)
     x0 /= np.maximum(x_length, eps)
     jaw = points[..., 2, :] - points[..., 1, :]
@@ -162,8 +177,9 @@ def grasp_forward_segment(landmarks, settings):
         if points.shape[-2] != 7:
             raise ValueError("Plane mapping requires index PIP landmarks; regenerate the mapping")
         return index, points[..., 6, :]
-    if settings.get("mapping_mode") == "wrist_roll":
-        return wrist, (thumb + index) / 2
+    if settings.get("mapping_mode") in ROLL_MODES:
+        midpoint = points[..., 3:5, :].mean(axis=-2) if settings.get("forward_axis") == "wrist_to_tip_midpoint" else (thumb + index) / 2
+        return wrist, midpoint
     axis = settings.get("forward_axis", "wrist_to_thumb_mcp")
     if axis == "wrist_to_mcp_midpoint":
         closing = index - thumb
@@ -181,41 +197,19 @@ def grasp_forward_segment(landmarks, settings):
     return wrist, thumb
 
 
-def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_hand_landmarks=None):
-    """Map [T,2,7,3] aligned landmarks to [T,2,4,4] column-vector transforms.
-
-    In fingertip_correspondence mode, +Y follows thumbtip→index tip and +X
-    projects true wrist→thumb MCP. FK solves opening and both tip constraints.
-    In mcp_plane mode, +Y follows thumb MCP→index MCP and +X projects index
-    MCP→PIP. FK matches separation and midpoint, not individual tip positions.
-    thumb_ip_plane instead points +Y index MCP→thumb IP. wrist_roll anchors the
-    rear palm origin at the wrist, preserves wrist→MCP-midpoint +X and projects
-    thumb MCP→index MCP as +Y, with roll measured from an ideal open reference.
-    Legacy +X follows the configured segment; +Y follows thumb MCP→index MCP.
-    The priority axis is preserved and the other projected perpendicular to it;
-    +Z=X×Y. Older settings default to closing priority, zero wrist shift and
-    wrist→thumb MCP. Local corrections are T_grasp_from_TCP. No interpolation,
-    filtering, sign flips or IK. Missing/degenerate outputs are NaN.
-    """
-    validate_settings(settings)
+def landmark_rotation(points, observed, settings):
+    """Proper axes [T,2,3,3] and validity from one directed landmark rule."""
     mode = settings.get("mapping_mode")
-    exact = mode == "fingertip_correspondence"
-    kinematic_opening = mode in KINEMATIC_MODES
-    points = np.asarray(landmarks, dtype=float)
-    observed = np.asarray(observed)
-    if (observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool
-            or points.shape not in tuple((*observed.shape, n, 3) for n in (5, 6, 7))):
-        raise ValueError("Expected landmarks [T,2,5|6|7,3] and boolean observed [T,2]")
     _, thumb, index, thumb_tip, index_tip = np.moveaxis(points[..., :5, :], 2, 0)
     start, end = grasp_forward_segment(points, settings)
     forward = end - start
-    closing = index_tip - thumb_tip if exact else index - thumb
+    closing = index_tip - thumb_tip if mode == "fingertip_correspondence" else index - thumb
     if mode == "thumb_ip_plane":
         closing = points[..., 5, :] - index
     lengths = np.linalg.norm(closing, axis=-1)
     forward_lengths = np.linalg.norm(forward, axis=-1)
     eps = settings["minimum_axis_length_m"]
-    if mode == "wrist_roll" or (not kinematic_opening and settings.get("orientation_priority", "closing") == "forward"):
+    if mode in ROLL_MODES or (mode not in KINEMATIC_MODES and settings.get("orientation_priority", "closing") == "forward"):
         x = forward / np.maximum(forward_lengths[..., None], eps)
         orthogonal = closing - np.sum(closing * x, axis=-1)[..., None] * x
         y = orthogonal / np.maximum(np.linalg.norm(orthogonal, axis=-1, keepdims=True), eps)
@@ -229,9 +223,66 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     sine = orthogonal_lengths / np.maximum(secondary_lengths, eps)
     valid = (observed & np.isfinite(points).all(axis=(-1, -2)) & (lengths > eps)
              & (forward_lengths > eps) & (orthogonal_lengths > eps) & (sine > settings["minimum_axis_sine"]))
-    rotation = np.stack((x, y, np.cross(x, y)), axis=-1)
-    if mode == "wrist_roll":
+    return np.stack((x, y, np.cross(x, y)), axis=-1), valid
+
+
+def blend_plane_rotations(open_rotation, pinch_rotation, roll, valid, settings):
+    """SO(3) interpolation with smoothstep weight from absolute MCP roll.
+
+    Input Config 1 rotates Y/Z by pi around its own X to align thumb→index jaw
+    conventions. This is a fixed endpoint choice, never a framewise sign guess.
+    SciPy's principal relative rotation gives the shortest interpolation arc.
+    Returns rotations [T,2,3,3], original weights and endpoint angles [T,2].
+    """
+    result = np.full_like(open_rotation, np.nan)
+    weights = np.full(valid.shape, np.nan)
+    angles = np.full(valid.shape, np.nan)
+    if valid.any():
+        low, high = settings["blend_open_roll_degrees"], settings["blend_pinch_roll_degrees"]
+        fraction = np.clip((np.abs(np.rad2deg(roll[valid])) - low) / (high-low), 0., 1.)
+        weights[valid] = fraction**2 * (3 - 2*fraction)
+        opened = Rotation.from_matrix(open_rotation[valid] @ np.diag([1., -1., -1.]))
+        relative = opened.inv() * Rotation.from_matrix(pinch_rotation[valid])
+        angles[valid] = relative.magnitude()
+        result[valid] = (opened * Rotation.from_rotvec(weights[valid, None] * relative.as_rotvec())).as_matrix()
+    return result, weights, angles
+
+
+def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_hand_landmarks=None):
+    """Map [T,2,7,3] aligned landmarks to [T,2,4,4] column-vector transforms.
+
+    In fingertip_correspondence mode, +Y follows thumbtip→index tip and +X
+    projects true wrist→thumb MCP. FK solves opening and both tip constraints.
+    In mcp_plane mode, +Y follows thumb MCP→index MCP and +X projects index
+    MCP→PIP. FK matches separation and midpoint, not individual tip positions.
+    thumb_ip_plane instead points +Y index MCP→thumb IP. wrist_roll anchors the
+    rear palm origin at the wrist, preserves its configured forward +X and
+    projects thumb MCP→index MCP as +Y. roll_blend uses this measured roll to
+    transition aligned Config 1→original plane rotations at fingertip midpoint.
+    Legacy +X follows the configured segment; +Y follows thumb MCP→index MCP.
+    The priority axis is preserved and the other projected perpendicular to it;
+    +Z=X×Y. Older settings default to closing priority, zero wrist shift and
+    wrist→thumb MCP. Local corrections are T_grasp_from_TCP. No temporal
+    interpolation/filtering, automatic sign guesses or arm IK. Invalid outputs
+    are NaN; Config 3's fixed endpoint jaw reversal is explicit above.
+    """
+    validate_settings(settings)
+    mode = settings.get("mapping_mode")
+    kinematic_opening = mode in KINEMATIC_MODES
+    points = np.asarray(landmarks, dtype=float)
+    observed = np.asarray(observed)
+    if (observed.ndim != 2 or observed.shape[1] != 2 or observed.dtype != bool
+            or points.shape not in tuple((*observed.shape, n, 3) for n in (5, 6, 7))):
+        raise ValueError("Expected landmarks [T,2,5|6|7,3] and boolean observed [T,2]")
+    thumb_tip, index_tip = points[..., 3, :], points[..., 4, :]
+    rotation, valid = landmark_rotation(points, observed, settings)
+    if mode in ROLL_MODES:
         reference, roll, valid = wrist_roll_reference(open_hand_landmarks, rotation, valid, settings)
+    if mode == "roll_blend":
+        opened, open_valid = landmark_rotation(points, observed, {**settings, "mapping_mode": "thumb_ip_plane"})
+        pinch, pinch_valid = landmark_rotation(points, observed, {**settings, "mapping_mode": "mcp_plane"})
+        valid &= open_valid & pinch_valid
+        rotation, weights, angles = blend_plane_rotations(opened, pinch, roll, valid, settings)
     grasp = np.full((*observed.shape, 4, 4), np.nan)
     grasp[valid] = np.eye(4)
     grasp[..., :3, :3][valid] = rotation[valid]
@@ -241,10 +292,14 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     separation[~observed | ~np.isfinite(points[..., 3:5, :]).all(axis=(-1, -2))] = np.nan
     if kinematic_opening:
         mapped = map_gripper_tip_frame(points, observed, grasp, valid, separation, settings, grippers)
-        if mode == "wrist_roll":
+        if mode in ROLL_MODES:
             reference[~mapped["mapping_valid"]] = np.nan
             roll[~mapped["mapping_valid"]] = np.nan
             mapped.update(zero_roll_rotation_aligned=reference, gripper_roll_rad=roll)
+        if mode == "roll_blend":
+            weights[~mapped["mapping_valid"]] = np.nan
+            angles[~mapped["mapping_valid"]] = np.nan
+            mapped.update(blend_original_weight=weights, blend_endpoint_angle_rad=angles)
         return mapped
     correction = np.tile(np.eye(4), (2, 1, 1))
     correction[:, :3, 3] = settings["tcp_offset_grasp_m"]
@@ -330,7 +385,7 @@ def mapping_summary(arrays):
                                  tip_action_range=arrays["tip_action_range"][hand].tolist())
             center_error = np.linalg.norm(arrays["gripper_tips_aligned_m"][valid, hand].mean(axis=1)
                                           - arrays["transform_aligned_from_grasp"][valid, hand, :3, 3], axis=-1)
-            if "gripper_roll_rad" in arrays:
+            if "gripper_roll_rad" in arrays and "blend_original_weight" not in arrays:
                 error = np.linalg.norm(arrays["transform_aligned_from_palm"][valid, hand, :3, 3]
                                        - arrays["landmarks_aligned_m"][valid, hand, 0], axis=-1)
                 roll = np.rad2deg(arrays["gripper_roll_rad"][valid, hand])
@@ -338,6 +393,11 @@ def mapping_summary(arrays):
                                      roll_range_degrees=[float(roll.min()), float(roll.max())] if len(roll) else None)
             else:
                 summary[side]["max_tip_midpoint_error_m"] = float(center_error.max()) if len(center_error) else None
+            if "blend_original_weight" in arrays:
+                weights = arrays["blend_original_weight"][valid, hand]
+                summary[side].update(full_config1_samples=int((weights == 0).sum()),
+                                     transition_samples=int(((weights > 0) & (weights < 1)).sum()),
+                                     full_original_samples=int((weights == 1).sum()))
     return summary
 
 
@@ -381,8 +441,9 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
     grippers = load_grippers(asset_root, robot_settings)
     arrays.update(landmarks_aligned_m=landmarks,
                   transform_palm_from_tcp=np.array([g.transform_palm_from_tcp for g in grippers]))
-    if settings.get("mapping_mode") == "wrist_roll":
-        arrays["open_hand_landmarks_aligned_m"] = reconstruct_open_hand_landmarks(arrays, model_paths)
+    if settings.get("mapping_mode") in ROLL_MODES:
+        arrays["open_hand_landmarks_aligned_m"] = reconstruct_open_hand_landmarks(
+            arrays, model_paths, include_tips=settings.get("forward_axis") == "wrist_to_tip_midpoint")
     report = {"schema_version": 1, "method": "direct_gripper_mapping", "hand_order": ["left", "right"],
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "prepared_video": alignment["inputs"]["prepared_video"]["path"],
@@ -406,9 +467,12 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
             report["tip_correspondence"] = "Tip midpoint and separation matched; jaw follows thumb MCP→index MCP; individual tip offsets are expected"
         elif settings["mapping_mode"] == "thumb_ip_plane":
             report["tip_correspondence"] = "Tip midpoint and separation matched; jaw follows index MCP→thumb IP; individual tip offsets are expected"
-        elif settings["mapping_mode"] == "wrist_roll":
+        elif settings["mapping_mode"] in ROLL_MODES:
             report.update(tip_correspondence="Rear palm origin matches hand wrist; separation matched; individual tip offsets are expected",
-                          roll_reference="Identity MANO local rotations, same shape/root pose; shortest rotation from open forward to current forward; signed roll about +X in [-pi,pi]")
+                          roll_reference="Identity MANO local rotations, same shape/root pose; configured open forward transported to current forward; signed MCP-line roll about +X in [-pi,pi]")
+            if settings["mapping_mode"] == "roll_blend":
+                report.update(tip_correspondence="Tip midpoint/separation matched; Config 1 jaw aligned thumb→index; individual offsets expected",
+                              blend_convention="Config 1 @ diag(1,-1,-1) → original MCP plane; shortest SO(3) arc; smoothstep of absolute roll; thresholds in settings")
     result = save_mapping(output_directory, arrays, report, settings, grippers)
     for gripper in grippers:
         (Path(output_directory) / f"{gripper.side}_gripper.urdf").write_text(gripper.xml)

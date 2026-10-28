@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 8 fulfilled: preserved baseline plus thumb-IP plane and wrist-anchor/roll comparison viewers; default selection pending.
+- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 9 fulfilled: fingertip-forward wrist mapping and adjustable roll-weighted plane blend, with older comparisons preserved; default selection pending.
 - [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — fulfilled: configurable target filtering, base prior and merging; controlled comparisons and full rerun, with pose/motion tradeoffs.
 - [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — fulfilled GPU solver, matched benchmark and latest smoothing-configuration rerun.
 - [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — original fitting and infill-exclusion evidence preserved; approved stronger-smoothing experiment verified.
@@ -27,7 +27,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 ## Topics and evidence
 
 - [Direct hand-to-gripper mapping](topics/direct-gripper-mapping.md) — detached gripper, MANO landmark/pose/action contracts and interactive tuning without IK.
-- [Direct iPhone gripper review](experiments/direct-gripper-iphone.md) — three-method first-region comparison, anchor/roll/FK checks, synchronized viewers and historical acceptance evidence.
+- [Direct iPhone gripper review](experiments/direct-gripper-iphone.md) — first-region mapping/blend comparisons, anchor/roll/FK and motion checks, synchronized viewers and historical acceptance evidence.
 - [Hand-pose refinement evidence](experiments/hand-pose-refinement.md) — seven controlled variants, full iPhone rerun, raw/smoothed pass rates and all-experiment viewer.
 - [iPhone retargeting evidence](experiments/retargeting-iphone.md) — full demonstration, infill exclusion, 1,000× temporal-weight comparison and verified CUDA rerun (6.29× faster solve).
 - [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — original benchmark and subsequent experiments, including gripper-offset/hand-weight results and visual evidence; posture, motion and orientation tradeoffs.

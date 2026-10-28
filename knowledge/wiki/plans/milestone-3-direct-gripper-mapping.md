@@ -1,49 +1,52 @@
 # Milestone 3 — Direct hand-to-gripper mapping
 
-Approved revision 8 · 2026-10-28 · User-requested comparison and clarified wrist/roll reference recorded as `20261028-gripper-comparison-001` in the [action log](../logs/2026-10.jsonl). Revision 7 remains the preserved comparison baseline.
+Approved revision 9 · 2026-10-28 · User-requested fingertip-forward Config 2 and roll-weighted Config 3, with explicit jaw-alignment choice, recorded as `20261028-gripper-blend-001` in the [action log](../logs/2026-10.jsonl). Earlier comparison results remain preserved.
 
 ## Objective and deliverable
 
-Compare two additional direct hand-to-gripper mappings with revision 7 so the
-user can select a method. Keep the current viewer on port 8091 open, and launch
-separate synchronized RGB/MANO/gripper viewers for both new configurations on
-iPhone frames **[0,296)**. Each result must be independently reloadable.
+Extend the first-region comparison to refine Config 2's forward direction and
+try a smooth transition between Config 1 for open hands and the original MCP
+plane for pinches. Deliver two independently reloadable results and new viewers
+for iPhone frames **[0,296)**, retaining the existing three review windows.
 
 ## Scope and boundaries
 
 - Preserve pinned Purdue gripper assets, coupling/limits, original aligned MANO
   geometry, metres, radians, timestamps and left/right identity. Use
   `export_valid & ~motion_infilled`; do not interpolate missing observations.
-- Config 1: plane through index MCP, index PIP and thumb IP. Jaw +Y points
-  **index MCP→thumb IP**; forward +X is index MCP→index PIP projected perpendicular
-  to +Y, toward PIP; +Z = +X × +Y. Preserve fingertip-midpoint placement using
-  the opening-dependent gripper tip frame.
-- Config 2: the gripper's rear palm/base origin coincides with the physical hand
-  wrist. Forward +X points wrist→midpoint(thumb MCP,index MCP). Roll about +X
-  follows the projected thumb MCP→index MCP line. Zero roll is the ideal open
-  MANO hand with the same shape/current wrist orientation; align its forward
-  axis to current forward with the shortest rotation before measuring signed
-  roll. Reject undefined axes/references without inventing a pose.
-- Both variants retain geometry-derived opening from fingertip distance and
-  the existing uncrossed, increasing-separation branch. No gripper scaling or
-  silent clamping. Config 2 intentionally replaces fingertip-midpoint placement
-  with wrist attachment; its tip offsets remain visible diagnostics.
-- Show method names, construction geometry, axes, tips and relevant anchor
-  errors; show Config 2's zero-roll reference and signed roll. Retain playback,
-  scrubbing, closeups, visibility, snapshots, manual controls and older results.
+- Updated Config 2: rear palm origin stays at the physical hand wrist. Forward
+  becomes wrist→midpoint(thumbtip,index tip); project thumb MCP→index MCP
+  perpendicular to forward for the jaw. Retain signed roll from an ideal open
+  hand with matching shape and wrist orientation. Its open forward also uses
+  fingertip midpoint, transported by the shortest rotation to current forward.
+  Preserve earlier MCP-forward results when reloading their saved settings.
+- Config 3: measure MCP-line roll using updated Config 2 and interpolate proper
+  rotations between the thumb-IP and original MCP planes using existing SciPy
+  rotation operations. The user approved aligning jaw directions within this
+  blend: reverse Config 1's +Y/+Z while preserving +X, so its jaw points from
+  thumb side toward index side. Standalone Config 1 stays unchanged.
+- Start with original weight 0 at |roll|≤30°, weight 1 at ≥45°, and smoothstep
+  between. Expose both thresholds and current roll/weight in the viewer. Config 3
+  retains fingertip-midpoint placement and existing FK-derived opening; Config 2
+  retains wrist attachment. Reject undefined axes/references without inventing
+  poses or bridging missing data.
+- Preserve opening branch, playback, closeups, snapshots, manual controls and
+  historical mappings. Show endpoint planes, blended axes and anchor diagnostics.
 - No arm IK, reconstruction reruns, filtering, hardware control, physical contact,
   collision or dynamics validation. Later regions and selecting a new default
   remain deferred until the user's comparison review.
 
 ## Acceptance
 
-- Test axis signs, proper rotations and rigid-frame equivariance, Config 1's
-  real-FK midpoint, Config 2's exact wrist anchor and 0°/±90° roll, unchanged
-  opening, missing/degenerate/unreachable inputs and historical compatibility.
+- Test updated forward/wrist placement, unchanged opening/source fields,
+  zero/±90° roll, blend endpoints/interior, proper rotations and rigid-frame
+  equivariance. Exercise invalid thresholds, missing/degenerate inputs, historical
+  settings and saved snapshots through production commands.
 - Generate both results and audit all eligible samples, original fields and
-  timestamps. Exercise CLI, snapshots/reload and representative visual playback
-  for both hands, frames 92/119, endpoints and gaps. Confirm the original viewer
-  remains available. Save settings, logs, audits and screenshots under a new
+  timestamps, ordinary FK, anchors, weights, endpoint angles and adjacent-frame
+  rotation changes. Inspect both hands, especially open/pinch frames 92/119.
+  Verify playback, threshold adjustment, snapshots/reload, manual controls and
+  existing viewer availability. Save settings, logs, audits and screenshots under a new
   local comparison directory; update wiki/status/log and commit verified work.
   Acceptance establishes an inspectable geometric comparison, not simulation
   execution or physical contact accuracy.

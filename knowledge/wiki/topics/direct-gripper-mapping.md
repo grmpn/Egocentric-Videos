@@ -1,6 +1,6 @@
 # Direct hand-to-gripper mapping
 
-Implemented under [approved revision 8](../plans/milestone-3-direct-gripper-mapping.md).
+Implemented under [approved revision 9](../plans/milestone-3-direct-gripper-mapping.md).
 This workflow reuses the existing iPhone reconstruction/alignment, MANO evaluator,
 Purdue assets and Viser stack. It computes gripper poses directly; it does not fit
 an arm/base, solve IK or apply the earlier target filters.
@@ -81,7 +81,9 @@ thumb→index direction. Tip-offset diagnostics retain finger 2→thumb / finger
 
 [Config 2](../../../configs/gripper_wrist_roll.json), `wrist_roll`, puts the
 gripper **rear palm origin** at the physical hand wrist, with no translational
-offset. +X is normalized wrist→midpoint(thumb MCP,index MCP). +Y projects
+offset. Its current `forward_axis: wrist_to_tip_midpoint` makes +X normalized
+wrist→midpoint(thumbtip,index tip). Missing `forward_axis` preserves the earlier
+wrist→MCP-midpoint rule; explicit `wrist_to_mcp_midpoint` also selects it. +Y projects
 thumb MCP→index MCP perpendicular to +X, and +Z = +X × +Y. This preserves
 forward exactly and lets the MCP line determine roll. Here the human grasp
 transform is the palm transform; the fixed TCP follows from ordinary FK.
@@ -91,7 +93,8 @@ not a constraint. Tip offsets therefore measure both orientation and attachment.
 Config 2's zero-roll reference is the same MANO model/shape/root pose evaluated
 with identity local joint rotations. The installed `MANOLayer` matrix interface
 does not add a pose mean, so this is the ideal open hand, not the learned mean
-articulation. Construct open forward and projected MCP jaw axes, then apply the
+articulation. Construct open forward using the same selected midpoint rule and
+projected MCP jaw axes, then apply the
 shortest rotation taking open forward to current forward. If its transported
 jaw axis is `y0`, current jaw is `y`, and current forward is `x`, signed roll is
 `atan2(dot(x,cross(y0,y)), dot(y0,y))`, in [-π,π]. Applying that X rotation to
@@ -101,8 +104,31 @@ at ±π without changing the rotation matrix. Degenerate reference axes and
 near-antiparallel forward directions are invalid, using the axis thresholds.
 No frame interpolation, physical calibration or artificial 90° gain is applied.
 
-Both modes use original observations, units, timestamps and opening limits.
-The [comparison evidence](../experiments/direct-gripper-iphone.md#two-method-comparison-2026-10-28)
+[Config 3](../../../configs/gripper_roll_blend.json), `roll_blend`, combines the
+two plane orientations using the signed MCP roll from updated Config 2, with
+its fingertip-forward reference. Both endpoints use fingertip-midpoint placement
+and the same FK opening. As explicitly approved, the Config 1 endpoint is first
+right-multiplied by `diag(1,-1,-1)`: +X stays fixed and +Y/+Z reverse. Its jaw
+then points thumb side→index side, avoiding the near-half-turn between the
+original directed conventions. This changes the Config 1 endpoint orientation
+and finger assignment inside Config 3; it does not alter the standalone result
+or assume that every gripper surface is symmetric.
+
+Let `u = clip((abs(roll_degrees)-low)/(high-low), 0, 1)`, and original weight
+`w = u²(3-2u)`. Defaults are **low=30°, high=45°**; require finite
+`0 ≤ low < high ≤ 180°`. The output rotation is the shortest SO(3) interpolation
+`R_open * Exp(w * Log(R_open.T * R_original))`, implemented with SciPy `Rotation`.
+It equals aligned Config 1 below low and the original above high; weight and
+its slope are continuous at both thresholds. This is per-frame pose-dependent
+blending, not temporal smoothing. Source jitter and steep changes in measured
+roll can still cause visible motion. Both planes and the roll reference must be
+valid, even at endpoint weights; there is no fallback across undefined geometry.
+The viewer exposes both thresholds, signed roll, original weight, both construction
+planes and the final axes. Invalid threshold edits keep the last valid preview
+and disable saving; reset restores the loaded settings and snapshots retain tuning.
+
+All modes use original observations, units, timestamps and opening limits.
+The [latest comparison evidence](../experiments/direct-gripper-iphone.md#fingertip-forward-and-roll-blend-2026-10-28)
 owns measured results, viewer links and remaining selection work.
 
 ## Historical mappings
@@ -136,9 +162,11 @@ MANO/provenance fields are copied without alteration. Saved arrays include:
 | `opening_reachable` | Geometry-derived opening modes: `[T,2]` bool, observed finite distance within the selected branch |
 | `gripper_tips_aligned_m`, `tip_error_m` | Geometry-derived opening modes: `[T,2,2,3]` marker positions and `[T,2,2]` Euclidean tip offsets in metres, thumb then index; expected nonzero in plane mode; NaN when invalid |
 | `tip_action_range`, `tip_distance_range_m` | Geometry-derived opening modes: `[2,2]`, per-hand lower/upper reachable branch bounds |
-| `open_hand_landmarks_aligned_m` | Wrist-roll only: `[T,2,3,3]`, ideal-open wrist/thumb MCP/index MCP in aligned metres; missing observations NaN |
-| `zero_roll_rotation_aligned` | Wrist-roll only: `[T,2,3,3]`, aligned-from-zero-roll basis at current forward, NaN where mapping-invalid |
-| `gripper_roll_rad` | Wrist-roll only: `[T,2]`, signed rotation about current forward X relative to that basis, [-π,π], invalid NaN |
+| `open_hand_landmarks_aligned_m` | Roll modes: `[T,2,N,3]`, N=3 or 5: ideal-open wrist/thumb MCP/index MCP, plus thumb/index tips for fingertip-forward, in aligned metres; missing NaN |
+| `zero_roll_rotation_aligned` | Roll modes: `[T,2,3,3]`, aligned-from-zero-roll basis at measurement forward, NaN where mapping-invalid; in Config 3 this measures roll, not the blended orientation |
+| `gripper_roll_rad` | Roll modes: `[T,2]`, signed MCP-line roll about measurement forward relative to that basis, [-π,π], invalid NaN |
+| `blend_original_weight` | Config 3: `[T,2]`, original weight in [0,1]; 0 means aligned Config 1, invalid NaN |
+| `blend_endpoint_angle_rad` | Config 3: `[T,2]`, shortest rotation angle between aligned endpoint frames, invalid NaN |
 
 `gripper_mapping.npz`, `mapping_report.json`, `settings.json` and standalone
 left/right URDFs are saved in a new output directory. Existing outputs are refused.
@@ -164,7 +192,9 @@ opacity and landmark/axis overlays. Small cyan spheres attach to the articulated
 gripper tips. Plane modes display their selected three-landmark triangle and
 reports midpoint error separately from individual tip offsets; exact-tip mode
 retains coincident tip markers and its original error readout. Wrist-roll mode
-shows wrist-anchor error, signed roll and tip offsets. Its longer thin axes at
+shows wrist-anchor error, signed roll and tip offsets. Config 3 shows signed
+measurement roll, original weight, midpoint error and both endpoint planes.
+The longer thin axes at
 the wrist show zero roll; shorter axes show the mapped palm. Method names
 distinguish comparison windows. Legacy opening,
 wrist-shift and TCP-offset controls remain hidden for geometry-derived modes.
