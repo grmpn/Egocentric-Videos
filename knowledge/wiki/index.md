@@ -13,6 +13,9 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — approved: 100-point scoring, smoothed Config 2 targets, opening and missing-hand motion penalty.
+- [IK benchmark joint limits](decisions/ik-benchmark-limits.md) — pinned Alex model limits and approved acceleration proxy with external-source rationale.
+
 - [Milestone 3: Config 2 wrist offset](plans/milestone-3-gripper-wrist-offset.md) — requested 25 mm backward placement verified; separate full-video comparison viewer.
 
 - [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 10 fulfilled: interpolated-thumb Config 4 and full iPhone overlay MP4s for Configs 2/3/4; default selection pending.

@@ -1,11 +1,11 @@
 # Project status
 
-- Current milestone: **3 — Hand-to-gripper mapping**, isolated from arm IK.
-- Stage: **Validating** — requested Config 2 offset fulfilled; user comparison pending.
-- Active plan: [Config 2 wrist offset, approved revision 1](plans/milestone-3-gripper-wrist-offset.md).
-- Deliverable: reloadable full-video Config 2 with rear palm 25 mm backward along its existing forward axis and a separate comparison viewer.
-- Completed outcome: 1,286 frames / 1,802 valid samples translated as requested, with unchanged orientation, roll, opening and source data. [Evidence](experiments/direct-gripper-iphone.md#config-2-backward-wrist-offset-2026-10-29).
-- Current work: compare [shifted Config 2 :8097](http://localhost:8097) with [original :8094](http://localhost:8094). Earlier Configs 2/3/4 MP4s remain unchanged; baseline default remains.
-- Blockers or decisions: no implementation blocker. Mapping selection, physical scale/contact, collisions/dynamics, earlier IK failures and Milestone 2 [pilot acceptance](plans/milestone-2-lerobot-pilot.md)/Eidon review remain unresolved.
-- Next action: user compares wrist placements; IK integration remains deferred. Focused cleanup remains due before another milestone.
-- Last verification: **2026-10-29**, 47 tests passed, all-sample baseline comparison, browser checks and representative visual inspection. [Evidence](experiments/direct-gripper-iphone.md#config-2-backward-wrist-offset-2026-10-29).
+- Current milestone: **3 — IK benchmark and gripper integration**.
+- Stage: **Implementing** — revision 1 explicitly approved.
+- Active plan: [IK benchmark and gripper integration, approved revision 1](plans/milestone-3-ik-benchmark.md).
+- Deliverable: reusable 100-point benchmark, preserved experiments and updating report, Config 2 gripper IK with missing-hand motion penalty, and a result viewer.
+- Completed outcome: latest Config 2's 25 mm backward placement verified previously over 1,286 frames / 1,802 valid samples. [Evidence](experiments/direct-gripper-iphone.md#config-2-backward-wrist-offset-2026-10-29).
+- Current work: implement benchmark scoring and smoothed Config 2 palm/opening targets in two-stage IK; add per-hand missing-target motion penalty.
+- Blockers or decisions: no implementation blocker. [Limit research](decisions/ik-benchmark-limits.md) defines an approved 10 rad/s² benchmark cap because Alex acceleration bounds are unavailable in inspected sources. Physical scale/contact, dynamics, earlier IK failures and Milestone 2 [pilot acceptance](plans/milestone-2-lerobot-pilot.md) remain unresolved.
+- Next action: implement and compare the existing IK reference with Config 2 gripper IK, missing-hand penalty off/on. Focused cleanup remains due before another milestone.
+- Last verification: **2026-10-29**, static inspection of smoothing defaults, latest Config 2, pinned Alex limits/collision filters and external acceleration references; [research evidence](decisions/ik-benchmark-limits.md). Prior 47-test/visual validation applies to the wrist-offset work only.
