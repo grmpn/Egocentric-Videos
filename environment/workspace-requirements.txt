@@ -4,6 +4,8 @@
 scikit-robot==0.3.39
 viser==1.1.1
 trimesh==5.1.1
+# scikit-robot's existing mesh self-collision query requires FCL.
+python-fcl==0.7.0.11
 numpy==2.2.6
 scipy==1.15.3
 torch @ https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl

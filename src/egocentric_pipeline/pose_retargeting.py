@@ -2,7 +2,8 @@
 
 All transforms act on column vectors. FK uses metres/radians in the pedestal
 frame; observations use the gravity-aligned frame. Joint order is left arm (7),
-right arm (7), neck (2). Camera optical rotation is fitted; translation is not.
+right arm (7), neck (2), optionally two coupled gripper leader angles.
+Camera optical rotation is fitted; translation is not.
 """
 
 import time
@@ -20,21 +21,45 @@ from .robot_workspace import arm_parameters
 class PoseModel:
     """Reuse scikit-robot's URDF FK/Jacobians for wrists, tools and head."""
 
-    def __init__(self, robot, robot_settings, settings):
+    def __init__(self, robot, robot_settings, settings, gripper_commands=None):
+        self.palm_targets = settings.get("hand_target_mode", "wrist") == "gripper_palm"
         self.joint_names = sum(robot_settings["arm_joints"], []) + settings["neck_joints"]
+        self.coupled_joints = {}
+        if self.palm_targets:
+            if gripper_commands is None:
+                raise ValueError("Gripper palm IK requires the pinned gripper command helper")
+            self.closed_angle = gripper_commands.EZGRIPPER_CLOSED_ANGLE_RAD
+            for side in ("left", "right"):
+                leaders = gripper_commands.alex_purdue_ezgripper_targets(0., side)
+                first, second = leaders
+                if leaders[first] != leaders[second]:
+                    raise ValueError("Expected the pinned equal-angle two-leader opening rule")
+                self.joint_names.append(first)
+                self.coupled_joints[second] = first
         joints = [robot.__dict__[name] for name in self.joint_names]
         self.lower = np.array([j.min_angle for j in joints])
         self.upper = np.array([j.max_angle for j in joints])
         self.neutral = np.asarray(settings["neutral_joint_angles_rad"], dtype=float)
         if (self.neutral.shape != (16,) or not np.isfinite(self.neutral).all()
-                or np.any(self.neutral < self.lower) or np.any(self.neutral > self.upper)):
+                or np.any(self.neutral < self.lower[:16]) or np.any(self.neutral > self.upper[:16])):
             raise ValueError("Neutral posture must contain 16 finite, joint-limit-valid angles")
-        self.wrists, self.tools = [], []
+        if self.palm_targets:
+            # Both leaders share this angle; mimics retain the URDF relationships.
+            for index, (other, first) in enumerate(self.coupled_joints.items(), 16):
+                joint = robot.__dict__[other]
+                self.lower[index] = max(0., self.lower[index], joint.min_angle)
+                self.upper[index] = min(self.closed_angle, self.upper[index], joint.max_angle)
+            self.neutral = np.r_[self.neutral, [self.closed_angle / 2] * 2]
+        self.dof = len(self.joint_names)
+        self.wrists, self.tools, self.palms = [], [], []
         self.wrist_offset = np.asarray(settings.get("wrist_offset_tool_m", [0., 0., 0.]))
         for hand in range(2):
             names = robot_settings["arm_joints"][hand]
             self.wrists.append(arm_parameters(robot, robot_settings["target_frames"][hand], names[:6])[2])
             self.tools.append(arm_parameters(robot, robot_settings["tool_frames"][hand], names)[2])
+            if self.palm_targets:
+                side = ("left", "right")[hand]
+                self.palms.append(arm_parameters(robot, f"{side}_ezgripper_palm_link", names)[2])
         self.head = arm_parameters(robot, settings["camera_mount_frame"], settings["neck_joints"])[2]
         self.optical = np.asarray(settings["rotation_mount_from_optical"], dtype=float)
         if (self.optical.shape != (3, 3) or not np.isfinite(self.optical).all()
@@ -43,11 +68,13 @@ class PoseModel:
             raise ValueError("Camera mount-from-optical must be a proper rotation")
 
     def forward(self, angles, jacobian=False):
-        """Return wrist match points, tool rotations/positions and optical poses.
+        """Return wrist/palm match points, tool rotations/positions and optical poses.
 
+        Angles are [T,16] for wrists, [T,18] with coupled gripper opening.
         With jacobian=True, append three lists of geometric [T,6,J] Jacobians.
         Match point = physical wrist + R_base_from_tool @ wrist_offset_tool_m.
-        Its linear Jacobian includes the rotating offset for all seven joints.
+        Its linear Jacobian includes the rotating offset for all seven joints;
+        palm mode instead uses the actual palm FK/Jacobian, independent of opening.
         """
         from skrobot.kinematics.differentiable import (
             compute_geometric_jacobian_batched_numpy, forward_kinematics_ee_batched_numpy)
@@ -66,7 +93,9 @@ class PoseModel:
             p, _, j = fk(q[:, :6], self.wrists[hand])
             tp, r, tj = fk(q, self.tools[hand])
             offset = r @ self.wrist_offset
-            positions.append(p + offset)
+            if self.palm_targets:
+                palm, _, palm_j = fk(q, self.palms[hand])
+            positions.append(palm if self.palm_targets else p + offset)
             rotations.append(r)
             tools.append(tp)
             if jacobian:
@@ -75,12 +104,19 @@ class PoseModel:
                 shifted_j[:, :3] += np.cross(tj[:, 3:].transpose(0, 2, 1),
                                              offset[:, None, :]).transpose(0, 2, 1)
                 shifted_j[:, 3:] = tj[:, 3:]
-                wrist_j.append(shifted_j)
+                wrist_j.append(palm_j if self.palm_targets else shifted_j)
             tool_j.append(tj)
-        hp, hr, hj = fk(angles[:, 14:], self.head)
+        hp, hr, hj = fk(angles[:, 14:16], self.head)
         result = (np.stack(positions, axis=1), np.stack(rotations, axis=1),
                   np.stack(tools, axis=1), hp, hr @ self.optical)
         return (*result, wrist_j, tool_j, hj) if jacobian else result
+
+    def physical_wrists(self, angles):
+        """Physical robot wrists [T,2,3] in base metres, independent of target mode."""
+        from skrobot.kinematics.differentiable import forward_kinematics_ee_batched_numpy
+
+        return np.stack([forward_kinematics_ee_batched_numpy(
+            angles[:, h * 7:h * 7 + 6], self.wrists[h])[0] for h in range(2)], axis=1)
 
 
 def initialize_base(camera_positions, camera_rotations, model, heading_min_norm):
@@ -136,24 +172,50 @@ class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
     def __init__(self, model, wrists, orientations, cameras, valid, times, settings,
-                 *, fixed_base=None, smooth=False, base_reference=None):
+                 *, fixed_base=None, smooth=False, base_reference=None, opening_targets=None):
         self.model, self.settings = model, settings
         self.wrists, self.orientations, self.cameras = wrists, orientations, cameras
         self.valid, self.n = valid, len(times)
+        self.dof = model.dof
         self.fixed_base = fixed_base
         self.base_reference = base_reference
         self.base_variables = 4 if fixed_base is None else 0
-        self.width = self.n * 16 + self.base_variables
+        self.width = self.n * self.dof + self.base_variables
         if smooth:
-            velocity, acceleration = temporal_operators(times)
+            velocity, acceleration = temporal_operators(times, self.dof)
+        missing = sparse.csr_matrix((0, self.n * self.dof))
+        if smooth and settings.get("missing_hand_velocity_weight", 0.):
+            # An edge is penalized when its destination has no target for that
+            # hand. Reappearance can move freely; neck columns are always zero.
+            mask = np.zeros((self.n - 1, self.dof), bool)
+            for hand in range(2):
+                mask[:, hand * 7:hand * 7 + 7] = ~valid[1:, hand, None]
+                if model.palm_targets:
+                    mask[:, 16 + hand] = ~valid[1:, hand]
+            missing = settings["missing_hand_velocity_weight"] * velocity[mask.ravel()]
         self.regularizer = sparse.vstack([
-            settings["neutral_weight"] * sparse.eye(self.n * 16),
-            settings["velocity_weight"] * velocity if smooth else sparse.csr_matrix((0, self.n * 16)),
-            settings["acceleration_weight"] * acceleration if smooth else sparse.csr_matrix((0, self.n * 16)),
+            settings["neutral_weight"] * sparse.eye(self.n * self.dof),
+            settings["velocity_weight"] * velocity if smooth else sparse.csr_matrix((0, self.n * self.dof)),
+            settings["acceleration_weight"] * acceleration if smooth else sparse.csr_matrix((0, self.n * self.dof)),
+            missing,
         ], format="csr")
         self.regularizer_target = np.r_[
             settings["neutral_weight"] * np.tile(model.neutral, self.n),
-            np.zeros(self.regularizer.shape[0] - self.n * 16)]
+            np.zeros(self.regularizer.shape[0] - self.n * self.dof)]
+        if opening_targets is not None:
+            opening_targets = np.asarray(opening_targets)
+            if (not model.palm_targets or fixed_base is None or opening_targets.shape != valid.shape
+                    or not np.isfinite(opening_targets[valid]).all()
+                    or np.any((opening_targets[valid] < 0) | (opening_targets[valid] > 1))):
+                raise ValueError("Opening targets require fixed-base palm IK and finite observed actions in [0,1]")
+            frames, hands = np.nonzero(valid)
+            weight = settings["gripper_opening_weight"]
+            opening = sparse.coo_matrix((np.full(len(frames), weight),
+                (np.arange(len(frames)), frames * self.dof + 16 + hands)),
+                shape=(len(frames), self.n * self.dof)).tocsr()
+            self.regularizer = sparse.vstack([self.regularizer, opening], format="csr")
+            self.regularizer_target = np.r_[self.regularizer_target,
+                weight * model.closed_angle * (1 - opening_targets[valid])]
         self.cached_x = None
 
     def base_prior(self, base):
@@ -171,7 +233,7 @@ class PoseProblem:
 
     def unpack(self, x):
         return (x[:4] if self.base_variables else self.fixed_base,
-                x[self.base_variables:].reshape(self.n, 16))
+                x[self.base_variables:].reshape(self.n, self.dof))
 
     def evaluate(self, x):
         if self.cached_x is not None and np.array_equal(x, self.cached_x):
@@ -187,7 +249,7 @@ class PoseProblem:
             size = error.shape[1]
             residuals.append(error.ravel())
             rr = row_start + np.arange(len(frames) * size).reshape(-1, size, 1)
-            cc = self.base_variables + frames[:, None, None] * 16 + np.arange(16)
+            cc = self.base_variables + frames[:, None, None] * self.dof + np.arange(self.dof)
             rows.append(np.broadcast_to(rr, derivative.shape).ravel())
             cols.append(np.broadcast_to(cc, derivative.shape).ravel())
             values.append(derivative.ravel())
@@ -199,7 +261,7 @@ class PoseProblem:
 
         def position_term(pred, target, linear_j, joint_start, frames, scale):
             aligned = pred @ rotation.T
-            derivative = np.zeros((len(frames), 3, 16))
+            derivative = np.zeros((len(frames), 3, self.dof))
             derivative[:, :, joint_start:joint_start + linear_j.shape[-1]] = (
                 np.einsum("ij,tjk->tik", rotation, linear_j) / scale)
             bd = np.zeros((len(frames), 3, 4))
@@ -214,7 +276,7 @@ class PoseProblem:
             derivative = np.cross(axes.transpose(0, 2, 1)[:, :, None, :],
                                   aligned.transpose(0, 2, 1)[:, None, :, :])
             derivative = derivative.transpose(0, 3, 2, 1).reshape(len(frames), 9, -1)
-            full = np.zeros((len(frames), 9, 16))
+            full = np.zeros((len(frames), 9, self.dof))
             full[:, :, joint_start:joint_start + derivative.shape[-1]] = derivative / scale
             bd = np.zeros((len(frames), 9, 4))
             bd[:, :, 3] = np.cross([0., 0., 1.], aligned.transpose(0, 2, 1)).transpose(0, 2, 1).reshape(-1, 9) / scale
@@ -287,7 +349,7 @@ class PoseProblem:
 
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
-               *, seed_index=0, raw_wrists=None, raw_orientations=None):
+               *, seed_index=0, raw_wrists=None, raw_orientations=None, opening_targets=None):
     """Fit alternate frames, freeze base, interpolate seeds and refine all frames.
 
     With filtered targets, pass raw_wrists/raw_orientations for observation-based
@@ -308,9 +370,9 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         # Interpolation preserves bounds. An unsampled final frame holds the
         # last pose until the full-resolution solve; no source data is filled.
         before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])
-                                  for j in range(16)])
+                                  for j in range(model.dof)])
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
-                              fixed_base=base, smooth=True)
+                              fixed_base=base, smooth=True, opening_targets=opening_targets)
         _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
         p, r, *_ = model.forward(after)
         rotation = base_transform(base)[:3, :3].T

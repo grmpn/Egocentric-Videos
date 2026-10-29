@@ -445,6 +445,38 @@ command still defaults to its original expanded workspace workflow; use
 [contract and limitations](knowledge/wiki/topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
 and [bundled evidence](knowledge/wiki/experiments/joint-base-bundled.md).
 
+## IK benchmark with Config 2 gripper targets
+
+Use a full-source saved gripper mapping and the pinned workspace/GPU environment.
+The benchmark runner preserves each experiment, scores all four requested
+components out of 25, and updates `outputs/ik-benchmark/REPORT.md` after every run:
+
+```bash
+env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/benchmark_ik.py \
+    --config configs/gripper_ik.json \
+    --mapping-directory outputs/ik-benchmark/mapping-config2 \
+    --run-id config2-new-experiment \
+    --name 'Config 2 with missing-hand motion penalty' \
+    --description 'Smoothed Config 2 palm targets, optimized opening, missing-hand velocity weight 5.'
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+    outputs/ik-benchmark/config2-new-experiment/trajectory --open-browser
+```
+
+Use a unique `--run-id`; earlier experiments are never overwritten. Mapping inputs
+must match the complete alignment and pinned robot. The checked-in gripper IK
+configuration enables 0.3-second position/orientation smoothing, fits the actual
+palm, and optimizes opening in the second stage. Its missing-hand penalty excludes
+the neck. The viewer shows saved opening, filtered targets and benchmark results.
+
+[Benchmark settings](configs/ik_benchmark.json) use 1 cm / 4° tracking thresholds,
+URDF position/velocity limits and an explicitly assumed 10 rad/s² acceleration
+cap. Changing common scoring settings requires a new benchmark directory or
+consistent rescoring. [Contracts](knowledge/wiki/topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets)
+and [limit sources](knowledge/wiki/decisions/ik-benchmark-limits.md) explain the
+denominators, source timing and collision exclusions. The legacy wrist IK default
+remains available through `retarget_trajectory.py`; palm mode also accepts
+`--gripper-mapping-directory` there.
+
 ## Direct hand-to-gripper review
 
 Prepare detached EZGrippers directly from the original MANO geometry, independently

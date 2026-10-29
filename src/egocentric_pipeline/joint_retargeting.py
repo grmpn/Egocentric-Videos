@@ -20,6 +20,14 @@ from .run_metadata import utc_now, write_json
 
 def validate_settings(settings):
     validate_filter_settings(settings)
+    if settings.get("hand_target_mode", "wrist") not in ("wrist", "gripper_palm"):
+        raise ValueError("hand_target_mode must be wrist or gripper_palm")
+    for key in ("missing_hand_velocity_weight", "gripper_opening_weight"):
+        value = settings.get(key, 0.)
+        if not np.isfinite(value) or value < 0:
+            raise ValueError(f"{key} must be nonnegative finite")
+    if settings.get("hand_target_mode") == "gripper_palm" and settings.get("gripper_opening_weight", 0.) <= 0:
+        raise ValueError("Gripper palm IK requires positive gripper_opening_weight")
     if type(settings.get("merge_adjacent_regions", False)) is not bool:
         raise ValueError("merge_adjacent_regions must be boolean")
     for key in ("base_prior_translation_scale_m", "base_prior_yaw_scale_rad"):
@@ -58,7 +66,7 @@ def validate_settings(settings):
 
 
 def joint_retarget_trajectory(alignment_directory, output_directory, settings, robot_settings,
-                              asset_root, *, render_video=True):
+                              asset_root, *, render_video=True, mapping_directory=None):
     """Process retained camera seeds only; save failed regions for honest review."""
     import torch
 
@@ -89,7 +97,10 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         torch.set_num_threads(settings["torch_threads"])
         arrays, alignment, clip = load_alignment(alignment_directory)
         robot = load_robot(verify_asset_source(asset_root, robot_settings), robot_settings["base_frame"])
-        model = PoseModel(robot, robot_settings, settings)
+        from .gripper_model import load_gripper_commands
+        palm_targets = settings.get("hand_target_mode") == "gripper_palm"
+        model = PoseModel(robot, robot_settings, settings,
+                          load_gripper_commands(asset_root) if palm_targets else None)
         paths = [alignment["inputs"][f"mano_{hand}"]["path"] for hand in ("left", "right")]
         offsets = mano_palm_frames(paths)
         n, times = len(arrays["timestamp_s"]), arrays["timestamp_s"]
@@ -100,6 +111,27 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         for hand in range(2):
             orientations[valid[:, hand], hand] = Rotation.from_rotvec(
                 arrays["root_orientation_aligned_axis_angle"][valid[:, hand], hand]).as_matrix() @ offsets[hand]
+        opening_targets = None
+        if palm_targets:
+            from .gripper_mapping import load_mapping_for_alignment
+            if mapping_directory is None:
+                raise ValueError("Gripper palm IK requires --gripper-mapping-directory")
+            mapping, mapping_report = load_mapping_for_alignment(mapping_directory, arrays)
+            if mapping_report["robot_settings"] != robot_settings:
+                raise ValueError("Gripper mapping and IK must use the same robot settings")
+            valid = valid & mapping["mapping_valid"]
+            wrists_aligned = mapping["transform_aligned_from_palm"][..., :3, 3].copy()
+            orientations = mapping["transform_aligned_from_palm"][..., :3, :3].copy()
+            wrists_aligned[~valid], orientations[~valid] = np.nan, np.nan
+            opening_targets = mapping["gripper_action"].copy()
+            report.update(schema_version=7, target_frames=[f"{s}_ezgripper_palm_link" for s in ("left", "right")],
+                          position_mapping="Config 2 mapped rear palm; actual robot palm FK, no shifted-wrist surrogate",
+                          orientation_mapping="Mapped gripper palm axes; filtered before both IK stages",
+                          gripper_mapping_directory=str(Path(mapping_directory).resolve()),
+                          gripper_mapping_settings=mapping_report["settings"],
+                          coupled_joint_leaders=model.coupled_joints,
+                          gripper_closed_angle_rad=model.closed_angle,
+                          mapping_invalid_observations=int(((arrays["export_valid"] & ~arrays["motion_infilled"]) & ~valid).sum()))
         cameras = arrays["camera_rotation_aligned_from_camera"]
         if (not np.isfinite(cameras).all()
                 or not np.allclose(cameras @ cameras.transpose(0, 2, 1), np.eye(3), atol=1e-6)
@@ -115,11 +147,12 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             "camera_position_smoothed_m": smooth,
             "rotation_mano_from_palm": offsets,
             "wrist_orientation_target_aligned": orientations,
+            "hand_position_target_aligned_m": wrists_aligned,
             "wrist_position_filtered_aligned_m": filtered_positions,
             "wrist_orientation_filtered_aligned": filtered_rotations,
             "episode_id": np.full(n, -1, np.int32),
-            "joint_solution_rad": np.full((n, 16), np.nan),
-            "joint_solution_before_smoothing_rad": np.full((n, 16), np.nan),
+            "joint_solution_rad": np.full((n, model.dof), np.nan),
+            "joint_solution_before_smoothing_rad": np.full((n, model.dof), np.nan),
             "joint_angles_rad": np.full((n, 2, 7), np.nan),
             "neck_joint_angles_rad": np.full((n, 2), np.nan),
             "joint_prediction": np.zeros((n, 2), bool),
@@ -141,9 +174,13 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             "joint_step_rad": np.full((n, 2), np.nan),
             "joint_jump": np.zeros((n, 2), bool),
         }
+        if palm_targets:
+            derived.update(gripper_action_target=opening_targets, gripper_action=np.full((n, 2), np.nan))
         report.update(source_run_id=alignment["source_run_id"], prepared_video=alignment["inputs"]["prepared_video"]["path"],
                       joint_names=model.joint_names, joint_lower_rad=model.lower.tolist(), joint_upper_rad=model.upper.tolist(),
-                      locked_joint_positions_rad={j.name: 0. for j in robot.joint_list if j.name not in model.joint_names},
+                      locked_joint_positions_rad={j.name: 0. for j in robot.joint_list
+                          if j.name not in model.joint_names and j.name not in model.coupled_joints
+                          and not (palm_targets and getattr(j, "mimic", None))},
                       packages={p: importlib.metadata.version(p) for p in ("scikit-robot", "numpy", "scipy", "torch", "viser", "smplx")},
                       seeds=seeds, regions=regions, hand_target_filtering=filtering,
                       timing={"loading_s": time.perf_counter() - started})
@@ -167,7 +204,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             pose, before, q, info = fit_region(model, filtered_positions[sl],
                                                filtered_rotations[sl], cameras[sl], v, times[sl], initial, settings,
                                                seed_index=seed_index, raw_wrists=wrists_aligned[sl],
-                                               raw_orientations=orientations[sl])
+                                               raw_orientations=orientations[sl],
+                                               opening_targets=opening_targets[sl] if palm_targets else None)
             transform = base_transform(pose)
             wrists = transform_points(wrists_aligned[sl], transform)
             target_rotations = transform[:3, :3] @ orientations[sl]
@@ -199,12 +237,16 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             derived["joint_solution_rad"][sl] = q
             derived["joint_solution_before_smoothing_rad"][sl] = before
             derived["joint_angles_rad"][sl] = q[:, :14].reshape(-1, 2, 7)
-            derived["neck_joint_angles_rad"][sl] = q[:, 14:]
+            derived["neck_joint_angles_rad"][sl] = q[:, 14:16]
+            if palm_targets:
+                derived["gripper_action"][sl] = 1 - q[:, 16:18] / model.closed_angle
             derived["joint_prediction"][sl] = ~v
-            derived["wrist_position_base_m"][sl] = wrists
+            physical_targets = transform_points(arrays["wrist_position_aligned_m"][sl], transform)
+            physical_targets[~v] = np.nan
+            derived["wrist_position_base_m"][sl] = physical_targets
             derived["wrist_orientation_target_base"][sl] = target_rotations
             derived["target_position_base_m"][sl] = p
-            derived["robot_wrist_position_base_m"][sl] = p - r @ model.wrist_offset
+            derived["robot_wrist_position_base_m"][sl] = model.physical_wrists(q)
             derived["tcp_position_base_m"][sl] = tcp
             derived["tool_orientation_base"][sl] = r
             derived["camera_position_base_m"][sl] = hp

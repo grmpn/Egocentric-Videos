@@ -41,7 +41,7 @@ gripper-Y link–wrist-Z link. Actual pair handling, including rigid assemblies
 and adjacent links, must be documented and checked during implementation.
 This inspection did not execute collision checks.
 
-## Acceleration reference search and proposed cap
+## Acceleration reference search and benchmark cap
 
 Primary sources do not establish a universal humanoid acceleration limit:
 

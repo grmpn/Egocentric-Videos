@@ -17,6 +17,8 @@ def main():
     parser.add_argument("--config", type=Path, help="Defaults to the selected method's configuration")
     parser.add_argument("--solver-backend", choices=("cpu", "cuda"),
                         help="Override joint fitting backend; old configurations without a backend use CPU")
+    parser.add_argument("--gripper-mapping-directory", type=Path,
+                        help="Saved full-source mapping required for gripper_palm targets")
     parser.add_argument("--robot-config", type=Path, default=root / "configs/robot_workspace.json")
     parser.add_argument("--regions-only", action="store_true", help="Baseline comparison on unexpanded heuristic regions")
     parser.add_argument("--asset-root", type=Path, help="Override the location of the same pinned robot assets")
@@ -31,7 +33,7 @@ def main():
         if args.solver_backend is not None:
             settings["solver_backend"] = args.solver_backend
         report = joint_retarget_trajectory(args.alignment_directory, args.output_directory,
-            settings, read_json(args.robot_config), args.asset_root)
+            settings, read_json(args.robot_config), args.asset_root, mapping_directory=args.gripper_mapping_directory)
     else:
         if args.workspace_directory is None:
             parser.error("--workspace-directory is required for workspace fitting")

@@ -523,3 +523,14 @@ def load_mapping(directory):
     with np.load(directory / "gripper_mapping.npz", allow_pickle=False) as saved:
         arrays = dict(saved)
     return arrays, report
+
+
+def load_mapping_for_alignment(directory, source):
+    """Require the complete same source timeline/hand data before IK integration."""
+    arrays, report = load_mapping(directory)
+    for name in ("frame_index", "timestamp_s", "source_timestamp_s", "export_valid", "motion_infilled",
+                 "direct_detection", "root_translation_aligned_m", "root_orientation_aligned_axis_angle",
+                 "wrist_position_aligned_m", "hand_pose_axis_angle", "mano_betas"):
+        if arrays[name].shape != source[name].shape or not np.array_equal(arrays[name], source[name], equal_nan=True):
+            raise ValueError(f"Gripper mapping {name} differs from the complete alignment; regenerate it for this input")
+    return arrays, report

@@ -63,6 +63,149 @@ def test_library_fk_matches_ordinary_model_and_optical_axes(model):
         np.testing.assert_allclose(hr[i, :, 1], -head.worldrot()[:, 2], atol=1e-6)
 
 
+@pytest.fixture
+def palm_model(model, settings):
+    from egocentric_pipeline.gripper_model import load_gripper_commands
+
+    _, robot, rs = model
+    settings.update(hand_target_mode="gripper_palm", gripper_opening_weight=20., missing_hand_velocity_weight=5.)
+    return PoseModel(robot, rs, settings, load_gripper_commands(ROOT / "data/models/purdue-alex-assets")), robot, rs
+
+
+def test_palm_fk_opening_and_mimics(palm_model):
+    m, robot, _ = palm_model
+    q = np.random.default_rng(17).uniform(m.lower, m.upper, (4, m.dof))
+    p, r, *_ = m.forward(q)
+    wrists = m.physical_wrists(q)
+    for i, angles in enumerate(q):
+        for name, angle in zip(m.joint_names, angles):
+            robot.__dict__[name].joint_angle(float(angle))
+        for other, first in m.coupled_joints.items():
+            robot.__dict__[other].joint_angle(robot.__dict__[first].joint_angle())
+        for h, side in enumerate(("left", "right")):
+            palm = robot.__dict__[f"{side}_ezgripper_palm_link"]
+            np.testing.assert_allclose(p[i,h], palm.worldpos(), atol=1e-7)
+            np.testing.assert_allclose(r[i,h], palm.worldrot(), atol=1e-7)
+            np.testing.assert_allclose(wrists[i,h], robot.__dict__[f"{side.upper()}_WRIST_X_LINK"].worldpos(), atol=1e-7)
+            for stem in ("palm_l1", "l1_l2"):
+                for finger in (1,2):
+                    assert robot.__dict__[f"{side}_ezgripper_knuckle_{stem}_{finger}"].joint_angle() == pytest.approx(angles[16+h])
+
+
+@pytest.mark.parametrize("fixed", [False, True])
+def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed):
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1)) + .01
+    p,r,_,_,cameras=m.forward(q)
+    valid=np.array([[True,True],[False,True],[False,False],[True,True]])
+    p[~valid],r[~valid]=np.nan,np.nan
+    actions=1-q[:,16:18]/m.closed_angle
+    actions[~valid]=np.nan
+    problem=PoseProblem(m,p,r,cameras,valid,np.array([0.,.03,.07,.10]),settings,
+                        fixed_base=np.zeros(4) if fixed else None,smooth=fixed,
+                        opening_targets=actions if fixed else None)
+    x=q.ravel() if fixed else np.r_[np.zeros(4),q.ravel()]
+    residual,jac=problem.evaluate(x)
+    direction=np.random.default_rng(4).normal(size=len(x))
+    eps=1e-6
+    numerical=(problem.evaluate(x+eps*direction)[0]-problem.evaluate(x-eps*direction)[0])/(2*eps)
+    np.testing.assert_allclose(jac@direction,numerical,atol=2e-5,rtol=1e-6)
+    if fixed:
+        np.testing.assert_allclose(residual[-valid.sum():],0,atol=1e-12)
+
+
+def test_missing_hand_penalty_is_local_and_never_neck(palm_model, settings):
+    m,_,_=palm_model
+    q=np.tile(m.neutral,(4,1));q[1:]+=0.02
+    p,r,_,_,c=m.forward(q)
+    valid=np.array([[True,True],[False,True],[False,True],[True,True]])
+    times=np.arange(4)*.1
+    off=PoseProblem(m,p,r,c,valid,times,dict(settings,missing_hand_velocity_weight=0),fixed_base=np.zeros(4),smooth=True)
+    on=PoseProblem(m,p,r,c,valid,times,settings,fixed_base=np.zeros(4),smooth=True)
+    penalty=on.regularizer[off.regularizer.shape[0]:]
+    assert penalty.shape[0]==16  # two missing destinations, seven arm joints plus opening
+    cols=np.unique(penalty.nonzero()[1]%m.dof)
+    np.testing.assert_array_equal(cols,[0,1,2,3,4,5,6,16])
+    expected=5*np.diff(q,axis=0)[:2][:,[0,1,2,3,4,5,6,16]]/.1
+    np.testing.assert_allclose(penalty@q.ravel(),expected.ravel(),atol=1e-12)
+    first=PoseProblem(m,p,r,c,valid,times,settings)
+    first_off=PoseProblem(m,p,r,c,valid,times,dict(settings,missing_hand_velocity_weight=0))
+    np.testing.assert_array_equal(first.regularizer.toarray(),first_off.regularizer.toarray())
+
+
+def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings):
+    require_cuda()
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1))
+    q[:, 16:18] += np.arange(4)[:, None] * .005
+    p, r, _, _, cameras = m.forward(q)
+    valid = np.ones((4, 2), bool)
+    valid[1, 0] = False
+    opening = 1 - q[:, 16:18] / m.closed_angle
+    answers = []
+    for backend in ("cpu", "cuda"):
+        problem = PoseProblem(m, p, r, cameras, valid, np.arange(4) * .1,
+                              dict(settings, solver_backend=backend), fixed_base=np.zeros(4),
+                              smooth=True, opening_targets=opening)
+        _, result, info = problem.solve(np.zeros(4), np.tile(m.neutral, (4, 1)), 50)
+        answers.append((result, info["cost"]))
+    np.testing.assert_allclose(answers[0][0], answers[1][0], atol=2e-5, rtol=2e-5)
+    assert answers[0][1] == pytest.approx(answers[1][1], rel=1e-6, abs=1e-8)
+
+
+def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings):
+    from egocentric_pipeline.ik_benchmark import evaluate_run
+    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.run_metadata import write_json
+
+    directory, source, _, rs = aligned_input
+    m, _, _ = palm_model
+    source.update(direct_detection=source["export_valid"].copy(),
+                  root_translation_aligned_m=source["wrist_position_aligned_m"].copy(),
+                  hand_pose_axis_angle=np.zeros((8, 2, 45)), mano_betas=np.zeros((8, 2, 10)))
+    np.savez(directory / "trajectory_aligned.npz", **source)
+    valid = source["export_valid"] & ~source["motion_infilled"]
+    p, r, *_ = m.forward(np.tile(m.neutral, (8, 1)))
+    transforms = np.broadcast_to(np.eye(4), (8, 2, 4, 4)).copy()
+    transforms[..., :3, :3], transforms[..., :3, 3] = r, p
+    transforms[~valid] = np.nan
+    opening = np.full((8, 2), .5)
+    opening[~valid] = np.nan
+    mapping = tmp_path / "mapping"
+    mapping.mkdir()
+    np.savez(mapping / "gripper_mapping.npz", **source, mapping_valid=valid,
+             transform_aligned_from_palm=transforms, gripper_action=opening)
+    write_json(mapping / "mapping_report.json", {"schema_version": 1, "status": "completed",
+        "hand_order": ["left", "right"], "robot_settings": rs, "settings": {"mapping_mode": "wrist_roll"}})
+    settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=1)
+    run = tmp_path / "benchmark/run"
+    report = joint_retarget_trajectory(directory, run / "trajectory", settings, rs,
+        ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False)
+    with np.load(run / "trajectory/trajectory_retargeted.npz") as data:
+        assert data["joint_solution_rad"].shape == (8, 18)
+        assert data["gripper_action"].shape == (8, 2)
+        for name in source:
+            np.testing.assert_array_equal(source[name], data[name])
+        assert np.isnan(data["wrist_position_base_m"][~valid]).all()
+    assert len(report["coupled_joint_leaders"]) == 2
+    benchmark = json.loads((ROOT / "configs/ik_benchmark.json").read_text())
+    benchmark.update(hand_position_window_s=.5, hand_orientation_window_s=.5)
+    result = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
+    assert result["components"]["position_tracking"]["evaluated"] == int(valid.sum())
+    assert result["components"]["joint_feasibility"]["evaluated"] == 8
+    assert result["missing_robot_frames"] == 0
+    with np.load(run / "benchmark_frame_metrics.npz") as data:
+        np.testing.assert_allclose(data["target_position_aligned_m"][valid], p[valid], atol=1e-10)
+        assert data["joint_positions_rad"].shape == (8, 24)
+    rescored = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
+    assert result["components"] == rescored["components"]
+    transforms[valid, :3, 3] += .001
+    np.savez(mapping / "gripper_mapping.npz", **source, mapping_valid=valid,
+             transform_aligned_from_palm=transforms, gripper_action=opening)
+    with pytest.raises(ValueError, match="targets, timestamps or observations differ"):
+        evaluate_run(run, mapping, benchmark, "test", "Changed targets must not share the scoreboard")
+
+
 def test_camera_initialization_wraparound_offset_and_degenerate_heading(model):
     m, _, _ = model
     yaw = np.deg2rad([179, -179])

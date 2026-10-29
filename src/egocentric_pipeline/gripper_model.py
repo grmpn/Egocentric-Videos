@@ -125,13 +125,19 @@ class EZGripper:
         return palm
 
 
-def load_grippers(asset_root, robot_settings):
-    """Reuse the pinned asset's pure-Python command helper without Isaac Lab."""
+def load_gripper_commands(asset_root):
+    """Load the asset's opening rule without importing its Isaac Lab package."""
     asset_root = Path(asset_root).resolve()
-    urdf = verify_asset_source(asset_root, robot_settings)
     helper = asset_root / "src/ihmc_alex_isaaclab/end_effectors/sake_ezgripper.py"
     spec = importlib.util.spec_from_file_location("ezgripper_asset_commands", helper)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def load_grippers(asset_root, robot_settings):
+    """Reuse the pinned asset's pure-Python command helper without Isaac Lab."""
+    urdf = verify_asset_source(asset_root, robot_settings)
+    module = load_gripper_commands(asset_root)
     return [EZGripper(detached_gripper_xml(urdf, side), side, module.alex_purdue_ezgripper_targets)
             for side in ("left", "right")]

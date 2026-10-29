@@ -209,9 +209,14 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     valid = arrays.get("retarget_valid", arrays["export_valid"])
     settings = report["robot_settings"]
     pose_fitting = report.get("method") == "joint_base"
-    target_frames = settings.get("target_frames", settings["tool_frames"])
+    palm_targets = report.get("settings", {}).get("hand_target_mode") == "gripper_palm"
+    target_frames = report.get("target_frames", settings.get("target_frames", settings["tool_frames"]))
     wrist_matching = target_frames != settings["tool_frames"]
-    shifted_matching = pose_fitting and np.any(report["settings"].get("wrist_offset_tool_m", [0, 0, 0]))
+    shifted_matching = pose_fitting and not palm_targets and np.any(report["settings"].get("wrist_offset_tool_m", [0, 0, 0]))
+    benchmark = None
+    if (directory.parent / "benchmark_frame_metrics.npz").exists():
+        with np.load(directory.parent / "benchmark_frame_metrics.npz", allow_pickle=False) as data:
+            benchmark = dict(data)
     endpoint_positions = arrays.get("target_position_base_m", arrays["tcp_position_base_m"])
     if wrist_matching and "target_position_base_m" not in arrays:
         raise ValueError("Wrist-target run has no saved target positions; regenerate the retargeting output")
@@ -233,7 +238,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     server.scene.add_label("/aligned/label", "Aligned origin", position=(0, 0, -.06))
     camera = arrays["camera_position_aligned_m"]
     camera_points = server.scene.add_point_cloud("/camera", points=camera.astype(np.float32), colors=(160, 165, 178), point_size=.012)
-    wrists = arrays["wrist_position_aligned_m"]
+    wrists = arrays["wrist_position_filtered_aligned_m"] if palm_targets else arrays["wrist_position_aligned_m"]
     targets, endpoint_markers, tcp_markers, wrist_markers, paths = [], [], [], [], []
     for hand, name in enumerate(("left", "right")):
         hand_valid = valid[:, hand]
@@ -243,7 +248,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         endpoint_markers.append(server.scene.add_icosphere(f"/{name}/ik_target", radius=.012, color=(245, 245, 245)))
         tcp_markers.append(server.scene.add_icosphere(f"/{name}/tcp", radius=.009, color=(90, 235, 220)))
         wrist_markers.append(server.scene.add_icosphere(f"/{name}/robot_wrist", radius=.008, color=(235, 115, 220), visible=False))
-    endpoint_label = "shifted wrist match point" if shifted_matching else "robot wrist" if wrist_matching else "TCP (legacy alignment)"
+    endpoint_label = "robot gripper palm" if palm_targets else "shifted wrist match point" if shifted_matching else "robot wrist" if wrist_matching else "TCP (legacy alignment)"
     camera_explanation = ("Camera position and rotation are fitted in both stages."
                           if report.get("camera_position_objective", "camera_position_error_m" in arrays)
                           else "Camera rotation is fitted; position error is diagnostic only."
@@ -257,20 +262,23 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         "the original hand orientation and articulation.")
     server.gui.add_markdown(
         "## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
-        f"Blue/orange: original left/right hand and wrist · White: verified {endpoint_label}"
+        + ("Blue/orange: original MANO hands and smoothed gripper palm targets" if palm_targets else "Blue/orange: original left/right hand and wrist")
+        + f" · White: {endpoint_label}"
         + (" · Cyan: gripper TCP" if wrist_matching else "")
         + (" · Pink: physical robot wrist" if shifted_matching else "")
         + ("\nInfilled hands excluded; treated as missing observations." if "retarget_valid" in arrays
            else "\nHistorical fit may include infilled hand estimates.")
         + "\nPath: green pass, purple pose/IK failure, gray unassigned; red is a baseline workspace failure.\n\n"
-        + explanation + " Collisions and dynamic limits are unchecked.")
+        + explanation + (" Frame collision/benchmark-limit results appear below; acceleration is a benchmark proxy."
+                          " Path colours retain the historical raw-target pose gate; benchmark errors use filtered Config 2 targets."
+                          if benchmark is not None else " Collisions and dynamic limits are unchecked."))
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
     play = server.gui.add_checkbox("Play", initial_value=False)
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
-    path_control = server.gui.add_checkbox("Wrist paths", initial_value=True)
+    path_control = server.gui.add_checkbox("Palm target paths" if palm_targets else "Wrist paths", initial_value=True)
     orientation_handles = []
     if pose_fitting:
-        predicted_control = server.gui.add_checkbox("Show unverified robot poses", initial_value=False)
+        predicted_control = server.gui.add_checkbox("Show unverified robot poses", initial_value=palm_targets)
         axes_control = server.gui.add_checkbox("Orientation axes", initial_value=True)
         for name in ("left_target", "left_robot", "right_target", "right_robot", "camera_target", "camera_robot"):
             target = name.endswith("_target")
@@ -320,8 +328,10 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             base_axes.position = transform[:3, 3]
             base_axes.wxyz = Rotation.from_matrix(transform[:3, :3]).as_quat(scalar_first=True)
             if pose_fitting:
-                for name, angle in zip(report["settings"]["neck_joints"], arrays["neck_joint_angles_rad"][frame]):
+                for name, angle in zip(report["joint_names"], arrays["joint_solution_rad"][frame]):
                     robot.__dict__[name].joint_angle(float(angle))
+                for second, first in report.get("coupled_joint_leaders", {}).items():
+                    robot.__dict__[second].joint_angle(robot.__dict__[first].joint_angle())
             for hand in range(2):
                 if arrays["ik_success"][frame, hand] or pose_fitting:
                     for name, angle in zip(settings["arm_joints"][hand], arrays["joint_angles_rad"][frame, hand]):
@@ -343,7 +353,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             targets[hand].visible = bool(valid[frame, hand])
             if targets[hand].visible:
                 targets[hand].position = wrists[frame, hand]
-            endpoint_markers[hand].visible = eid >= 0 and bool(arrays["ik_success"][frame, hand])
+            endpoint_markers[hand].visible = eid >= 0 and (bool(arrays["ik_success"][frame, hand])
+                                                          or (pose_fitting and predicted_control.value))
             if endpoint_markers[hand].visible:
                 endpoint_markers[hand].position = transform_points(endpoint_positions[frame, hand], transform)
             tcp_markers[hand].visible = wrist_matching and endpoint_markers[hand].visible
@@ -362,7 +373,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
                     continue
                 if hand < 2:
                     position = wrists[frame, hand] if i % 2 == 0 else transform_points(endpoint_positions[frame, hand], transform)
-                    rotation = (arrays["wrist_orientation_target_aligned"][frame, hand] if i % 2 == 0
+                    rotation = (arrays["wrist_orientation_filtered_aligned" if palm_targets else "wrist_orientation_target_aligned"][frame, hand] if i % 2 == 0
                                 else transform[:3, :3] @ arrays["tool_orientation_base"][frame, hand])
                 else:
                     position = (camera[frame] if i % 2 == 0 else transform_points(arrays["camera_position_base_m"][frame], transform))
@@ -377,17 +388,25 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             detail += f" · Episode {eid}: [{region['start']}, {region['stop']})"
         if pose_fitting and eid >= 0:
             degrees = np.rad2deg(arrays["orientation_residual_rad"][frame])
-            detail += (f"\n\nWrist L/R: {np.round(arrays['ik_residual_m'][frame] * 1000, 2).tolist()} mm · "
+            detail += (f"\n\n{'Raw palm target' if palm_targets else 'Wrist'} L/R: {np.round(arrays['ik_residual_m'][frame] * 1000, 2).tolist()} mm · "
                        f"{np.round(degrees, 2).tolist()}° · Head: {np.rad2deg(arrays['camera_rotation_error_rad'][frame]):.2f}°")
             if "camera_position_error_m" in arrays:
                 detail += f" · Camera position: {arrays['camera_position_error_m'][frame] * 1000:.1f} mm"
             if predicted_control.value and not arrays["ik_success"][frame].all():
                 detail += "\n\n**Unverified robot poses shown; missing observations remain unknown.**"
+            if palm_targets:
+                detail += (f"\n\nOpening L/R (0 closed, 1 open): {np.round(arrays['gripper_action'][frame],3).tolist()}"
+                           f" · target {np.round(arrays['gripper_action_target'][frame],3).tolist()}")
+            if benchmark is not None:
+                detail += (f"\n\nBenchmark: {np.round(benchmark['position_error_m'][frame]*1000,2).tolist()} mm · "
+                           f"{np.round(np.rad2deg(benchmark['orientation_error_rad'][frame]),2).tolist()}°"
+                           f" · All joint limits: {bool(benchmark['joint_feasible'][frame])}"
+                           f" · Collision-free: {bool(benchmark['collision_free'][frame])}")
         if arrays["joint_jump"][frame].any():
             label += " · **Large joint change flagged**"
         status.content = (f"**Frame {frame} · {arrays['timestamp_s'][frame]:.3f} s**\n\n{label}\n\n{detail}\n\n"
                           f"Observed L/R: {valid[frame].tolist()} · IK L/R: {arrays['ik_success'][frame].tolist()}\n\n"
-                          f"Robot wrist frames: {', '.join(target_frames)}"
+                          f"Robot target frames: {', '.join(target_frames)}"
                           + (f" · Match offset in tool metres: {report['settings']['wrist_offset_tool_m']}" if shifted_matching else ""))
         viewer.redraw()
 

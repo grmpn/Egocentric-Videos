@@ -298,6 +298,78 @@ camera poses, because it disrupts shared camera/hand motion cancellation. See th
 [frame-1050 diagnosis](../experiments/hand-pose-refinement.md#frame-1050-projection-jitter-diagnosis)
 for measured evidence; world smoothness alone does not establish overlay fidelity.
 
+## IK benchmark and gripper targets
+
+Implemented under the [approved benchmark plan](../plans/milestone-3-ik-benchmark.md).
+[README commands](../../../README.md#ik-benchmark-with-config-2-gripper-targets)
+run an experiment and open its viewer. Full-run acceptance is still in progress.
+
+`hand_target_mode: gripper_palm` consumes a full-source saved direct mapping;
+all shared source fields must match the alignment before fitting. Actual robot
+palm FK replaces the rotating wrist surrogate. The mapped palm's XYZ and SO(3)
+orientation are filtered with the existing per-hand/span/region filter before
+both stages. Raw mapped targets still own the historical demonstration gates
+and restart ranking; the benchmark independently scores common filtered Config 2
+targets. A direct-mapping failure excludes that target and is counted explicitly.
+
+Schema 7 appends two opening leader angles to the existing 16 arm/neck variables:
+left arm 0:7, right arm 7:14, neck 14:16, left/right opening 16:18. The pinned
+asset command defines `angle = 1.30 * (1 - action)` radians, action 0 closed / 1
+open. Each side's two independent leaders are tied to the same optimized angle;
+ordinary URDF FK propagates their mimics. `coupled_joint_leaders` records the
+second leader→optimized leader relationship; these joints are not locked.
+Opening remains bounded to action [0,1] intersected with both leaders' URDF
+bounds. Its neutral initialization is action 0.5. Only fixed-base fitting adds
+the observed opening-angle residual, multiplied by `gripper_opening_weight` (20).
+Base fitting retains posture regularization without an opening target.
+
+`missing_hand_velocity_weight` (5 in the new config) multiplies extra source-time
+joint-velocity residuals when the edge's destination has no target for that hand.
+It covers that arm's seven joints and its opening, including entry into a gap;
+the edge returning to an observed target is unconstrained by this extra term.
+Neck columns are always zero. Weight zero disables the term. Existing temporal
+weights remain 1.0/0.5; both backends consume the same residual/Jacobian.
+
+Source geometry is unchanged. `hand_position_target_aligned_m` saves raw fitting
+positions; historical `wrist_*filtered*` and orientation-target field names now
+hold palm targets in this mode. `wrist_position_base_m` still means the actual
+human wrist for MANO reconstruction. Physical robot wrist, palm match point and
+TCP remain separate. `gripper_action_target` / `gripper_action` are [T,2] in
+left/right order; predictions through missing observations remain labeled.
+
+The [benchmark evaluator](../../../src/egocentric_pipeline/ik_benchmark.py) uses
+ordinary full-robot FK, independently of saved solver errors. Each tracking score
+is 25 times the fraction of observed hand samples passing ≤0.01 m or ≤4°;
+joint feasibility and collision-free scores use all selected frames. Failed or
+absent robot predictions fail. Empty denominators yield no total, never a free
+pass. Source frames outside the shared regions are disclosed. Different source,
+mapping settings, robot, regions or scoring definitions cannot share ranked scores.
+
+All 24 physical revolute joints, including mimics, enter limit checks and joint
+motion statistics. Speed is a source-time first difference; acceleration is the
+difference of interval velocities divided by their midpoint separation. Every
+frame checks both incident speeds; endpoint acceleration uses its nearest
+interior estimate. Derivatives never cross region gaps. Position bounds allow
+1e-9 rad numerical tolerance. RMS/P95 motion uses interval samples, absolute P95;
+error medians/P95 use finite observed predictions, with nonfinite counts exposed.
+Scores retain failures in their denominators. The 10 rad/s² cap is an explicit
+[benchmark assumption](../decisions/ik-benchmark-limits.md).
+
+Collision evaluation reuses scikit-robot's URDF mesh query through trimesh and
+new pinned `python-fcl==0.7.0.11`; no simulator is needed. Exclusions cover the
+same rigid assembly, adjacent assemblies and the asset's documented convex pairs.
+Every excluded pair/reason is saved. No random-pose-derived exclusions are added.
+This checks sampled self-intersection, including fingers, without establishing
+inter-frame clearance, scene contact or dynamic execution.
+
+Each experiment retains settings, trajectory/report/video, original/filtered
+targets, full-joint/frame metrics, collisions and solver attempts under
+`outputs/ik-benchmark/`. `REPORT.md` is regenerated from preserved experiment and
+score records after successes or failures. Its timing includes both solve stages
+and retries, separated from loading/export/rendering. It links complete raw-error,
+opening and per-joint diagnostics. The viewer labels unverified poses, shows
+opening/filtered target axes and reads benchmark checks without solving IK.
+
 ## Part 3 placement and IK contract
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.
