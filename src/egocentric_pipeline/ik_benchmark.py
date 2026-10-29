@@ -202,7 +202,7 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
 
 def update_report(directory):
     """Regenerate the scoreboard from every preserved registered experiment."""
-    root = Path(directory)
+    root = Path(directory).resolve()
     entries = []
     for path in sorted(root.glob("*/experiment.json")):
         experiment = read_json(path)

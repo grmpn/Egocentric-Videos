@@ -302,7 +302,8 @@ for measured evidence; world smoothness alone does not establish overlay fidelit
 
 Implemented under the [approved benchmark plan](../plans/milestone-3-ik-benchmark.md).
 [README commands](../../../README.md#ik-benchmark-with-config-2-gripper-targets)
-run an experiment and open its viewer. Full-run acceptance is still in progress.
+run an experiment and open its viewer. The [full-iPhone comparison and acceptance](../experiments/ik-benchmark-iphone.md)
+verify this scope and preserve the remaining tracking, limit and collision failures.
 
 `hand_target_mode: gripper_palm` consumes a full-source saved direct mapping;
 all shared source fields must match the alignment before fitting. Actual robot

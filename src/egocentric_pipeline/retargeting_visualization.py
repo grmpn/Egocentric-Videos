@@ -274,6 +274,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
                           if benchmark is not None else " Collisions and dynamic limits are unchecked."))
     slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
     play = server.gui.add_checkbox("Play", initial_value=False)
+    focus_control = server.gui.add_button("Focus robot")
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
     path_control = server.gui.add_checkbox("Palm target paths" if palm_targets else "Wrist paths", initial_value=True)
     orientation_handles = []
@@ -414,6 +415,15 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     def scrub(event):
         update(int(event.target.value))
 
+    def focus_robot():
+        center = np.mean([link.worldpos() for link in robot.link_list], axis=0)
+        viewer.set_camera(angles=[np.pi / 3, 0, 3 * np.pi / 4], distance=1.6, center=center)
+
+    @focus_control.on_click
+    def focus_current_robot(event):
+        if arrays["episode_id"][int(slider.value)] >= 0:
+            focus_robot()
+
     def playback():
         while viewer.is_active:
             frame = int(slider.value)
@@ -425,6 +435,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
 
     update(0)
     viewer.set_camera(angles=[np.pi / 3, 0, 3 * np.pi / 4], distance=2.4, center=np.mean(wrists[valid], axis=0))
+    if palm_targets and arrays["episode_id"][0] >= 0:
+        focus_robot()
     viewer.show(open_browser=open_browser)
     threading.Thread(target=playback, daemon=True).start()
     return viewer
