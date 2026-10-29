@@ -96,6 +96,8 @@ class GripperMappingViewer:
                   "thumb_point_blend": "Config 4 · Interpolated thumb plane"}.get(self.settings.get("mapping_mode"))
         if method:
             gui.add_markdown(f"**{method}**")
+        if self.wrist_roll:
+            gui.add_markdown(f"Wrist anchor: **{self.settings.get('wrist_backward_offset_m', 0.) * 100:.1f} cm backward** along forward")
         priority = self.settings.get("orientation_priority", "closing")
         rule = "Forward preserved; closing made perpendicular." if priority == "forward" else "Closing preserved; forward made perpendicular."
         if self.exact_tips:
@@ -106,7 +108,7 @@ class GripperMappingViewer:
             rule = "Jaw: " + ("index MCP → thumb IP" if self.thumb_ip_plane else "thumb MCP → index MCP") + ". Tip midpoint matched."
         if self.wrist_roll:
             forward_label = "wrist → thumb/index " + ("fingertip midpoint" if forward_axis == "wrist_to_tip_midpoint" else "MCP midpoint")
-            rule = "Rear palm origin fixed to wrist. Roll follows thumb MCP → index MCP, measured from the hand-relative open pose."
+            rule = "Rear palm origin at the configured backward wrist offset. Roll follows thumb MCP → index MCP, measured from the hand-relative open pose."
         if self.roll_blend:
             forward_label = "blend of the two plane orientations"
             roll_direction = "fingertip midpoint" if forward_axis == "wrist_to_tip_midpoint" else "MCP midpoint"
@@ -441,9 +443,9 @@ class GripperMappingViewer:
                                 detail += f" · MCP roll **{angle:+.1f}°** · {label} **{weight:.0%}**"
                         elif self.wrist_roll:
                             palm = self.grippers[hand].model.root_link.worldpos()
-                            wrist = self.arrays["landmarks_aligned_m"][i, hand, 0]
+                            wrist = self.mapping["transform_aligned_from_grasp"][i, hand, :3, 3]
                             angle = np.rad2deg(self.mapping["gripper_roll_rad"][i, hand])
-                            detail += f" · wrist error **{np.linalg.norm(palm-wrist) * 1000:.4f} mm** · roll **{angle:+.1f}°** · tip offset **{error:.2f} mm**"
+                            detail += f" · anchor error **{np.linalg.norm(palm-wrist) * 1000:.4f} mm** · roll **{angle:+.1f}°** · tip offset **{error:.2f} mm**"
                         else:
                             detail += f" · tip error **{error:.4f} mm**"
                 else:

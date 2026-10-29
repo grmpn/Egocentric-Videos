@@ -13,6 +13,8 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: Config 2 wrist offset](plans/milestone-3-gripper-wrist-offset.md) — requested 25 mm backward placement verified; separate full-video comparison viewer.
+
 - [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 10 fulfilled: interpolated-thumb Config 4 and full iPhone overlay MP4s for Configs 2/3/4; default selection pending.
 - [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — fulfilled: configurable target filtering, base prior and merging; controlled comparisons and full rerun, with pose/motion tradeoffs.
 - [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — fulfilled GPU solver, matched benchmark and latest smoothing-configuration rerun.

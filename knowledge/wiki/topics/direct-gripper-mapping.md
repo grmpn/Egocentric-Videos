@@ -80,8 +80,10 @@ thumb→index direction. Tip-offset diagnostics retain finger 2→thumb / finger
 1→index labels; they do not minimize distance over swapped tip assignments.
 
 [Config 2](../../../configs/gripper_wrist_roll.json), `wrist_roll`, puts the
-gripper **rear palm origin** at the physical hand wrist, with no translational
-offset. Its current `forward_axis: wrist_to_tip_midpoint` makes +X normalized
+gripper **rear palm origin** at `hand_wrist - wrist_backward_offset_m * forward`.
+The current setting is **0.025 m backward**; absent settings default to zero for
+earlier saved mappings. The offset changes translation only, not the forward
+construction, roll or opening. Anchor errors measure distance to this shifted target. Its current `forward_axis: wrist_to_tip_midpoint` makes +X normalized
 wrist→midpoint(thumbtip,index tip). Missing `forward_axis` preserves the earlier
 wrist→MCP-midpoint rule; explicit `wrist_to_mcp_midpoint` also selects it. +Y projects
 thumb MCP→index MCP perpendicular to +X, and +Z = +X × +Y. This preserves

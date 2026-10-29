@@ -166,8 +166,12 @@ def test_mcp_plane_degenerate_and_missing_observations(grippers, mode):
 
 
 @pytest.mark.parametrize("forward_axis", ["wrist_to_mcp_midpoint", "wrist_to_tip_midpoint"])
-def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers, forward_axis):
+@pytest.mark.parametrize("backward", [None, 0.025])
+def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers, forward_axis, backward):
     settings = {**read_json(ROOT / "configs/gripper_wrist_roll.json"), "forward_axis": forward_axis}
+    settings.pop("wrist_backward_offset_m")
+    if backward is not None:
+        settings["wrist_backward_offset_m"] = backward
     angles = np.array([0., np.pi/2, -np.pi/2])
     points = landmarks([.05]*3)
     open_points = points[..., :5 if forward_axis == "wrist_to_tip_midpoint" else 3, :].copy()
@@ -185,7 +189,7 @@ def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers, forward_ax
             g = grippers[hand]
             g.set_opening(mapped["gripper_action"][i,hand])
             g.place_tcp(mapped["transform_aligned_from_tcp"][i,hand])
-            np.testing.assert_allclose(g.model.root_link.worldpos(), points[i,hand,0], atol=1e-12)
+            np.testing.assert_allclose(g.model.root_link.worldpos(), points[i,hand,0] - (backward or 0.) * swing[:,0], atol=1e-12)
             expected = swing @ Rotation.from_euler("x", angle).as_matrix() @ np.diag([1., sign, sign])
             np.testing.assert_allclose(g.model.root_link.worldrot(), expected, atol=1e-12)
             assert np.linalg.det(g.model.root_link.worldrot()) == pytest.approx(1.)
@@ -224,7 +228,7 @@ def test_wrist_roll_missing_degenerate_and_unreachable(grippers, forward_axis):
         map_grasp_landmarks(points, observed, settings, grippers)
 
 
-def test_tip_forward_differs_from_mcp_forward_and_matches_wrist(grippers):
+def test_tip_forward_differs_from_mcp_forward_and_matches_offset_wrist(grippers):
     settings = read_json(ROOT / "configs/gripper_wrist_roll.json")
     points = landmarks([.05])
     points[...,3:5,:] += [0., .04, .03]
@@ -235,7 +239,7 @@ def test_tip_forward_differs_from_mcp_forward_and_matches_wrist(grippers):
     for hand,g in enumerate(grippers):
         g.place_tcp(result["transform_aligned_from_tcp"][0,hand])
         np.testing.assert_allclose(g.model.root_link.worldrot()[:,0], expected, atol=1e-12)
-        np.testing.assert_allclose(g.model.root_link.worldpos(), points[0,hand,0], atol=1e-12)
+        np.testing.assert_allclose(g.model.root_link.worldpos(), points[0,hand,0] - .025 * expected, atol=1e-12)
     np.testing.assert_allclose(result["gripper_roll_rad"], 0., atol=1e-12)
 
 
@@ -602,8 +606,9 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
         # Source uses identity articulation, exactly the ideal-open reference.
         np.testing.assert_allclose(arrays["gripper_roll_rad"][arrays["mapping_valid"]], 0., atol=1e-12)
         if mode in ("wrist_roll", "wrist_roll_tips"):
+            target = arrays["wrist_position_aligned_m"] - settings.get("wrist_backward_offset_m", 0.) * arrays["transform_aligned_from_palm"][..., :3, 0]
             np.testing.assert_allclose(arrays["transform_aligned_from_palm"][arrays["mapping_valid"], :3, 3],
-                                       arrays["wrist_position_aligned_m"][arrays["mapping_valid"]], atol=1e-7)
+                                       target[arrays["mapping_valid"]], atol=1e-7)
     assert np.isnan(arrays["landmarks_aligned_m"][0,0]).all()
     for hand in range(2):
         joints, vertices = expected[hand]

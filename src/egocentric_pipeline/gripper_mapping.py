@@ -24,6 +24,11 @@ def validate_settings(settings):
     mode = settings.get("mapping_mode", "landmark_frame")
     if mode not in ("landmark_frame", *KINEMATIC_MODES):
         raise ValueError(f"mapping_mode must be one of {('landmark_frame', *KINEMATIC_MODES)}")
+    backward = settings.get("wrist_backward_offset_m", 0.)
+    if not np.isfinite(backward) or backward < 0:
+        raise ValueError("wrist_backward_offset_m must be nonnegative and finite")
+    if backward and mode != "wrist_roll":
+        raise ValueError("wrist_backward_offset_m requires wrist_roll mode")
     if not np.isfinite(settings["minimum_axis_length_m"]) or settings["minimum_axis_length_m"] <= 0:
         raise ValueError("minimum_axis_length_m must be positive and finite")
     if not 0 < settings["minimum_axis_sine"] < 1:
@@ -262,7 +267,8 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     In mcp_plane mode, +Y follows thumb MCP→index MCP and +X projects index
     MCP→PIP. FK matches separation and midpoint, not individual tip positions.
     thumb_ip_plane instead points +Y index MCP→thumb IP. wrist_roll anchors the
-    rear palm origin at the wrist, preserves its configured forward +X and
+    rear palm origin behind the wrist by wrist_backward_offset_m along +X
+    (default zero), preserves its configured forward +X and
     projects thumb MCP→index MCP as +Y. roll_blend uses this measured roll to
     transition aligned Config 1→original plane rotations at fingertip midpoint.
     thumb_point_blend instead moves the thumb plane point IP→MCP with the same
@@ -303,6 +309,8 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     grasp[valid] = np.eye(4)
     grasp[..., :3, :3][valid] = rotation[valid]
     target = points[..., 0, :] if mode == "wrist_roll" else (thumb_tip + index_tip) / 2
+    if mode == "wrist_roll":
+        target = target - settings.get("wrist_backward_offset_m", 0.) * rotation[..., :, 0]
     grasp[..., :3, 3][valid] = target[valid]
     separation = np.linalg.norm(thumb_tip - index_tip, axis=-1)
     separation[~observed | ~np.isfinite(points[..., 3:5, :]).all(axis=(-1, -2))] = np.nan
@@ -407,7 +415,7 @@ def mapping_summary(arrays):
                                           - arrays["transform_aligned_from_grasp"][valid, hand, :3, 3], axis=-1)
             if "gripper_roll_rad" in arrays and not any(k in arrays for k in ("blend_original_weight", "thumb_mcp_weight")):
                 error = np.linalg.norm(arrays["transform_aligned_from_palm"][valid, hand, :3, 3]
-                                       - arrays["landmarks_aligned_m"][valid, hand, 0], axis=-1)
+                                       - arrays["transform_aligned_from_grasp"][valid, hand, :3, 3], axis=-1)
                 roll = np.rad2deg(arrays["gripper_roll_rad"][valid, hand])
                 summary[side].update(max_wrist_anchor_error_m=float(error.max()) if len(error) else None,
                                      roll_range_degrees=[float(roll.min()), float(roll.max())] if len(roll) else None)
@@ -493,7 +501,7 @@ def prepare_gripper_mapping(alignment_directory, output_directory, settings, rob
         elif settings["mapping_mode"] == "thumb_ip_plane":
             report["tip_correspondence"] = "Tip midpoint and separation matched; jaw follows index MCP→thumb IP; individual tip offsets are expected"
         elif settings["mapping_mode"] in ROLL_MODES:
-            report.update(tip_correspondence="Rear palm origin matches hand wrist; separation matched; individual tip offsets are expected",
+            report.update(tip_correspondence="Rear palm origin at hand wrist minus wrist_backward_offset_m times forward +X (default zero); separation matched; individual tip offsets are expected",
                           roll_reference="Identity MANO local rotations, same shape/root pose; configured open forward transported to current forward; signed MCP-line roll about +X in [-pi,pi]")
             if settings["mapping_mode"] == "roll_blend":
                 report.update(tip_correspondence="Tip midpoint/separation matched; Config 1 jaw aligned thumb→index; individual offsets expected",

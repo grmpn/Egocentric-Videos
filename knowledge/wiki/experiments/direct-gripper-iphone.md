@@ -4,6 +4,32 @@ Revision 10 fulfilled · 2026-10-28 · [Approved plan](../plans/milestone-3-dire
 The [mapping topic](../topics/direct-gripper-mapping.md) owns the geometry,
 landmark, action and viewer contracts. All linked run artifacts are local-only.
 
+## Config 2 backward wrist offset (2026-10-29)
+
+[Approved adjustment](../plans/milestone-3-gripper-wrist-offset.md) fulfilled:
+rear palm origin moved **25 mm backward** along unchanged wrist→fingertip-midpoint
+forward. [Updated full viewer :8097](http://localhost:8097) and
+[original full viewer :8094](http://localhost:8094) are available for comparison.
+Earlier mapping files and saved MP4s retain zero offset.
+
+- [All-sample comparison](../../../outputs/retargeting/gripper-wrist-offset-20261029/comparison.json):
+  1,286 frames / 1,802 valid samples; translation residual ≤6.6e−16 m.
+  Rotation, roll, opening, validity, source landmarks and timestamps are identical.
+- [Focused suite](../../../outputs/retargeting/gripper-wrist-offset-20261029/tests-final.log):
+  **47 passed**, covering both forward rules, absent/25 mm offsets, ordinary-FK
+  placement, rigid equivariance and CLI/snapshot round trips. Initial run had one
+  stale zero-offset assertion (46 passed/1 failed); corrected to the requested target.
+- [Browser check](../../../outputs/retargeting/gripper-wrist-offset-20261029/browser.json):
+  frames 119/600/1285 load without page errors; original viewer responds.
+  Visually inspected [119](../../../outputs/retargeting/gripper-wrist-offset-20261029/viewer-119.png)
+  and [600](../../../outputs/retargeting/gripper-wrist-offset-20261029/viewer-600.png):
+  both hands/grippers visible, shifted anchor label and zero anchor-error readouts.
+- [Saved mapping](../../../outputs/retargeting/gripper-wrist-offset-20261029/config2/mapping_report.json)
+  and [viewer log](../../../outputs/retargeting/gripper-wrist-offset-20261029/viewer.log).
+
+This verifies the requested geometric translation; physical contact, collisions
+and arm IK remain unverified. Next action: user compares the two placements.
+
 ## Full-video Configs 2/3/4 (2026-10-28)
 
 The user requested an interpolated-thumb Config 4 and saved RGB overlay MP4s for
