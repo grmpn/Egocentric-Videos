@@ -32,7 +32,22 @@ One initial new-mode assertion assumed the second stage must further reduce
 acceleration despite stronger first-stage smoothing; its failure and correction
 are preserved in event `20261030-ik-tuning-006`. Legacy acceptance is unchanged.
 
-Further temporal, orientation/limit-penalty, and SDF experiments remain in
+Subsequent completed scores: `temporal-lower` (weights 0.01/0.005) **74.680132**;
+`orientation4-limits` **69.571952**; `continuous-base-limits` **69.071305**.
+The first explicit limit-penalty configurations have not improved the score.
+The 72.620759 run passed a further [independent audit](../../../outputs/ik-benchmark/validation/tuning/audit-temporal-low.json),
+including recomputed scalar FK/collisions; later scores await that audit.
+
+Runtime investigation confirmed CUDA on the RTX 4090 for both stages. However,
+all CPU cores measured ~800 MHz under load, despite the performance governor and
+a 5.8 GHz configured maximum; temperature was ~40°C. This likely explains much
+of the host-side slowdown, but its cause is unverified. No system settings were
+changed. [Hardware measurements](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware.txt)
+are saved. Most attempts exhaust 700/500 evaluations; the three-attempt run also
+spent 89 seconds exporting video. New `--skip-video` allows subsequent tuning to
+avoid that export without affecting scoring or interactive trajectory review.
+
+Further orientation/limit-penalty, balanced-position and SDF experiments remain in
 progress. No >90 result or final tuning acceptance is established yet. The
 [automatic report](../../../outputs/ik-benchmark/REPORT.md) owns the full scoreboard.
 

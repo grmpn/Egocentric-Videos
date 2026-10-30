@@ -22,6 +22,8 @@ def main():
     parser.add_argument("--run-id", required=True, help="Unique directory name; existing experiments are preserved")
     parser.add_argument("--name", required=True)
     parser.add_argument("--description", required=True)
+    parser.add_argument("--skip-video", action="store_true",
+                        help="Skip annotated video export during tuning; preserve trajectory and interactive viewer inputs")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", args.run_id):
         parser.error("run-id must be an ordinary directory name containing letters, digits, hyphens or underscores")
@@ -46,7 +48,8 @@ def main():
     write_json(run / "config.json", settings)
     write_json(run / "mapping_report.json", mapping_report)
     experiment = {"name": args.name, "description": args.description, "status": "running", "started_at": utc_now(),
-                  "mapping_directory": str(args.mapping_directory.resolve())}
+                  "mapping_directory": str(args.mapping_directory.resolve()),
+                  "render_video": not args.skip_video}
     write_json(run / "experiment.json", experiment)
     update_report(output)
     print(f"Running {args.name}; log: {run / 'run.log'}", flush=True)
@@ -55,7 +58,7 @@ def main():
             try:
                 joint_retarget_trajectory(mapping_report["alignment_directory"], run / "trajectory", settings,
                     mapping_report["robot_settings"], mapping_report["asset_root"],
-                    mapping_directory=args.mapping_directory, render_video=True,
+                    mapping_directory=args.mapping_directory, render_video=not args.skip_video,
                     region_limit=benchmark.get("region_limit"))
                 score = evaluate_run(run, args.mapping_directory, benchmark, args.name, args.description)
             except (Exception, KeyboardInterrupt):

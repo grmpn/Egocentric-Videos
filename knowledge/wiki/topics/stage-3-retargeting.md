@@ -400,7 +400,11 @@ inter-frame clearance, scene contact or dynamic execution.
 
 Each experiment retains settings, trajectory/report/video, original/filtered
 targets, full-joint/frame metrics, collisions and solver attempts under
-`outputs/ik-benchmark/`. `REPORT.md` is regenerated from preserved experiment and
+`outputs/ik-benchmark/`. For tuning, `benchmark_ik.py --skip-video` omits annotated
+video export while preserving trajectories, scoring and interactive viewer inputs;
+the choice is recorded in `experiment.json`. The default still exports video.
+
+`REPORT.md` is regenerated from preserved experiment and
 score records after successes or failures. Its timing sums saved solver durations
 for both stages and every retry in the selected region(s), excluding setup/export
 and between-solve overhead. Whole-run timing remains in the trajectory report.
