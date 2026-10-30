@@ -67,7 +67,23 @@ Legacy comparisons passed without their budgets or tolerances changing. Current
 6 mm / 2° fitting tolerances leave the benchmark at 10 mm / 4°. The fixed-base
 probe reached **77.197743** (386/470 position, 219/470 orientation, 264/296 joint,
 269/296 collision passes), but exhausted 2000 evaluations. The moving-base probe
-is still running. The 77.198 result is not yet a production export/audited winner.
+finished at **73.799957**, also unconverged. The 77.198 result is not yet a
+production export/audited winner. Exploratory vector Cauchy pose-loss probes are
+running next: five observations account for 52% of the best run's chordal
+orientation loss. Their analytic directional check passed; no production Cauchy
+loss feature or acceptance result is claimed.
+
+The requested [detection-gap check](../../../outputs/ik-benchmark/validation/tuning/first-region-detection-gaps.json)
+found one pair separated by more than ten absent frames inside [0,296): right
+hand **275 → 295**, with frames 276–294 missing (19 frames), 0.667 seconds between
+detections, **0.991933 m wrist displacement** and **0.988565 m palm-target
+displacement** in the gravity-aligned world frame. Raw and filtered palm positions
+agree for this pair. Direct-detection and benchmark observation masks are equal
+in this interval. Left has no qualifying internal gap; frames 274–295 are a
+22-frame trailing absence with no subsequent in-interval detection. Leading
+absence before the first detection is likewise not an inter-detection gap.
+These are measured discontinuities, not proof of a detector error; inputs and
+scoring masks remain unchanged.
 
 ## Runtime diagnosis — 2026-10-30
 
