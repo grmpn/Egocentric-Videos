@@ -291,6 +291,9 @@ def update_report(directory):
     for slug, experiment, score in entries:
         lines += [f"### {experiment['name']}", "", experiment["description"], "",
                   f"[Settings]({slug}/config.json) · [Experiment]({slug}/experiment.json) · [Log]({slug}/run.log)"]
+        if experiment.get("initial_trajectory_directory"):
+            lines += [f"Initialized from `{experiment['initial_trajectory_directory']}`. "
+                      "Solve time is incremental and excludes creation of that saved trajectory."]
         if score:
             lines += [f"[Trajectory report]({slug}/trajectory/retargeting_report.json) · [Trajectory arrays]({slug}/trajectory/trajectory_retargeted.npz) · [Frame metrics]({slug}/benchmark_frame_metrics.npz)",
                       f"Excluded source frames: {score['excluded_frames']}; invalid mapped observations: {score['mapping_invalid_observations']}; missing robot frames: {score['missing_robot_frames']}.",

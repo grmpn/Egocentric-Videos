@@ -520,14 +520,17 @@ Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original M
 geometry and timestamps are preserved; physical contact remains uncalibrated.
 
 For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1),
-`--config configs/gripper_wrist_roll.json` (Config 2),
+`--config configs/gripper_wrist_roll_left_flip.json` (accepted Config 2),
 `--config configs/gripper_roll_blend.json` (Config 3), or
 `--config configs/gripper_thumb_point_blend.json` (Config 4) to `map_gripper.py`, with
 a different output directory for each. Open each saved directory with
 `view_gripper_mapping.py --port PORT --open-browser`, choosing a free port to
 preserve existing viewers. Config 1 changes the plane/jaw landmarks; Config 2
 fixes the rear palm to the wrist, aims at fingertip midpoint and follows MCP
-roll. Config 3 blends aligned Config 1 toward the original plane as |roll|
+roll, then rotates only the left palm 180° about local forward +X, with the
+original right orientation. This target convention was accepted on 2026-10-30;
+`gripper_wrist_roll.json` preserves the earlier unflipped comparison.
+Config 3 blends aligned Config 1 toward the original plane as |roll|
 increases from 30° to 45°. Its **Mapping adjustments** controls tune these
 thresholds; snapshots retain them. Config 4 uses those weights to move the
 thumb plane point from IP to MCP, with jaw pointing index MCP→thumb point.

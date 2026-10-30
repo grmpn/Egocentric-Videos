@@ -467,7 +467,7 @@ class PoseProblem:
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
                *, seed_index=0, raw_wrists=None, raw_orientations=None, opening_targets=None,
-               workspace=None):
+               workspace=None, initial_guess=None):
     """Fit alternate frames, interpolate seeds and refine all frames.
 
     With filtered targets, pass raw_wrists/raw_orientations for observation-based
@@ -475,6 +475,15 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
     The second stage freezes the base unless refine_base_with_trajectory is set;
     its bounds and prior always remain anchored to the original camera seed.
     """
+    if initial_guess is not None:
+        base_guess, joint_guess = map(np.asarray, initial_guess)
+        radius = np.array([settings["base_translation_radius_m"]] * 3 + [np.pi])
+        if (settings["fit_attempts"] != 1 or settings.get("base_placement_method", "joint") != "joint"
+                or base_guess.shape != (4,) or joint_guess.shape != (len(timestamps), model.dof)
+                or not np.isfinite(base_guess).all() or not np.isfinite(joint_guess).all()
+                or np.any(base_guess < initial_base - radius) or np.any(base_guess > initial_base + radius)
+                or np.any(joint_guess < model.lower) or np.any(joint_guess > model.upper)):
+            raise ValueError("Saved initialization needs one joint-placement attempt and finite in-bounds base/joints for this region")
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
     raw_wrists = wrists if raw_wrists is None else raw_wrists
     raw_orientations = orientations if raw_orientations is None else raw_orientations
@@ -494,28 +503,34 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
     for attempt in range(settings["fit_attempts"]):
         # One posture per region avoids independent random branches at every frame.
         initial_q = model.neutral if attempt == 0 else rng.uniform(.8 * model.lower, .8 * model.upper)
-        q0 = np.tile(initial_q, (len(sampled), 1))
-        base_settings = dict(settings, velocity_weight=settings.get("base_velocity_weight", 0.),
-            acceleration_weight=settings.get("base_acceleration_weight", 0.),
-            missing_hand_velocity_weight=0., velocity_limit_weight=0., acceleration_limit_weight=0.)
-        base_smooth = bool(base_settings["velocity_weight"] or base_settings["acceleration_weight"])
-        problem = PoseProblem(model, wrists[sampled], orientations[sampled], cameras[sampled],
-                              valid[sampled], timestamps[sampled], base_settings,
-                              fixed_base=sdf_base, smooth=base_smooth)
-        base, sampled_q, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
-        print(f"Attempt {attempt + 1}: base/initialization cost {first['cost']:.3f}, "
-              f"{first['evaluations']} evaluations, {first['wall_time_s']:.2f}s", flush=True)
-        if sdf_info is not None:
-            first["base_placement_method"] = "sdf"
-            first["sdf_placement"] = sdf_info
-            # The shared placement is executed once; timings must not count it
-            # again when a different joint seed retries fixed-base pose fitting.
-            if attempt == 0:
-                first["wall_time_s"] += sdf_info["wall_time_s"]
-        # Interpolation preserves bounds. An unsampled final frame holds the
-        # last pose until the full-resolution solve; no source data is filled.
-        before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])
-                                  for j in range(model.dof)])
+        if initial_guess is not None:
+            base, before = base_guess.copy(), joint_guess.copy()
+            first = {"method": "saved_trajectory", "wall_time_s": 0., "evaluations": 0,
+                     "cost": None, "converged": None}
+            print("Using saved base/joints; base fitting skipped", flush=True)
+        else:
+            q0 = np.tile(initial_q, (len(sampled), 1))
+            base_settings = dict(settings, velocity_weight=settings.get("base_velocity_weight", 0.),
+                acceleration_weight=settings.get("base_acceleration_weight", 0.),
+                missing_hand_velocity_weight=0., velocity_limit_weight=0., acceleration_limit_weight=0.)
+            base_smooth = bool(base_settings["velocity_weight"] or base_settings["acceleration_weight"])
+            problem = PoseProblem(model, wrists[sampled], orientations[sampled], cameras[sampled],
+                                  valid[sampled], timestamps[sampled], base_settings,
+                                  fixed_base=sdf_base, smooth=base_smooth)
+            base, sampled_q, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
+            print(f"Attempt {attempt + 1}: base/initialization cost {first['cost']:.3f}, "
+                  f"{first['evaluations']} evaluations, {first['wall_time_s']:.2f}s", flush=True)
+            if sdf_info is not None:
+                first["base_placement_method"] = "sdf"
+                first["sdf_placement"] = sdf_info
+                # The shared placement is executed once; timings must not count it
+                # again when a different joint seed retries fixed-base pose fitting.
+                if attempt == 0:
+                    first["wall_time_s"] += sdf_info["wall_time_s"]
+            # Interpolation preserves bounds. An unsampled final frame holds the
+            # last pose until the full-resolution solve; no source data is filled.
+            before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])
+                                      for j in range(model.dof)])
         refine_base = settings.get("refine_base_with_trajectory", False)
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
                               fixed_base=None if refine_base else base, smooth=True, opening_targets=opening_targets)
@@ -532,10 +547,11 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         passed = valid.any(axis=1) & ((valid & (pe <= settings["ik_tolerance_m"])
                                       & (oe <= settings["orientation_tolerance_rad"])) | ~valid).all(axis=1)
         metrics = interval_metrics(0, len(timestamps), passed, valid.any(axis=1), frame_edges(timestamps), settings)
-        info = {"attempt": attempt, "initial_joint_angles_rad": initial_q.tolist(),
-                "base_sample_indices": sampled.tolist(),
+        info = {"attempt": attempt, "initial_joint_angles_rad": initial_q.tolist() if initial_guess is None else None,
+                "base_sample_indices": sampled.tolist() if initial_guess is None else [],
                 "trajectory_frame_count": len(timestamps),
-                "trajectory_initialization": "source-time linear joint interpolation; endpoint hold",
+                "trajectory_initialization": ("source-time linear joint interpolation; endpoint hold"
+                                              if initial_guess is None else "saved per-frame joint trajectory and base"),
                 "joint_base": first, "fixed_base_trajectory": second, "pose": metrics,
                 "base_drift_translation_m": float(np.linalg.norm(base[:3] - initial_base[:3])),
                 "base_drift_yaw_rad": float(np.arctan2(np.sin(base[3] - initial_base[3]), np.cos(base[3] - initial_base[3]))),

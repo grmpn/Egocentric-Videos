@@ -79,7 +79,7 @@ This deliberately reverses the general jaw direction relative to the baseline's
 thumb→index direction. Tip-offset diagnostics retain finger 2→thumb / finger
 1→index labels; they do not minimize distance over swapped tip assignments.
 
-[Config 2](../../../configs/gripper_wrist_roll.json), `wrist_roll`, puts the
+[Accepted Config 2](../../../configs/gripper_wrist_roll_left_flip.json), `wrist_roll`, puts the
 gripper **rear palm origin** at `hand_wrist - wrist_backward_offset_m * forward`.
 The current setting is **0.025 m backward**; absent settings default to zero for
 earlier saved mappings. The offset changes translation only, not the forward
@@ -91,6 +91,21 @@ forward exactly and lets the MCP line determine roll. Here the human grasp
 transform is the palm transform; the fixed TCP follows from ordinary FK.
 Opening still matches fingertip distance, but fingertip-midpoint placement is
 not a constraint. Tip offsets therefore measure both orientation and attachment.
+
+**Accepted target convention, 2026-10-30:** rotate the left palm target 180°
+about local forward +X and retain the original right orientation. The user
+confirmed this as correct after the left-flip comparison. Use
+[`gripper_wrist_roll_left_flip.json`](../../../configs/gripper_wrist_roll_left_flip.json)
+with `palm_roll_offset_rad: [pi, 0]` for subsequent Config 2 mappings.
+
+Config 2 accepts `palm_roll_offset_rad: [left, right]` (omitted means zeros for
+compatibility with earlier saved mappings).
+It postmultiplies each palm orientation by a rotation about local forward +X;
+palm position, opening and eligibility stay unchanged. The saved roll includes
+the offset, while the zero-roll reference stays hand-derived. Other mapping modes
+reject nonzero offsets. The [unflipped config](../../../configs/gripper_wrist_roll.json)
+and [earlier right-flip comparison](../../../configs/gripper_wrist_roll_right_flip.json)
+are historical references; their saved mappings and scores remain preserved.
 
 Config 2's zero-roll reference is the same MANO model/shape/root pose evaluated
 with identity local joint rotations. The installed `MANOLayer` matrix interface

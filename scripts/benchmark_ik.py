@@ -22,6 +22,8 @@ def main():
     parser.add_argument("--run-id", required=True, help="Unique directory name; existing experiments are preserved")
     parser.add_argument("--name", required=True)
     parser.add_argument("--description", required=True)
+    parser.add_argument("--initial-trajectory", type=Path,
+                        help="Refine a compatible completed trajectory; requires fit_attempts=1 and skips base fitting")
     parser.add_argument("--skip-video", action="store_true",
                         help="Skip annotated video export during tuning; preserve trajectory and interactive viewer inputs")
     args = parser.parse_args()
@@ -50,6 +52,8 @@ def main():
     experiment = {"name": args.name, "description": args.description, "status": "running", "started_at": utc_now(),
                   "mapping_directory": str(args.mapping_directory.resolve()),
                   "render_video": not args.skip_video}
+    if args.initial_trajectory is not None:
+        experiment["initial_trajectory_directory"] = str(args.initial_trajectory.resolve())
     write_json(run / "experiment.json", experiment)
     update_report(output)
     print(f"Running {args.name}; log: {run / 'run.log'}", flush=True)
@@ -59,7 +63,8 @@ def main():
                 joint_retarget_trajectory(mapping_report["alignment_directory"], run / "trajectory", settings,
                     mapping_report["robot_settings"], mapping_report["asset_root"],
                     mapping_directory=args.mapping_directory, render_video=not args.skip_video,
-                    region_limit=benchmark.get("region_limit"), selection=benchmark.get("selection"))
+                    region_limit=benchmark.get("region_limit"), selection=benchmark.get("selection"),
+                    initial_trajectory_directory=args.initial_trajectory)
                 score = evaluate_run(run, args.mapping_directory, benchmark, args.name, args.description)
             except (Exception, KeyboardInterrupt):
                 traceback.print_exc()

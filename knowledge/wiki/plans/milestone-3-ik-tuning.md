@@ -1,10 +1,17 @@
 # Milestone 3 — IK configuration experiments
 
-Approved user-directed scope · revision 2 · 2026-10-30 · Explicit instruction to
-manual-region amendment recorded as `20261030-ik-tuning-036`
+Approved user-directed scope · revision 5 · 2026-10-30 · Explicit manual-region
+amendment recorded as `20261030-ik-tuning-036`; right-target
+roll experiment explicitly authorized as `20261030-ik-tuning-054`, then corrected
+by the user to left-target roll with original right orientation (`20261030-ik-tuning-058`)
 (original >90 tuning approval: `20261030-ik-tuning-001`) in the
 [action log](../logs/2026-10.jsonl). Extends the completed
 [benchmark plan](milestone-3-ik-benchmark.md).
+
+**Stopped at user request, 2026-10-30.** The user accepted left +180° / original
+right as the correct target convention and directed all IK experimentation to
+stop (`20261030-ik-tuning-063`). Commit the completed work; resume experiments only
+on a new instruction. The >90 objective remains unachieved.
 
 ## Objective and deliverable
 
@@ -22,6 +29,13 @@ configuration, saved trajectory, comparison report, and diagnostic evidence.
   then continue experiments. Keep Config 2 targets, timestamps, four equal score
   terms, tolerances, joint limits, acceleration proxy and collision exclusions.
   Do not remove further observations without user direction.
+- Compare the corrected user-requested left palm target rotated 180° about its
+  local forward +X axis, keeping the right orientation and both palm positions/
+  openings unchanged. Preserve the earlier right-flip comparison. Rerun
+  `robust-position-limits` and open a detached-target viewer without viewer
+  review/tests. Keep this changed-target comparison in its own benchmark
+  directory. The user subsequently accepted this left-roll convention as correct;
+  use its explicit mapping config for future Config 2 work.
 - Test lower velocity/acceleration regularization; explicit penalties for motion
   exceeding the robot velocity limits and existing benchmark acceleration cap;
   and the original SDF base-placement approach with the current base constraints

@@ -22,6 +22,11 @@ KINEMATIC_MODES = ("fingertip_correspondence", *PLANE_MODES, *ROLL_MODES)
 
 def validate_settings(settings):
     mode = settings.get("mapping_mode", "landmark_frame")
+    roll_offsets = np.asarray(settings.get("palm_roll_offset_rad", [0., 0.]))
+    if roll_offsets.shape != (2,) or not np.isfinite(roll_offsets).all():
+        raise ValueError("palm_roll_offset_rad must be finite [left,right] radians")
+    if np.any(roll_offsets) and mode != "wrist_roll":
+        raise ValueError("Palm roll offsets require wrist_roll mapping")
     if mode not in ("landmark_frame", *KINEMATIC_MODES):
         raise ValueError(f"mapping_mode must be one of {('landmark_frame', *KINEMATIC_MODES)}")
     backward = settings.get("wrist_backward_offset_m", 0.)
@@ -292,6 +297,12 @@ def map_grasp_landmarks(landmarks, observed, settings, grippers=None, *, open_ha
     rotation, valid = landmark_rotation(points, observed, settings)
     if mode in ROLL_MODES:
         reference, roll, valid = wrist_roll_reference(open_hand_landmarks, rotation, valid, settings)
+    if mode == "wrist_roll":
+        offsets = np.asarray(settings.get("palm_roll_offset_rad", [0., 0.]))
+        # Postmultiply: local palm +X stays fixed; translation/opening are unchanged.
+        if np.any(offsets):
+            rotation = rotation @ Rotation.from_euler("x", offsets).as_matrix()
+            roll = np.arctan2(np.sin(roll + offsets), np.cos(roll + offsets))
     if mode == "roll_blend":
         opened, open_valid = landmark_rotation(points, observed, {**settings, "mapping_mode": "thumb_ip_plane"})
         pinch, pinch_valid = landmark_rotation(points, observed, {**settings, "mapping_mode": "mcp_plane"})

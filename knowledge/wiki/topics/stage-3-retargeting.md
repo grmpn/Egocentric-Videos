@@ -368,6 +368,13 @@ base-prior residuals are unchanged. An exact residual Jacobian is shared by CPU
 and CUDA. Position Huber and Cauchy are mutually exclusive. Saved errors and
 benchmark thresholds are independent of these fitting losses.
 
+`benchmark_ik.py --initial-trajectory PATH` can refine a compatible completed
+trajectory with `fit_attempts: 1`. Source, robot, joint order, selected regions,
+timestamps and eligibility must match. Saved joints/base are checked against
+the original camera-relative box and joint bounds. Base fitting is skipped;
+reported solve time is incremental and excludes creation of the seed run.
+The saved input path and initialization method remain in experiment/report data.
+
 `refine_base_with_trajectory: true` allows the second stage to adjust the shared
 base alongside the source-timed joint trajectory and gripper opening. The default
 still freezes it. Refinement retains the original camera-seed bounds and prior;

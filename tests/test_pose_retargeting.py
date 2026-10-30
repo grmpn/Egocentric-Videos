@@ -317,9 +317,9 @@ def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
     np.testing.assert_allclose(base, first["sdf_placement"]["base_xyz_yaw"])
 
 
-@pytest.mark.parametrize("region_limit,refine_base,reviewed", [(None, False, False), (1, False, False),
-                                                          (1, True, False), (1, False, True)])
-def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base, reviewed):
+@pytest.mark.parametrize("region_limit,refine_base,reviewed,warm", [(None, False, False, False),
+    (1, False, False, False), (1, True, False, False), (1, False, True, False), (1, True, True, True)])
+def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base, reviewed, warm):
     from egocentric_pipeline.ik_benchmark import evaluate_run
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.run_metadata import write_json
@@ -356,15 +356,25 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
                         lambda camera, times, config: (camera.copy(), seeds))
     settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=2,
                     merge_adjacent_regions=True, refine_base_with_trajectory=refine_base)
+    initial_directory = None
+    if warm:
+        initial_directory = tmp_path / "initial"
+        joint_retarget_trajectory(directory, initial_directory, settings, rs,
+            ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
+            region_limit=region_limit, selection=selection)
+        settings["fit_attempts"] = 1
     run = tmp_path / "benchmark/run"
     report = joint_retarget_trajectory(directory, run / "trajectory", settings, rs,
         ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
-        region_limit=region_limit, selection=selection)
+        region_limit=region_limit, selection=selection, initial_trajectory_directory=initial_directory)
     expected_regions = [(0, 3)] if region_limit else [(0, 3), (5, 8)]
     assert [(r["start"], r["stop"]) for r in report["regions"]] == expected_regions
     assert len(report["candidates"]) == len(expected_regions)
     for candidate in report["candidates"]:
         assert candidate["optimization"]["fixed_base_trajectory"]["base_refined"] == refine_base
+        if warm:
+            assert candidate["optimization"]["joint_base"]["method"] == "saved_trajectory"
+            assert candidate["optimization"]["joint_base"]["wall_time_s"] == 0
     assert report["regions"][0]["seed_indices"] == [0, 1]
     if region_limit:
         assert all(span["stop"] <= 3 for span in report["hand_target_filtering"]["spans"])
@@ -379,6 +389,9 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
             assert np.isnan(data["wrist_position_filtered_aligned_m"][1, 1]).all()
             assert data["joint_prediction"][1, 1]
         np.testing.assert_array_equal(data["retarget_valid"], expected_valid)
+        if warm:
+            with np.load(initial_directory / "trajectory_retargeted.npz") as initial:
+                np.testing.assert_array_equal(data["joint_solution_before_smoothing_rad"], initial["joint_solution_rad"])
         assert np.isnan(data["wrist_position_base_m"][~valid]).all()
         if region_limit:
             assert np.isnan(data["joint_solution_rad"][3:]).all()
@@ -412,6 +425,14 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     if reviewed:
         with pytest.raises(ValueError, match="selections differ"):
             evaluate_run(run, mapping, dict(benchmark, selection=None), "test", "Wrong selection")
+    if warm:
+        initial_report = json.loads((initial_directory / "retargeting_report.json").read_text())
+        initial_report["source_run_id"] = "different-source"
+        write_json(initial_directory / "retargeting_report.json", initial_report, overwrite=True)
+        with pytest.raises(ValueError, match="Initial trajectory must match"):
+            joint_retarget_trajectory(directory, tmp_path / "mismatched", settings, rs,
+                ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
+                region_limit=region_limit, selection=selection, initial_trajectory_directory=initial_directory)
     transforms[valid, :3, 3] += .001
     np.savez(mapping / "gripper_mapping.npz", **source, mapping_valid=valid,
              transform_aligned_from_palm=transforms, gripper_action=opening)
@@ -957,3 +978,15 @@ def test_invalid_refinement_settings(settings, key, value):
 def test_conflicting_position_losses_rejected(settings):
     with pytest.raises(ValueError, match="either"):
         validate_settings(dict(settings, position_huber_m=.01, position_cauchy_m=.003))
+
+
+def test_saved_initial_guess_bounds_and_single_attempt(palm_model, settings):
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (3, 1))
+    p, r, _, _, cameras = m.forward(q)
+    args = (m, p, r, cameras, np.ones((3, 2), bool), np.arange(3)*.1, np.zeros(4))
+    for config, base, joints in ((dict(settings, fit_attempts=2), np.zeros(4), q),
+                                 (dict(settings, fit_attempts=1), np.array([3., 0., 0., 0.]), q),
+                                 (dict(settings, fit_attempts=1), np.zeros(4), q + 100)):
+        with pytest.raises(ValueError, match="Saved initialization"):
+            fit_region(*args, config, initial_guess=(base, joints))

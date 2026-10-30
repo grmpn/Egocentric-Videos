@@ -95,7 +95,7 @@ def validate_settings(settings):
 
 def joint_retarget_trajectory(alignment_directory, output_directory, settings, robot_settings,
                               asset_root, *, render_video=True, mapping_directory=None, region_limit=None,
-                              selection=None):
+                              selection=None, initial_trajectory_directory=None):
     """Process retained camera seeds only; save failed regions for honest review."""
     import torch
 
@@ -188,6 +188,23 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
         regions = retained_regions(seeds, times, settings.get("merge_adjacent_regions", False))[:region_limit]
         regions, valid = select_manipulation_data(regions, valid, times, selection)
+        initial_report = initial_arrays = None
+        if initial_trajectory_directory is not None:
+            initial_directory = Path(initial_trajectory_directory).resolve()
+            initial_report = read_json(initial_directory / "retargeting_report.json")
+            with np.load(initial_directory / "trajectory_retargeted.npz", allow_pickle=False) as saved:
+                initial_arrays = dict(saved)
+            if (initial_report["status"] != "completed"
+                    or initial_report["source_run_id"] != alignment["source_run_id"]
+                    or initial_report["robot_settings"] != robot_settings
+                    or initial_report["joint_names"] != model.joint_names
+                    or initial_report.get("benchmark_selection") != selection
+                    or [(r["start"], r["stop"]) for r in initial_report["regions"]]
+                       != [(r["start"], r["stop"]) for r in regions]
+                    or not np.array_equal(initial_arrays["timestamp_s"], times)
+                    or not np.array_equal(initial_arrays["retarget_valid"], valid)):
+                raise ValueError("Initial trajectory must match the source, robot, joints, selected regions, timestamps and observations")
+            report["initial_trajectory_directory"] = str(initial_directory)
         wrists_aligned[~valid], orientations[~valid] = np.nan, np.nan
         filtered_positions, filtered_rotations, filtering = smooth_hand_targets(
             wrists_aligned, orientations, valid, times, regions, settings)
@@ -251,12 +268,17 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                 continue
             initial = initialize_base(arrays["camera_position_aligned_m"][sl], cameras[sl], model,
                                       settings["heading_min_norm"])
+            initial_guess = None
+            if initial_arrays is not None:
+                candidate = next(c for c in initial_report["candidates"]
+                                 if (c["seed"]["start"], c["seed"]["stop"]) == (seed["start"], seed["stop"]))
+                initial_guess = (np.asarray(candidate["base_xyz_yaw"]), initial_arrays["joint_solution_rad"][sl])
             pose, before, q, info = fit_region(model, filtered_positions[sl],
                                                filtered_rotations[sl], cameras[sl], v, times[sl], initial, settings,
                                                seed_index=seed_index, raw_wrists=wrists_aligned[sl],
                                                raw_orientations=orientations[sl],
                                                opening_targets=opening_targets[sl] if palm_targets else None,
-                                               workspace=workspace)
+                                               workspace=workspace, initial_guess=initial_guess)
             transform = base_transform(pose)
             wrists = transform_points(wrists_aligned[sl], transform)
             target_rotations = transform[:3, :3] @ orientations[sl]

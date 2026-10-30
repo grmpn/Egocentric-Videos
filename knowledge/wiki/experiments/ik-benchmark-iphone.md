@@ -32,22 +32,107 @@ The six reruns completed on 269 frames / 461 observed hand samples:
 
 [Full results](../../../outputs/ik-benchmark-reviewed/validation/top-six-results.json).
 [Independent audits of all six runs passed](../../../outputs/ik-benchmark-reviewed/validation/top-six-audit.json): source arrays preserved, identical reviewed targets/masks/timestamps, all 24 physical joints and derivatives, FK, collisions and score arithmetic verified.
-The best is 74.670; source editing alone did not resolve the tracking/motion
-tradeoff. Fixed/refined-base tolerance experiments are running next.
+The best of these six is 74.670; source editing alone did not resolve the
+tracking/motion tradeoff.
 
 Subsequent tuning adds optional production vector Cauchy fitting for hand pose
 blocks. [12 derivative/loss checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-tests.log),
 [16 settings checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-settings-tests.log)
 and [4 CPU/CUDA comparisons](../../../outputs/ik-benchmark-reviewed/validation/cauchy-cuda-tests.log)
 passed. This retains the scoring targets, isolates camera/motion/opening terms,
-and defaults to the previous objective. Benchmark experiments using it follow
-the six requested reruns; passing tests alone does not establish a score gain.
+and defaults to the previous objective.
 
-The previous Cauchy polish failed its pre-solve directional Jacobian check;
+The subsequent production comparisons completed:
+
+| Configuration | Reviewed score /100 |
+| --- | ---: |
+| tolerance-limits | 73.569 |
+| tolerance-limits-base | 72.803 |
+| cauchy-orientation-base | **87.992** |
+| cauchy-pose-base | 69.178 |
+| cauchy-orientation-continued | **88.558** |
+
+The [87.992 result](../../../outputs/ik-benchmark-reviewed/cauchy-orientation-base/score.json)
+passes 456/461 positions, 260/461 orientations, all 269 joint-feasibility checks,
+and 260/269 collision checks. Its
+[independent audit passed](../../../outputs/ik-benchmark-reviewed/validation/audit-cauchy-orientation-base.json).
+It retains position Huber fitting and adds Cauchy orientation fitting with a
+refined base; scoring still uses the same smoothed targets and 1 cm / 4° thresholds.
+It exhausted 2000 trajectory evaluations, so further convergence is unverified.
+
+Separate warm diagnostic refinements scored 64.903, 86.490 and 83.391; these are
+not production exports or accepted winners. Their
+[local evidence](../../../outputs/ik-benchmark-reviewed/validation/warm-refinement/)
+is preserved. Production saved-trajectory initialization subsequently passed
+[eight focused checks](../../../outputs/ik-benchmark-reviewed/validation/warm-start-tests.log)
+covering export/scoring, source mismatch, bounds, skipped-base timing and existing
+workflows. Continuing the 87.992 result with the same objective improved it to
+**88.558**: 456/461 positions, 279/461 orientations, 269/269 joint-feasible frames
+and 255/269 collision-free frames. Its
+[independent audit passed](../../../outputs/ik-benchmark-reviewed/validation/audit-cauchy-orientation-continued.json).
+Another 2000 evaluations reduced objective cost from 10474.53 to 8906.75 but
+again reached the iteration cap. The 255.33 seconds are incremental and exclude
+the original solve. >90 is still unachieved; remaining orientation errors and
+collisions need further tuning.
+
+## Requested gripper roll experiments
+
+**Accepted by the user on 2026-10-30:** left +180° about local forward +X,
+original right orientation. This is the correct target convention for future
+Config 2 work. The user then stopped all IK experiments and requested the final
+commit. Original-target tuning ended at 88.558; >90 was not achieved.
+
+The user corrected the requested side to **left +180° / original right** after
+reviewing the right-flip run below. The
+[left config](../../../configs/gripper_wrist_roll_left_flip.json) regenerates from
+the original mapping. Its
+[numerical check passed](../../../outputs/ik-benchmark-left-roll-flip/validation/mapping-check.json):
+original right orientation restored, only left local Y/Z axes reversed, unchanged
+positions/openings/eligibility, and the same relationship after smoothing.
+The corrected `robust-position-limits` comparison scored **85.127**, up from
+74.670 with the original targets: 459/461 position passes, 295/461 orientation
+passes, 227/269 joint-feasible frames and 249/269 collision-free frames. Both
+stages converged by `ftol` after 600/506 evaluations; total solve time was 60.77 s.
+It overlapped the original-target Cauchy continuation, so these times are not
+an isolated speed comparison. The
+[separate report](../../../outputs/ik-benchmark-left-roll-flip/REPORT.md) and
+[passing independent audit](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-robust-position-limits.json)
+preserve the result. The corrected detached-target viewer opened at
+localhost:8086 with a browser connection recorded in its
+[startup log](../../../outputs/ik-benchmark-left-roll-flip/validation/viewer.log).
+No viewer tests or visual review were performed, as requested.
+
+### Earlier right flip
+
+The user requested a 180° right-target rotation about local forward +X.
+The [separate mapping config](../../../configs/gripper_wrist_roll_right_flip.json)
+postmultiplies only the right palm orientation; palm positions, opening, source
+data and eligibility are preserved. The
+[mapping check](../../../outputs/ik-benchmark-right-roll-flip/validation/mapping-check.json)
+also verifies that smoothing preserves this exact rotation relationship.
+
+With unchanged `robust-position-limits` solver settings, the score changes from
+**74.670 to 45.214**, with 353/461 position passes, 138/461 orientation passes,
+52/269 joint-feasible frames and 148/269 collision-free frames. Both stages hit
+their 700/1000 evaluation caps; solve time was 98.27 seconds. This establishes a
+worse result for this solve, not a conclusion about the desired servo orientation.
+The changed-target comparison has its own
+[report](../../../outputs/ik-benchmark-right-roll-flip/REPORT.md) and
+[passing independent audit](../../../outputs/ik-benchmark-right-roll-flip/validation/audit-robust-position-limits.json).
+The original mapping and benchmark remain available.
+
+Opened the detached-target viewer at localhost:8085; its
+[startup log](../../../outputs/ik-benchmark-right-roll-flip/validation/viewer.log)
+records a browser connection. Per user instruction, no viewer tests, screenshots
+or visual review were performed. The user will assess the target orientation.
+
+## Earlier original-region experiments
+
+The earlier Cauchy polish failed its pre-solve directional Jacobian check;
 no polish trajectory or score was produced. The user ended viewer work, and its
 server was stopped. Earlier viewer evidence below remains historical.
 
-## Ongoing configuration tuning
+### Configuration tuning before the reviewed restart
 
 The user subsequently authorized [experiments toward >90](../plans/milestone-3-ik-tuning.md)
 on the original unchanged region before the reviewed restart above. The first completed run,
