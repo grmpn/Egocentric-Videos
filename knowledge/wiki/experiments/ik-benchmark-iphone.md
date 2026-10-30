@@ -19,6 +19,22 @@ cached runtime comparison is counted once. Further experiments follow those runs
 for source preservation, exact boundaries, hand identity, production fitting and
 scoring, legacy behavior and selection mismatch rejection.
 
+The six reruns completed on 269 frames / 461 observed hand samples:
+
+| Configuration | Reviewed score /100 | Solve seconds |
+| --- | ---: | ---: |
+| robust-position-limits | 74.670 | 63.06 |
+| temporal-lower | 74.310 | 122.06 |
+| config2-gripper | 73.878 | 171.67 |
+| config2-missing-hold | 73.692 | 170.77 |
+| temporal-low | 73.364 | 183.61 |
+| orientation4-low | 70.507 | 138.14 |
+
+[Full results](../../../outputs/ik-benchmark-reviewed/validation/top-six-results.json).
+[Independent audits of all six runs passed](../../../outputs/ik-benchmark-reviewed/validation/top-six-audit.json): source arrays preserved, identical reviewed targets/masks/timestamps, all 24 physical joints and derivatives, FK, collisions and score arithmetic verified.
+The best is 74.670; source editing alone did not resolve the tracking/motion
+tradeoff. Fixed/refined-base tolerance experiments are running next.
+
 Subsequent tuning adds optional production vector Cauchy fitting for hand pose
 blocks. [12 derivative/loss checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-tests.log),
 [16 settings checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-settings-tests.log)
