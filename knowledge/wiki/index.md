@@ -64,3 +64,4 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 Local-only reports and figures stay under `knowledge/agent/summaries/`; see the
 acceptance page for links. They and linked run outputs are unavailable in a fresh clone.
+Latest weekly update: [Week 6, with a brief Week 5 recap](../agent/summaries/Week-6.md) (local-only).
