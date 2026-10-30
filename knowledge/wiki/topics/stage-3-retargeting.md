@@ -331,6 +331,26 @@ the edge returning to an observed target is unconstrained by this extra term.
 Neck columns are always zero. Weight zero disables the term. Existing temporal
 weights remain 1.0/0.5; both backends consume the same residual/Jacobian.
 
+The [IK tuning plan](../plans/milestone-3-ik-tuning.md) adds optional second-stage
+`velocity_limit_weight` and `acceleration_limit_weight` signed-hinge residuals:
+zero inside a limit and proportional to excess outside it. They use the existing
+source-time derivative operators, including nonuniform intervals. Velocity caps
+come from the pinned URDF; `acceleration_limit_rad_s2` defaults to the same
+10 rad/s² proxy as the benchmark, with optional named joint overrides. Limits
+are reduced through coupled leaders and mimic multipliers. `motion_limit_margin`
+in (0,1] optionally leaves headroom; it changes the fitting objective only. All
+new weights default to zero, preserving earlier configurations.
+
+Optional `base_placement_method: sdf` replaces movable-base pose fitting with the
+original seeded SDF search over XYZ/yaw. It requires a separately sampled actual
+palm workspace matching the robot, rather than using the historical wrist grid.
+The search consumes filtered palm positions and retains the camera-centred
+translation/yaw bounds and base prior. Its camera term uses the neutral head;
+neck and hand orientation are fitted in subsequent fixed-base pose initialization
+and full trajectory optimization, not certified by the positional SDF. Placement
+runs once per region; its time is included once across all pose retries. Legacy
+`joint` base fitting and unrestricted positional placement remain available.
+
 Source geometry is unchanged. `hand_position_target_aligned_m` saves raw fitting
 positions; historical `wrist_*filtered*` and orientation-target field names now
 hold palm targets in this mode. `wrist_position_base_m` still means the actual

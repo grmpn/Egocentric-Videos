@@ -133,11 +133,14 @@ def test_missing_hand_penalty_is_local_and_never_neck(palm_model, settings):
     np.testing.assert_array_equal(first.regularizer.toarray(),first_off.regularizer.toarray())
 
 
-def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings):
+@pytest.mark.parametrize("limit_weight", [0., 3.])
+def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings, limit_weight):
     require_cuda()
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1))
-    q[:, 16:18] += np.arange(4)[:, None] * .005
+    q[:, 16:18] += np.array([0., .005, .04, .045])[:, None]
+    m.acceleration_limits[:] = .2
+    settings.update(acceleration_limit_weight=limit_weight, velocity_limit_weight=limit_weight)
     p, r, _, _, cameras = m.forward(q)
     valid = np.ones((4, 2), bool)
     valid[1, 0] = False
@@ -151,6 +154,76 @@ def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings):
         answers.append((result, info["cost"]))
     np.testing.assert_allclose(answers[0][0], answers[1][0], atol=2e-5, rtol=2e-5)
     assert answers[0][1] == pytest.approx(answers[1][1], rel=1e-6, abs=1e-8)
+
+
+def test_motion_limit_hinges_and_jacobian(palm_model, settings):
+    m, _, _ = palm_model
+    times = np.array([0., .08, .19, .3])
+    q = np.tile(m.neutral, (4, 1))
+    q[:, 0] += [0., .3, .31, -.1]
+    q[:, 17] += [0., .01, .12, .1]
+    p, r, _, _, cameras = m.forward(q)
+    valid = np.ones((4, 2), bool)
+    config = dict(settings, velocity_limit_weight=2., acceleration_limit_weight=3., motion_limit_margin=.9)
+    on = PoseProblem(m, p, r, cameras, valid, times, config, fixed_base=np.zeros(4), smooth=True)
+    off = PoseProblem(m, p, r, cameras, valid, times, settings, fixed_base=np.zeros(4), smooth=True)
+    residual, jac = on.evaluate(q.ravel())
+    prefix = len(off.evaluate(q.ravel())[0])
+    velocity, acceleration = temporal_operators(times, m.dof)
+    v, a = velocity @ q.ravel(), acceleration @ q.ravel()
+    vl, al = .9 * np.tile(m.velocity_limits, 3), .9 * np.tile(m.acceleration_limits, 2)
+    expected = np.r_[2 * (v - np.clip(v, -vl, vl)), 3 * (a - np.clip(a, -al, al))]
+    np.testing.assert_allclose(residual[prefix:], expected, atol=1e-12)
+    assert np.any(expected != 0) and np.any(expected == 0)
+    assert jac[prefix:][expected == 0].nnz == 0
+    direction = np.random.default_rng(2).normal(size=q.size)
+    eps = 1e-7
+    numerical = (on.evaluate(q.ravel() + eps * direction)[0]
+                 - on.evaluate(q.ravel() - eps * direction)[0]) / (2 * eps)
+    np.testing.assert_allclose(jac @ direction, numerical, atol=2e-5, rtol=1e-6)
+    for operator, limits in on.motion_limits:
+        constant = np.tile(m.neutral, (4, 1)).ravel()
+        np.testing.assert_allclose(operator @ constant, 0, atol=1e-12)
+        assert np.all(limits > 0)
+    # Exactly at the speed threshold, the hinge remains zero.
+    m.velocity_limits[0] = 1.
+    boundary_q = np.tile(m.neutral, (4, 1))
+    boundary_q[:, 0] += np.arange(4)
+    boundary = PoseProblem(m, p, r, cameras, valid, np.arange(4),
+        dict(config, motion_limit_margin=1.), fixed_base=np.zeros(4), smooth=True)
+    np.testing.assert_allclose(boundary.evaluate(boundary_q.ravel())[0][prefix:], 0, atol=1e-12)
+
+
+def test_motion_limits_include_coupled_and_mimic_joints(palm_model, settings):
+    from egocentric_pipeline.gripper_model import load_gripper_commands
+
+    _, robot, rs = palm_model
+    settings.update(joint_acceleration_limits_rad_s2={"right_ezgripper_knuckle_l1_l2_2": 2.})
+    m = PoseModel(robot, rs, settings, load_gripper_commands(ROOT / "data/models/purdue-alex-assets"))
+    assert m.acceleration_limits[17] == 2.
+    assert m.acceleration_limits[16] == 10.
+    assert m.velocity_limits[16] == pytest.approx(3.67)
+    assert m.velocity_limits[2] == pytest.approx(4.47)
+
+
+def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
+    from egocentric_pipeline.workspace import build_grid
+
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1))
+    p, r, _, _, cameras = m.forward(q)
+    workspace = build_grid([p[:, 0], p[:, 1]], spacing_m=.05)
+    settings.update(base_placement_method="sdf", workspace_margin_m=0.,
+                    optimizer_iterations=2, optimizer_population=4,
+                    base_max_evaluations=5, trajectory_max_evaluations=5, fit_attempts=2)
+    base, _, after, info = fit_region(m, p, r, cameras, np.ones((4, 2), bool),
+        np.arange(4) * .1, np.zeros(4), settings, workspace=workspace)
+    assert after.shape == (4, 18)
+    assert np.all(after >= m.lower) and np.all(after <= m.upper)
+    first = info["attempts"][0]["joint_base"]
+    assert first["base_placement_method"] == "sdf"
+    assert first["wall_time_s"] >= first["sdf_placement"]["wall_time_s"] > 0
+    np.testing.assert_allclose(base, first["sdf_placement"]["base_xyz_yaw"])
 
 
 @pytest.mark.parametrize("region_limit", [None, 1])

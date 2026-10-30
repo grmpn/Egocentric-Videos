@@ -51,6 +51,26 @@ class PoseModel:
                 self.upper[index] = min(self.closed_angle, self.upper[index], joint.max_angle)
             self.neutral = np.r_[self.neutral, [self.closed_angle / 2] * 2]
         self.dof = len(self.joint_names)
+        # Reduce physical leader/mimic limits to each optimized variable. Offsets
+        # do not affect derivatives; multipliers scale both speed and acceleration.
+        self.velocity_limits = np.full(self.dof, np.inf)
+        self.acceleration_limits = np.full(self.dof, np.inf)
+        overrides = settings.get("joint_acceleration_limits_rad_s2", {})
+        if set(overrides) - {j.name for j in robot.joint_list}:
+            raise ValueError("Acceleration overrides contain unknown robot joints")
+        for joint in robot.joint_list:
+            leader, multiplier = joint, 1.
+            while getattr(leader, "mimic", None):
+                multiplier *= leader.mimic["multiplier"]
+                leader = leader.mimic["joint"]
+            name = self.coupled_joints.get(leader.name, leader.name)
+            if name not in self.joint_names or multiplier == 0:
+                continue
+            index = self.joint_names.index(name)
+            self.velocity_limits[index] = min(self.velocity_limits[index],
+                                                joint.max_joint_velocity / abs(multiplier))
+            cap = overrides.get(joint.name, settings.get("acceleration_limit_rad_s2", 10.))
+            self.acceleration_limits[index] = min(self.acceleration_limits[index], cap / abs(multiplier))
         self.wrists, self.tools, self.palms = [], [], []
         self.wrist_offset = np.asarray(settings.get("wrist_offset_tool_m", [0., 0., 0.]))
         for hand in range(2):
@@ -183,6 +203,16 @@ class PoseProblem:
         self.width = self.n * self.dof + self.base_variables
         if smooth:
             velocity, acceleration = temporal_operators(times, self.dof)
+        self.motion_limits = []
+        if smooth:
+            margin = settings.get("motion_limit_margin", 1.)
+            for key, operator, limits in (
+                    ("velocity_limit_weight", velocity, model.velocity_limits),
+                    ("acceleration_limit_weight", acceleration, model.acceleration_limits)):
+                weight = settings.get(key, 0.)
+                if weight:
+                    self.motion_limits.append((weight * operator,
+                        weight * margin * np.tile(limits, operator.shape[0] // self.dof)))
         missing = sparse.csr_matrix((0, self.n * self.dof))
         if smooth and settings.get("missing_hand_velocity_weight", 0.):
             # An edge is penalized when its destination has no target for that
@@ -299,10 +329,21 @@ class PoseProblem:
         rows.append(reg.row + row_start)
         cols.append(reg.col + self.base_variables)
         values.append(reg.data)
+        row_start += reg.shape[0]
+        for operator, limits in self.motion_limits:
+            motion = operator @ q.ravel()
+            # Signed hinge: zero cost/Jacobian inside limits; quadratic excess
+            # outside. Both backends see the same piecewise analytic derivative.
+            residuals.append(motion - np.clip(motion, -limits, limits))
+            derivative = operator.multiply((np.abs(motion) > limits)[:, None]).tocoo()
+            rows.append(derivative.row + row_start)
+            cols.append(derivative.col + self.base_variables)
+            values.append(derivative.data)
+            row_start += operator.shape[0]
         prior, prior_derivative = self.base_prior(base)
         if len(prior):
             residuals.append(prior)
-            rows.append(row_start + reg.shape[0] + np.arange(4))
+            rows.append(row_start + np.arange(4))
             cols.append(np.arange(4))
             values.append(prior_derivative)
         residual = np.concatenate(residuals)
@@ -349,7 +390,8 @@ class PoseProblem:
 
 
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
-               *, seed_index=0, raw_wrists=None, raw_orientations=None, opening_targets=None):
+               *, seed_index=0, raw_wrists=None, raw_orientations=None, opening_targets=None,
+               workspace=None):
     """Fit alternate frames, freeze base, interpolate seeds and refine all frames.
 
     With filtered targets, pass raw_wrists/raw_orientations for observation-based
@@ -360,13 +402,31 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
     raw_orientations = orientations if raw_orientations is None else raw_orientations
     sampled = np.arange(0, len(timestamps), settings["base_frame_stride"])
     attempts, best, best_rank = [], None, None
+    sdf_base, sdf_info = None, None
+    if settings.get("base_placement_method") == "sdf":
+        from .base_placement import optimize_base
+        if workspace is None:
+            raise ValueError("SDF placement requires the matching palm workspace")
+        started = time.perf_counter()
+        _, sdf_info = optimize_base(wrists, valid, workspace, settings, seed_index,
+            initial_base=initial_base, camera_rotations=cameras,
+            neutral_camera_rotation=model.forward(model.neutral[None])[4][0])
+        sdf_info["wall_time_s"] = time.perf_counter() - started
+        sdf_base = np.asarray(sdf_info["base_xyz_yaw"])
     for attempt in range(settings["fit_attempts"]):
         # One posture per region avoids independent random branches at every frame.
         initial_q = model.neutral if attempt == 0 else rng.uniform(.8 * model.lower, .8 * model.upper)
         q0 = np.tile(initial_q, (len(sampled), 1))
         problem = PoseProblem(model, wrists[sampled], orientations[sampled], cameras[sampled],
-                              valid[sampled], timestamps[sampled], settings)
+                              valid[sampled], timestamps[sampled], settings, fixed_base=sdf_base)
         base, sampled_q, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
+        if sdf_info is not None:
+            first["base_placement_method"] = "sdf"
+            first["sdf_placement"] = sdf_info
+            # The shared placement is executed once; timings must not count it
+            # again when a different joint seed retries fixed-base pose fitting.
+            if attempt == 0:
+                first["wall_time_s"] += sdf_info["wall_time_s"]
         # Interpolation preserves bounds. An unsampled final frame holds the
         # last pose until the full-resolution solve; no source data is filled.
         before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])

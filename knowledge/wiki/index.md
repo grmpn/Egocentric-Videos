@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [Milestone 3: IK configuration experiments](plans/milestone-3-ik-tuning.md) — authorized tuning toward >90 on the unchanged first-region benchmark.
 - [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — revision 2 fulfilled: first-region solving/scoring, three rescored comparisons, preserved full-video evidence.
 - [IK benchmark joint limits](decisions/ik-benchmark-limits.md) — pinned Alex model limits and approved acceleration proxy with external-source rationale.
 

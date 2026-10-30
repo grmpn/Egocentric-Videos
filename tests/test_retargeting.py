@@ -131,6 +131,24 @@ def test_seeded_optimizer_finds_known_feasible_placement(settings):
         optimize_base(wrists, np.zeros_like(valid), grid, settings)
 
 
+def test_sdf_camera_initialization_bounds_and_prior(settings):
+    grid = sphere_grid()
+    points = np.array([[[0., .35, .5], [0., -.35, .5]]] * 4)
+    settings.update(optimizer_iterations=20, optimizer_population=8,
+                    base_translation_radius_m=.05, base_initialization_weight=2.,
+                    camera_rotation_scale_rad=1.)
+    initial = np.zeros(4)
+    _, info = optimize_base(points, np.ones((4, 2), bool), grid, settings,
+        initial_base=initial, camera_rotations=np.tile(np.eye(3), (4, 1, 1)),
+        neutral_camera_rotation=np.eye(3))
+    bounds = np.asarray(info["bounds_xyz_yaw"])
+    np.testing.assert_allclose(bounds[:3], [[-.05, .05]] * 3)
+    np.testing.assert_allclose(bounds[3], [-np.pi, np.pi])
+    pose = np.asarray(info["base_xyz_yaw"])
+    assert np.all(pose >= bounds[:, 0]) and np.all(pose <= bounds[:, 1])
+    assert abs(pose[3]) < .1
+
+
 @pytest.mark.parametrize("field,value", [("workspace_margin_m", .02), ("ik_tolerance_m", .01),
                                         ("minimum_feasible_fraction", .9), ("optimizer_iterations", 0),
                                         ("camera_sustain_s", np.nan)])

@@ -15,17 +15,35 @@ from .manipulation_regions import camera_segments, frame_edges, interval_metrics
 from .pose_retargeting import PoseModel, fit_region, initialize_base, rotation_error
 from .retargeting import load_alignment, save_retargeting
 from .robot_workspace import load_robot, verify_asset_source
-from .run_metadata import utc_now, write_json
+from .run_metadata import read_json, utc_now, write_json
 
 
 def validate_settings(settings):
     validate_filter_settings(settings)
+    if settings.get("base_placement_method", "joint") not in ("joint", "sdf"):
+        raise ValueError("base_placement_method must be joint or sdf")
+    if settings.get("base_placement_method") == "sdf":
+        if not settings.get("base_workspace_directory"):
+            raise ValueError("SDF placement requires a matching base_workspace_directory")
+        if not np.isfinite(settings.get("workspace_margin_m", np.nan)) or settings["workspace_margin_m"] < 0:
+            raise ValueError("workspace_margin_m must be nonnegative finite")
+        for key in ("optimizer_iterations", "optimizer_population"):
+            if type(settings.get(key)) is not int or settings[key] < 1:
+                raise ValueError(f"{key} must be a positive integer")
     if settings.get("hand_target_mode", "wrist") not in ("wrist", "gripper_palm"):
         raise ValueError("hand_target_mode must be wrist or gripper_palm")
-    for key in ("missing_hand_velocity_weight", "gripper_opening_weight"):
+    for key in ("missing_hand_velocity_weight", "gripper_opening_weight",
+                "velocity_limit_weight", "acceleration_limit_weight"):
         value = settings.get(key, 0.)
         if not np.isfinite(value) or value < 0:
             raise ValueError(f"{key} must be nonnegative finite")
+    margin = settings.get("motion_limit_margin", 1.)
+    if not np.isfinite(margin) or not 0 < margin <= 1:
+        raise ValueError("motion_limit_margin must be in (0,1]")
+    caps = [settings.get("acceleration_limit_rad_s2", 10.),
+            *settings.get("joint_acceleration_limits_rad_s2", {}).values()]
+    if not np.isfinite(caps).all() or np.any(np.asarray(caps) <= 0):
+        raise ValueError("Acceleration limits must be positive finite rad/s²")
     if settings.get("hand_target_mode") == "gripper_palm" and settings.get("gripper_opening_weight", 0.) <= 0:
         raise ValueError("Gripper palm IK requires positive gripper_opening_weight")
     if type(settings.get("merge_adjacent_regions", False)) is not bool:
@@ -103,6 +121,21 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
         palm_targets = settings.get("hand_target_mode") == "gripper_palm"
         model = PoseModel(robot, robot_settings, settings,
                           load_gripper_commands(asset_root) if palm_targets else None)
+        workspace = None
+        if settings.get("base_placement_method") == "sdf":
+            from .workspace import WorkspaceGrid
+            directory = Path(settings["base_workspace_directory"])
+            workspace_report = read_json(directory / "workspace_report.json")
+            expected = [f"{side}_ezgripper_palm_link" for side in ("left", "right")]
+            if not palm_targets:
+                raise ValueError("SDF joint-trajectory experiments require actual gripper palm targets")
+            if (workspace_report["status"] != "completed" or workspace_report["hand_order"] != ["left", "right"]
+                    or workspace_report["settings"]["target_frames"] != expected
+                    or any(workspace_report["settings"][key] != robot_settings[key]
+                           for key in ("asset_revision", "urdf", "base_frame", "arm_joints", "tool_frames"))):
+                raise ValueError("SDF workspace must match the pinned robot and actual palm endpoints")
+            workspace = WorkspaceGrid.load(directory / "workspace_grid.npz")
+            report["base_workspace_directory"] = str(directory.resolve())
         paths = [alignment["inputs"][f"mano_{hand}"]["path"] for hand in ("left", "right")]
         offsets = mano_palm_frames(paths)
         n, times = len(arrays["timestamp_s"]), arrays["timestamp_s"]
@@ -207,7 +240,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                                                filtered_rotations[sl], cameras[sl], v, times[sl], initial, settings,
                                                seed_index=seed_index, raw_wrists=wrists_aligned[sl],
                                                raw_orientations=orientations[sl],
-                                               opening_targets=opening_targets[sl] if palm_targets else None)
+                                               opening_targets=opening_targets[sl] if palm_targets else None,
+                                               workspace=workspace)
             transform = base_transform(pose)
             wrists = transform_points(wrists_aligned[sl], transform)
             target_rotations = transform[:3, :3] @ orientations[sl]
