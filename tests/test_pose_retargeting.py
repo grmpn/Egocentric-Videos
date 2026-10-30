@@ -447,6 +447,29 @@ def test_cuda_bound_optimum_and_evaluation_budget():
     assert stopped.nfev == 1 and not stopped.success
 
 
+def test_cuda_symbolic_reuse_updates_values_rhs_and_structure():
+    require_cuda()
+    from scipy import sparse
+    from egocentric_pipeline.gpu_least_squares import CudaNormalSolver
+
+    solver = CudaNormalSolver()
+    try:
+        for index, matrix in enumerate((np.diag([2., 3., 4.]), np.diag([4., 2., 3.]),
+                                        np.array([[4., 1., 0.], [0., 2., 0.], [0., 0., 3.]]))):
+            gradient = np.array([1., -2., 3.]) * (index + 1)
+            scaling = np.array([.5, 1., 2.])
+            diagonal = np.array([.1, .2, .3])
+            result = solver.solve(sparse.csr_matrix(matrix), scaling, diagonal, gradient)
+            scaled = matrix * scaling
+            expected = np.linalg.solve(scaled.T @ scaled + np.diag(diagonal), gradient)
+            np.testing.assert_allclose(result, expected, atol=1e-12, rtol=1e-12)
+            assert solver.plans == (1 if index < 2 else 2)
+        assert solver.max_backward_error < 1e-12
+    finally:
+        solver.close()
+    assert solver.solver is None and solver.normal is None
+
+
 @pytest.mark.parametrize("fixed", [False, True])
 @pytest.mark.parametrize("prior_weight", [0., .3])
 def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight):

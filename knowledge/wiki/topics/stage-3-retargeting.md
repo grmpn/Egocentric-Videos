@@ -352,6 +352,13 @@ positive cutoff uses SciPy's Huber cost and an exact transformed-residual
 Jacobian shared by CPU/CUDA. This limits the influence of large target jumps
 without discarding observations or modifying saved errors and benchmark scoring.
 
+CUDA linear solving retains its symbolic cuDSS plan while the normal matrix's
+CSR shape, row pointers and column indices are unchanged. Values and the RHS
+are updated in-place and numerically refactorized every iteration; any structural
+change rebuilds the plan. Solver reports include the number of symbolic plans.
+Backward-error checks remain active on every solve, and GPU resources are freed
+on both return and error. This reduces host work without changing constraints.
+
 Optional `base_placement_method: sdf` replaces movable-base pose fitting with the
 original seeded SDF search over XYZ/yaw. It requires a separately sampled actual
 palm workspace matching the robot, rather than using the historical wrist grid.

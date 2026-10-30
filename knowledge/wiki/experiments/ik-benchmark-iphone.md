@@ -34,22 +34,88 @@ are preserved in event `20261030-ik-tuning-006`. Legacy acceptance is unchanged.
 
 Subsequent completed scores: `temporal-lower` (weights 0.01/0.005) **74.680132**;
 `orientation4-limits` **69.571952**; `continuous-base-limits` **69.071305**.
-The first explicit limit-penalty configurations have not improved the score.
-The 72.620759 run passed a further [independent audit](../../../outputs/ik-benchmark/validation/tuning/audit-temporal-low.json),
-including recomputed scalar FK/collisions; later scores await that audit.
+The remaining initial sweeps finished: original SDF palm placement **66.176682**,
+orientation4-low **72.890670**, orientation8-limits **64.667194**, and
+balanced-limits **65.425173**. Explicit limit penalties have not improved the best
+score. A 1 cm radial Huber position loss with limit penalties scored **72.437464**;
+the motivation was that five of 470 observations account for >99.999% of the
+best run's squared position error. Targets and scoring remain unchanged.
+The objective passed [eight focused checks](../../../outputs/ik-benchmark/validation/tuning/huber-final-tests.log).
 
-Runtime investigation confirmed CUDA on the RTX 4090 for both stages. However,
-all CPU cores measured ~800 MHz under load, despite the performance governor and
-a 5.8 GHz configured maximum; temperature was ~40°C. This likely explains much
-of the host-side slowdown, but its cause is unverified. No system settings were
-changed. [Hardware measurements](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware.txt)
-are saved. Most attempts exhaust 700/500 evaluations; the three-attempt run also
-spent 89 seconds exporting video. New `--skip-video` allows subsequent tuning to
-avoid that export without affecting scoring or interactive trajectory review.
-
-Further orientation/limit-penalty, balanced-position and SDF experiments remain in
-progress. No >90 result or final tuning acceptance is established yet. The
+An [independent audit](../../../outputs/ik-benchmark/validation/tuning/audit-robust-position-limits-cached.json)
+passed for the original missing-hand configuration, the current best 74.680132
+run, and both robust-loss timing runs. It recomputed scalar FK, collisions,
+24 physical joint values/derivatives, score arithmetic and common source inputs.
+No >90 result or final tuning acceptance is established yet. The
 [automatic report](../../../outputs/ik-benchmark/REPORT.md) owns the full scoreboard.
+
+## Runtime diagnosis — 2026-10-30
+
+Both optimization stages use the RTX 4090 for sparse normal-matrix assembly and
+cuDSS factorization. Kinematics, objective/Jacobian evaluation and trust-region
+control run on the CPU. GPU use alone therefore cannot prevent a CPU slowdown.
+
+The user's root `turbostat` measurement confirms **800 MHz busy frequency** despite
+maximum HWP performance requests. `IA32_PACKAGE_THERM_STATUS = 0x8840000c` has
+external PROCHOT status/log bits 2/3 set, while CPU high-temperature bits 0/1 are
+clear. Intel defines this as another platform agent asserting the throttle signal
+([SDM volume 3B, §17.9](https://cdrdv2-public.intel.com/874250/253669-090-sdm-vol-3b.pdf#page=48)).
+CPU temperature was 36–37°C and package power ~13 W, below the configured
+180/253 W limits. This establishes external platform throttling; the exact
+component or firmware fault is **unverified**. No system settings were changed.
+[Selected hardware counters](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware-status.json)
+and [earlier measurements](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware.txt)
+are preserved. A post-recovery measurement is still needed to quantify its full
+contribution to the historical slowdown.
+
+Controlled [constraint ablation](../../../outputs/ik-benchmark/validation/tuning/runtime-ablation-before.json)
+on identical saved inputs measured 41.9 ms per objective/Jacobian evaluation
+with original weights, 42.1 ms with reduced weights, and 44.2 ms with added limit
+penalties; linear solving stayed ~125 ms in every case. Repeating on the much
+less smooth initialization, with more active penalty rows, gave
+[41.8 versus 44.5 ms](../../../outputs/ik-benchmark/validation/tuning/runtime-ablation-active-before.json),
+with linear solving again ~125 ms. Thus the added constraints cost roughly 5–7%
+in objective evaluation on these inputs, not the observed several-fold slowdown.
+Constraints can still change convergence and iteration counts. The historical
+base-stage comparison itself grew from 15.9 to 48.8 seconds with unchanged
+base-stage settings and 700 evaluations in each run; those runs were not isolated.
+
+The isolated profile also exposed avoidable repeated symbolic GPU planning:
+40.4 seconds across 893 plans. The solver now reuses a plan when the sparse
+structure is unchanged, updates GPU values/RHS in place, and performs fresh
+numeric factorization and backward-error checks every iteration. Structural
+changes rebuild the plan. [Nine targeted checks](../../../outputs/ik-benchmark/validation/tuning/cache-tests.log)
+passed, including invalidation, updated operands, bounds and CPU/CUDA agreement.
+
+| Identical robust-loss configuration | Before | With plan reuse |
+| --- | ---: | ---: |
+| Both optimization stages | 113.08 s | 69.61 s |
+| Linear-solve path | 58.81 s | 12.92 s |
+| Symbolic plans | 893 | 3 |
+| Whole profiled benchmark, video skipped | 136.04 s | 92.73 s |
+| Score /100 | 72.437464 | 72.437464 |
+
+This paired run reduced solve time **38.4%** while the CPU remained throttled.
+Both runs used cProfile, one attempt, and the same settings/inputs. Numerical
+trajectories are not bit-identical: stage-two evaluations changed from 314 to 341,
+maximum palm position difference was 6.31 µm and rotation difference 0.026°;
+all four score components and joint/collision passing masks were unchanged.
+The base stage reached its 700-evaluation cap in both runs; stage two converged.
+[Paired comparison](../../../outputs/ik-benchmark/validation/tuning/runtime-paired-comparison.json),
+[before profile](../../../outputs/ik-benchmark/validation/tuning/robust-position-limits-profile.txt),
+and [after profile](../../../outputs/ik-benchmark/validation/tuning/robust-position-limits-cached-profile.txt)
+preserve the evidence. A fixed-input linear-solve microbenchmark improved from
+~125 to 10.5–10.7 ms; this is not a whole-solver speedup claim.
+
+Most original experiments exhaust 700/500 evaluations across three attempts;
+one also spent 89 seconds exporting video. `--skip-video` avoids that export
+without changing scoring or saved interactive trajectories. To investigate the
+remaining platform fault, Dell documents a
+[power drain](https://www.dell.com/support/kbdoc/en-us/000139016/how-to-perform-hard-reset)
+and the Aurora R16's
+[F12 preboot diagnostics](https://www.dell.com/support/manuals/en-us/alienware-aurora-r16-desktop/alienware-aurora-r16-owners-manual/running-the-supportassist-pre-boot-system-performance-check?guid=guid-0b893eed-efbc-4831-a9c4-7298a7a9f619&lang=en-us).
+These are proposed troubleshooting steps, not a verified repair; external
+throttling protection has not been disabled.
 
 ## Comparison and results
 

@@ -77,6 +77,15 @@ class CudaNormalSolver:
         self.wall_time_s = 0.
         self.solves = 0
         self.max_backward_error = 0.
+        self.plans = 0
+        self.solver = None
+        self.normal = self.rhs = None
+
+    def close(self):
+        if self.solver is not None:
+            self.solver.free()
+            self.solver = None
+        self.normal = self.rhs = None
 
     def solve(self, jacobian, scale, diagonal, gradient):
         cp, sparse = self.cp, self.sparse
@@ -85,10 +94,23 @@ class CudaNormalSolver:
         normal = (j.T @ j + sparse.diags(cp.asarray(diagonal), format="csr")).tocsr()
         normal.sort_indices()
         rhs = cp.asarray(gradient)
-        with self.DirectSolver(normal, rhs, options={"multithreading_lib": self.threading_library}) as solver:
-            solver.plan()
-            solver.factorize()
-            solution = solver.solve()
+        same_pattern = (self.normal is not None and normal.shape == self.normal.shape
+                        and normal.nnz == self.normal.nnz
+                        and bool(cp.array_equal(normal.indptr, self.normal.indptr))
+                        and bool(cp.array_equal(normal.indices, self.normal.indices)))
+        if same_pattern:
+            # nvmath permits in-place GPU value/RHS updates with refactorization.
+            # Replacing matrix buffers would invalidate its symbolic plan.
+            self.normal.data[:] = normal.data
+            self.rhs[:] = rhs
+        else:
+            self.close()
+            self.normal, self.rhs = normal, rhs
+            self.solver = self.DirectSolver(normal, rhs, options={"multithreading_lib": self.threading_library})
+            self.solver.plan()
+            self.plans += 1
+        self.solver.factorize()
+        solution = self.solver.solve()
         # Normal equations square conditioning. Check backward error on every
         # solve, and fail explicitly rather than accepting an invalid direction.
         denominator = cp.max(cp.abs(rhs)) + cp.max(abs(normal).sum(axis=1)) * cp.max(cp.abs(solution))
@@ -109,6 +131,14 @@ def least_squares_cuda(evaluate, initial, lower, upper, max_evaluations, toleran
     angles are radians; the caller owns the residual's units and weighting.
     """
     linear = CudaNormalSolver()
+    try:
+        return _trf_cuda(linear, evaluate, initial, lower, upper, max_evaluations, tolerance)
+    finally:
+        linear.close()
+
+
+def _trf_cuda(linear, evaluate, initial, lower, upper, max_evaluations, tolerance):
+    """Trust-region iterations with a per-solve symbolic factorization cache."""
     x = make_strictly_feasible(initial, lower, upper)
     residual, jacobian = evaluate(x)
     if not np.isfinite(residual).all():
@@ -181,5 +211,6 @@ def least_squares_cuda(evaluate, initial, lower, upper, max_evaluations, toleran
                           message=messages[status], nfev=evaluations, njev=jacobian_evaluations,
                           gpu={"device": linear.device_name, "precision": "float64",
                                "linear_solves": linear.solves, "linear_solve_wall_time_s": linear.wall_time_s,
+                               "symbolic_plans": linear.plans,
                                "max_linear_backward_error": linear.max_backward_error,
                                "execution": "CUDA normal assembly/factorization; CPU objective and TRF control"})
