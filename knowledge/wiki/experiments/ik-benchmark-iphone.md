@@ -49,6 +49,26 @@ run, and both robust-loss timing runs. It recomputed scalar FK, collisions,
 No >90 result or final tuning acceptance is established yet. The
 [automatic report](../../../outputs/ik-benchmark/REPORT.md) owns the full scoreboard.
 
+Fixed-base refinement diagnostics then held the best run's base and started from
+its saved joints. Three existing-objective variants scored **74.263**, **67.305**,
+and **64.950**, all exhausting 1000 evaluations. The first improved joint passing
+frames from 60 to 253 but lost tracking. These are exploratory saved-joint scores,
+not production exports or new accepted winners; settings, joints and actual
+mesh-collision scores are in the local
+[refinement directory](../../../outputs/ik-benchmark/validation/tuning/refinement/).
+
+Testing now includes radial fitting tolerances and joint/base co-optimization
+in stage two. [Thirteen derivative/workflow checks](../../../outputs/ik-benchmark/validation/tuning/refinement/refinement-tests.log)
+and [thirteen reference/settings checks](../../../outputs/ik-benchmark/validation/tuning/refinement/reference-tests.log)
+passed. Four new tolerance-mode CPU/CUDA cases initially exceeded the existing
+1% cost-agreement threshold at 150 evaluations; all passed with 1000 evaluations
+in the [six-case retry](../../../outputs/ik-benchmark/validation/tuning/refinement/refinement-cuda-tests-retry.log).
+Legacy comparisons passed without their budgets or tolerances changing. Current
+6 mm / 2° fitting tolerances leave the benchmark at 10 mm / 4°. The fixed-base
+probe reached **77.197743** (386/470 position, 219/470 orientation, 264/296 joint,
+269/296 collision passes), but exhausted 2000 evaluations. The moving-base probe
+is still running. The 77.198 result is not yet a production export/audited winner.
+
 ## Runtime diagnosis — 2026-10-30
 
 Both optimization stages use the RTX 4090 for sparse normal-matrix assembly and

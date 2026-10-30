@@ -352,6 +352,20 @@ positive cutoff uses SciPy's Huber cost and an exact transformed-residual
 Jacobian shared by CPU/CUDA. This limits the influence of large target jumps
 without discarding observations or modifying saved errors and benchmark scoring.
 
+Optional `position_deadzone_m` and `orientation_deadzone_rad` define fitting
+tolerances (default zero). Hand tracking residuals are zero inside those radii
+and measure radial excess outside. Rotation uses the equivalent chordal-matrix
+radius `2 sqrt(2) sin(angle/2)`; camera orientation remains unchanged. Position
+Huber loss, if enabled, applies to the excess after its fitting tolerance.
+Saved errors and benchmark thresholds still use the original complete targets.
+
+`refine_base_with_trajectory: true` allows the second stage to adjust the shared
+base alongside the source-timed joint trajectory and gripper opening. The default
+still freezes it. Refinement retains the original camera-seed bounds and prior;
+it does not recenter the permitted box around the first fitted base. For report
+compatibility, second-stage timing remains under `fixed_base_trajectory`, with
+`base_refined` recording whether the base was free.
+
 CUDA linear solving retains its symbolic cuDSS plan while the normal matrix's
 CSR shape, row pointers and column indices are unchanged. Values and the RHS
 are updated in-place and numerically refactorized every iteration; any structural

@@ -189,6 +189,27 @@ def rotation_error(predicted, target):
     return Rotation.from_matrix(relative.reshape(-1, 3, 3)).magnitude().reshape(shape)
 
 
+def vector_deadzone(error, derivative, base_derivative, radius):
+    """Radial excess beyond a fitting tolerance, with its exact outer Jacobian.
+
+    The residual is zero inside the radius. At the boundary we use the inner
+    derivative (zero); the squared objective is continuously differentiable.
+    This changes fitting only; saved target errors and scoring remain unmodified.
+    """
+    if not radius:
+        return error, derivative, base_derivative
+    length = np.linalg.norm(error, axis=1)
+    outside = length > radius
+    transform = np.zeros((len(error), error.shape[1], error.shape[1]))
+    vectors, distance = error[outside], length[outside]
+    factor = 1 - radius / distance
+    transform[outside] = (factor[:, None, None] * np.eye(error.shape[1])
+        + radius * vectors[:, :, None] * vectors[:, None, :] / distance[:, None, None] ** 3)
+    result = np.zeros_like(error)
+    result[outside] = factor[:, None] * vectors
+    return result, transform @ derivative, transform @ base_derivative
+
+
 class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
@@ -235,10 +256,10 @@ class PoseProblem:
             np.zeros(self.regularizer.shape[0] - self.n * self.dof)]
         if opening_targets is not None:
             opening_targets = np.asarray(opening_targets)
-            if (not model.palm_targets or fixed_base is None or opening_targets.shape != valid.shape
+            if (not model.palm_targets or opening_targets.shape != valid.shape
                     or not np.isfinite(opening_targets[valid]).all()
                     or np.any((opening_targets[valid] < 0) | (opening_targets[valid] > 1))):
-                raise ValueError("Opening targets require fixed-base palm IK and finite observed actions in [0,1]")
+                raise ValueError("Opening targets require palm IK and finite observed actions in [0,1]")
             frames, hands = np.nonzero(valid)
             weight = settings["gripper_opening_weight"]
             opening = sparse.coo_matrix((np.full(len(frames), weight),
@@ -299,6 +320,8 @@ class PoseProblem:
             bd[:, :, :3] = np.eye(3) / scale
             bd[:, :, 3] = np.cross([0., 0., 1.], aligned) / scale
             difference = aligned + base[:3] - target
+            difference, derivative, bd = vector_deadzone(difference, derivative, bd,
+                self.settings.get("position_deadzone_m", 0.))
             cutoff = self.settings.get("position_huber_m", 0.)
             if cutoff:
                 # Isotropic vector Huber loss, expressed as a residual so the
@@ -316,7 +339,7 @@ class PoseProblem:
                 difference[outside] *= factor[:, None]
             append(difference / scale, derivative, bd, frames)
 
-        def rotation_term(pred, target, angular_j, joint_start, frames, scale):
+        def rotation_term(pred, target, angular_j, joint_start, frames, scale, deadzone=0.):
             aligned = rotation @ pred
             # For spatial angular velocity w, dR[:,k] = w cross R[:,k].
             axes = np.einsum("ij,tjk->tik", rotation, angular_j)
@@ -327,7 +350,11 @@ class PoseProblem:
             full[:, :, joint_start:joint_start + derivative.shape[-1]] = derivative / scale
             bd = np.zeros((len(frames), 9, 4))
             bd[:, :, 3] = np.cross([0., 0., 1.], aligned.transpose(0, 2, 1)).transpose(0, 2, 1).reshape(-1, 9) / scale
-            append((aligned - target).reshape(-1, 9) / scale, full, bd, frames)
+            # ||R1-R2||_F = 2 sqrt(2) sin(theta/2), so an angular fitting
+            # tolerance maps exactly to a radius in the existing chordal loss.
+            difference, full, bd = vector_deadzone((aligned - target).reshape(-1, 9), full, bd,
+                                                  2 * np.sqrt(2) * np.sin(deadzone / 2))
+            append(difference / scale, full, bd, frames)
 
         for hand in range(2):
             frames = np.flatnonzero(self.valid[:, hand])
@@ -337,7 +364,8 @@ class PoseProblem:
                           hand * 7, frames, self.settings["position_scale_m"] / self.settings["hand_position_weight"])
             rotation_term(r[frames, hand], self.orientations[frames, hand], rj[hand][frames, 3:],
                           hand * 7, frames, np.sqrt(2) * self.settings["orientation_scale_rad"]
-                          / self.settings["hand_orientation_weight"])
+                          / self.settings["hand_orientation_weight"],
+                          self.settings.get("orientation_deadzone_rad", 0.))
         rotation_term(hr, self.cameras, hj[:, 3:], 14, np.arange(self.n),
                       np.sqrt(2) * self.settings["camera_rotation_scale_rad"])
         reg = self.regularizer
@@ -371,13 +399,18 @@ class PoseProblem:
         self.cached_result = residual, jac
         return residual, jac
 
-    def solve(self, initial_base, initial_q, max_evaluations):
+    def solve(self, initial_base, initial_q, max_evaluations, *, base_reference=None):
+        """Fit from the initial pose; movable-base bounds/prior use base_reference.
+
+        Omit the reference for a first solve. Refinement passes the original
+        camera seed so a later initial guess cannot move the permitted box.
+        """
         if self.base_variables:
-            self.base_reference = np.asarray(initial_base).copy()
+            self.base_reference = np.asarray(initial_base if base_reference is None else base_reference).copy()
             self.cached_x = None
             radius = np.array([self.settings["base_translation_radius_m"]] * 3 + [np.pi])
-            lower = np.r_[initial_base - radius, np.tile(self.model.lower, self.n)]
-            upper = np.r_[initial_base + radius, np.tile(self.model.upper, self.n)]
+            lower = np.r_[self.base_reference - radius, np.tile(self.model.lower, self.n)]
+            upper = np.r_[self.base_reference + radius, np.tile(self.model.upper, self.n)]
             initial = np.r_[initial_base, initial_q.ravel()]
         else:
             lower, upper = np.tile(self.model.lower, self.n), np.tile(self.model.upper, self.n)
@@ -409,10 +442,12 @@ class PoseProblem:
 def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_base, settings,
                *, seed_index=0, raw_wrists=None, raw_orientations=None, opening_targets=None,
                workspace=None):
-    """Fit alternate frames, freeze base, interpolate seeds and refine all frames.
+    """Fit alternate frames, interpolate seeds and refine all frames.
 
     With filtered targets, pass raw_wrists/raw_orientations for observation-based
     acceptance and restart ranking. Omitted raw arrays retain legacy behavior.
+    The second stage freezes the base unless refine_base_with_trajectory is set;
+    its bounds and prior always remain anchored to the original camera seed.
     """
     rng = np.random.default_rng(np.random.SeedSequence([settings["seed"], seed_index]))
     raw_wrists = wrists if raw_wrists is None else raw_wrists
@@ -455,9 +490,12 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         # last pose until the full-resolution solve; no source data is filled.
         before = np.column_stack([np.interp(timestamps, timestamps[sampled], sampled_q[:, j])
                                   for j in range(model.dof)])
+        refine_base = settings.get("refine_base_with_trajectory", False)
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
-                              fixed_base=base, smooth=True, opening_targets=opening_targets)
-        _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
+                              fixed_base=None if refine_base else base, smooth=True, opening_targets=opening_targets)
+        base, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"],
+                                            base_reference=initial_base)
+        second["base_refined"] = refine_base
         print(f"Attempt {attempt + 1}: trajectory cost {second['cost']:.3f}, "
               f"{second['evaluations']} evaluations, {second['wall_time_s']:.2f}s", flush=True)
         p, r, *_ = model.forward(after)

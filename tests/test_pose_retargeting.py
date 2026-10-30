@@ -94,27 +94,30 @@ def test_palm_fk_opening_and_mimics(palm_model):
 
 @pytest.mark.parametrize("fixed", [False, True])
 @pytest.mark.parametrize("huber_m", [0., .01])
-def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed, huber_m):
+@pytest.mark.parametrize("deadzone", [False, True])
+def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed, huber_m, deadzone):
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1)) + .01
     p,r,_,_,cameras=m.forward(q)
     settings["position_huber_m"] = huber_m
+    if deadzone:
+        settings.update(position_deadzone_m=.005, orientation_deadzone_rad=.04)
+        r[0, 0] = Rotation.from_rotvec([.1, -.2, .03]).as_matrix() @ r[0, 0]
     p[0, 0] += [.1, -.2, .03]
     valid=np.array([[True,True],[False,True],[False,False],[True,True]])
     p[~valid],r[~valid]=np.nan,np.nan
     actions=1-q[:,16:18]/m.closed_angle
     actions[~valid]=np.nan
     problem=PoseProblem(m,p,r,cameras,valid,np.array([0.,.03,.07,.10]),settings,
-                        fixed_base=np.zeros(4) if fixed else None,smooth=fixed,
-                        opening_targets=actions if fixed else None)
+                        fixed_base=np.zeros(4) if fixed else None,smooth=True,
+                        opening_targets=actions)
     x=q.ravel() if fixed else np.r_[np.zeros(4),q.ravel()]
     residual,jac=problem.evaluate(x)
     direction=np.random.default_rng(4).normal(size=len(x))
     eps=1e-6
     numerical=(problem.evaluate(x+eps*direction)[0]-problem.evaluate(x-eps*direction)[0])/(2*eps)
     np.testing.assert_allclose(jac@direction,numerical,atol=2e-5,rtol=1e-6)
-    if fixed:
-        np.testing.assert_allclose(residual[-valid.sum():],0,atol=1e-12)
+    np.testing.assert_allclose(residual[-valid.sum():],0,atol=1e-12)
 
 
 def test_position_huber_matches_radial_loss_without_excluding_targets(palm_model, settings):
@@ -133,6 +136,33 @@ def test_position_huber_matches_radial_loss_without_excluding_targets(palm_model
     scale = settings["position_scale_m"] / settings["hand_position_weight"]
     np.testing.assert_allclose(cost, huber(.01, errors) / scale ** 2, atol=1e-9)
     assert cost[-1] > cost[-2] > 0  # large outliers still contribute to fitting
+
+
+def test_fitting_deadzones_preserve_errors_and_camera_objective(palm_model, settings):
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1))
+    p, r, _, _, cameras = m.forward(q)
+    distances = np.array([0., .002, .005, .012])
+    angles = np.array([0., .02, .04, .10])
+    p[:, 0, 0] += distances
+    r[:, 0] = Rotation.from_rotvec(angles[:, None] * np.array([0., 0., 1.])).as_matrix() @ r[:, 0]
+    cameras = Rotation.from_rotvec([.01, 0., 0.]).as_matrix() @ cameras
+    config = dict(settings, position_deadzone_m=.005, orientation_deadzone_rad=.04)
+    problem = PoseProblem(m, p, r, cameras, np.ones((4, 2), bool), np.arange(4)*.1,
+                          config, fixed_base=np.zeros(4))
+    residual = problem.evaluate(q.ravel())[0]
+    position = residual[:12].reshape(4, 3)
+    orientation = residual[12:48].reshape(4, 9)
+    np.testing.assert_allclose(np.linalg.norm(position, axis=1),
+        np.maximum(distances-.005, 0) * settings['hand_position_weight']/settings['position_scale_m'], atol=1e-10)
+    np.testing.assert_allclose(np.linalg.norm(orientation, axis=1),
+        np.maximum(2*(np.sin(angles/2)-np.sin(.04/2)), 0)
+        * settings['hand_orientation_weight']/settings['orientation_scale_rad'], atol=1e-10)
+    plain = PoseProblem(m, p, r, cameras, np.ones((4, 2), bool), np.arange(4)*.1,
+                        settings, fixed_base=np.zeros(4)).evaluate(q.ravel())[0]
+    np.testing.assert_array_equal(residual[96:], plain[96:])  # camera and regularization unchanged
+    np.testing.assert_allclose(problem.wrists, p)
+    np.testing.assert_allclose(problem.orientations, r)
 
 
 def test_missing_hand_penalty_is_local_and_never_neck(palm_model, settings):
@@ -259,8 +289,8 @@ def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
     np.testing.assert_allclose(base, first["sdf_placement"]["base_xyz_yaw"])
 
 
-@pytest.mark.parametrize("region_limit", [None, 1])
-def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit):
+@pytest.mark.parametrize("region_limit,refine_base", [(None, False), (1, False), (1, True)])
+def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base):
     from egocentric_pipeline.ik_benchmark import evaluate_run
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.run_metadata import write_json
@@ -291,7 +321,7 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     monkeypatch.setattr("egocentric_pipeline.joint_retargeting.camera_segments",
                         lambda camera, times, config: (camera.copy(), seeds))
     settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=2,
-                    merge_adjacent_regions=True)
+                    merge_adjacent_regions=True, refine_base_with_trajectory=refine_base)
     run = tmp_path / "benchmark/run"
     report = joint_retarget_trajectory(directory, run / "trajectory", settings, rs,
         ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
@@ -299,6 +329,8 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     expected_regions = [(0, 3)] if region_limit else [(0, 3), (5, 8)]
     assert [(r["start"], r["stop"]) for r in report["regions"]] == expected_regions
     assert len(report["candidates"]) == len(expected_regions)
+    for candidate in report["candidates"]:
+        assert candidate["optimization"]["fixed_base_trajectory"]["base_refined"] == refine_base
     assert report["regions"][0]["seed_indices"] == [0, 1]
     if region_limit:
         assert all(span["stop"] <= 3 for span in report["hand_target_filtering"]["spans"])
@@ -472,7 +504,8 @@ def test_cuda_symbolic_reuse_updates_values_rhs_and_structure():
 
 @pytest.mark.parametrize("fixed", [False, True])
 @pytest.mark.parametrize("prior_weight", [0., .3])
-def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight):
+@pytest.mark.parametrize("deadzone", [False, True])
+def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight, deadzone):
     require_cuda()
     m, _, _ = model
     times = np.array([0., .03, .07, .10, .15])
@@ -486,9 +519,11 @@ def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, 
     costs = []
     for backend in ("cpu", "cuda"):
         options = dict(settings, solver_backend=backend, base_initialization_weight=prior_weight)
+        if deadzone:
+            options.update(position_deadzone_m=.002, orientation_deadzone_rad=.01)
         problem = PoseProblem(m, wrists, rotations, cameras, valid, times, options,
                               fixed_base=base if fixed else None, smooth=fixed)
-        b, q, info = problem.solve(base, np.tile(m.neutral, (len(times), 1)), 150)
+        b, q, info = problem.solve(base, np.tile(m.neutral, (len(times), 1)), 1000 if deadzone else 150)
         residual, jacobian = problem.evaluate(q.ravel() if fixed else np.r_[b, q.ravel()])
         assert np.isfinite(residual).all() and np.isfinite(jacobian.data).all()
         assert np.all(q >= m.lower) and np.all(q <= m.upper)
@@ -816,6 +851,21 @@ def test_base_prior_derivatives_wraparound_and_fixed_stage_exclusion(model, sett
                 np.testing.assert_allclose(jac[:, j].toarray().ravel(), numerical, atol=2e-6)
 
 
+def test_base_refinement_retains_original_bounds_and_prior(palm_model, settings):
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (3, 1))
+    p, r, _, _, cameras = m.forward(q)
+    p += [.3, 0., 0.]
+    options = dict(settings, base_translation_radius_m=.05, base_initialization_weight=.3)
+    problem = PoseProblem(m, p, r, cameras, np.ones((3, 2), bool), np.arange(3)*.1,
+                          options, smooth=True, opening_targets=np.full((3, 2), .5))
+    reference = np.zeros(4)
+    base, _, info = problem.solve(np.array([.04, 0., 0., 0.]), q, 50, base_reference=reference)
+    assert np.all(abs(base[:3]) <= .05)  # bounds stay around the original camera seed
+    expected_prior = .5 * .3**2 * np.sum(base**2)
+    assert info['base_prior_cost'] == pytest.approx(expected_prior)
+
+
 def test_restart_ranking_uses_original_observations(model, settings, monkeypatch):
     m, _, _ = model
     times = np.arange(8) / 6
@@ -826,7 +876,7 @@ def test_restart_ranking_uses_original_observations(model, settings, monkeypatch
     p, r, _, _, cameras = m.forward(target_q)
     raw_p, raw_r, *_ = m.forward(raw_q)
     calls = []
-    def solve(problem, base, initial_q, budget):
+    def solve(problem, base, initial_q, budget, *, base_reference=None):
         attempt = len(calls) // 2
         calls.append(problem.fixed_base is not None)
         q = target_q.copy() if attempt == 0 else raw_q.copy()
@@ -846,7 +896,9 @@ def test_restart_ranking_uses_original_observations(model, settings, monkeypatch
 @pytest.mark.parametrize('key,value', [('hand_position_window_s', -1), ('hand_orientation_window_s', np.nan),
                                      ('hand_filter_polyorder', 1.5), ('merge_adjacent_regions', 1),
                                      ('base_initialization_weight', -1), ('base_prior_translation_scale_m', 0),
-                                     ('base_prior_yaw_scale_rad', np.inf)])
+                                     ('base_prior_yaw_scale_rad', np.inf), ('position_deadzone_m', -1),
+                                     ('orientation_deadzone_rad', np.pi), ('orientation_deadzone_rad', np.nan),
+                                     ('refine_base_with_trajectory', 1)])
 def test_invalid_refinement_settings(settings, key, value):
     with pytest.raises(ValueError):
         validate_settings(dict(settings, **{key: value}))

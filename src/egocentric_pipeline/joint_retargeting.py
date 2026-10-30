@@ -34,10 +34,13 @@ def validate_settings(settings):
         raise ValueError("hand_target_mode must be wrist or gripper_palm")
     for key in ("missing_hand_velocity_weight", "gripper_opening_weight",
                 "velocity_limit_weight", "acceleration_limit_weight",
-                "base_velocity_weight", "base_acceleration_weight", "position_huber_m"):
+                "base_velocity_weight", "base_acceleration_weight", "position_huber_m",
+                "position_deadzone_m", "orientation_deadzone_rad"):
         value = settings.get(key, 0.)
         if not np.isfinite(value) or value < 0:
             raise ValueError(f"{key} must be nonnegative finite")
+    if settings.get("orientation_deadzone_rad", 0.) >= np.pi:
+        raise ValueError("orientation_deadzone_rad must be less than pi")
     margin = settings.get("motion_limit_margin", 1.)
     if not np.isfinite(margin) or not 0 < margin <= 1:
         raise ValueError("motion_limit_margin must be in (0,1]")
@@ -49,6 +52,8 @@ def validate_settings(settings):
         raise ValueError("Gripper palm IK requires positive gripper_opening_weight")
     if type(settings.get("merge_adjacent_regions", False)) is not bool:
         raise ValueError("merge_adjacent_regions must be boolean")
+    if type(settings.get("refine_base_with_trajectory", False)) is not bool:
+        raise ValueError("refine_base_with_trajectory must be boolean")
     for key in ("base_prior_translation_scale_m", "base_prior_yaw_scale_rad"):
         if not np.isfinite(settings.get(key, 1.)) or settings.get(key, 1.) <= 0:
             raise ValueError(f"{key} must be positive finite")
