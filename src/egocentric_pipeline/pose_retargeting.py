@@ -11,6 +11,7 @@ import time
 import numpy as np
 from scipy import sparse
 from scipy.optimize import least_squares
+from scipy.special import huber
 from scipy.spatial.transform import Rotation
 
 from .base_placement import base_transform
@@ -297,7 +298,23 @@ class PoseProblem:
             bd = np.zeros((len(frames), 3, 4))
             bd[:, :, :3] = np.eye(3) / scale
             bd[:, :, 3] = np.cross([0., 0., 1.], aligned) / scale
-            append((aligned + base[:3] - target) / scale, derivative, bd, frames)
+            difference = aligned + base[:3] - target
+            cutoff = self.settings.get("position_huber_m", 0.)
+            if cutoff:
+                # Isotropic vector Huber loss, expressed as a residual so the
+                # CPU/CUDA drivers share the same objective and exact Jacobian.
+                # Large discrepancies remain penalized; no target is discarded.
+                length = np.linalg.norm(difference, axis=1)
+                outside = length > cutoff
+                distance = length[outside]
+                factor = np.sqrt(2 * huber(cutoff, distance)) / distance
+                outer = difference[outside, :, None] * difference[outside, None, :]
+                slope = cutoff * (cutoff - distance) / (factor * distance ** 4)
+                derivative_map = factor[:, None, None] * np.eye(3) + slope[:, None, None] * outer
+                derivative[outside] = derivative_map @ derivative[outside]
+                bd[outside] = derivative_map @ bd[outside]
+                difference[outside] *= factor[:, None]
+            append(difference / scale, derivative, bd, frames)
 
         def rotation_term(pred, target, angular_j, joint_start, frames, scale):
             aligned = rotation @ pred

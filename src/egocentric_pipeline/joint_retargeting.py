@@ -34,7 +34,7 @@ def validate_settings(settings):
         raise ValueError("hand_target_mode must be wrist or gripper_palm")
     for key in ("missing_hand_velocity_weight", "gripper_opening_weight",
                 "velocity_limit_weight", "acceleration_limit_weight",
-                "base_velocity_weight", "base_acceleration_weight"):
+                "base_velocity_weight", "base_acceleration_weight", "position_huber_m"):
         value = settings.get(key, 0.)
         if not np.isfinite(value) or value < 0:
             raise ValueError(f"{key} must be nonnegative finite")

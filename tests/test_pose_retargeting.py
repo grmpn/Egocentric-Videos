@@ -93,10 +93,13 @@ def test_palm_fk_opening_and_mimics(palm_model):
 
 
 @pytest.mark.parametrize("fixed", [False, True])
-def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed):
+@pytest.mark.parametrize("huber_m", [0., .01])
+def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed, huber_m):
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1)) + .01
     p,r,_,_,cameras=m.forward(q)
+    settings["position_huber_m"] = huber_m
+    p[0, 0] += [.1, -.2, .03]
     valid=np.array([[True,True],[False,True],[False,False],[True,True]])
     p[~valid],r[~valid]=np.nan,np.nan
     actions=1-q[:,16:18]/m.closed_angle
@@ -112,6 +115,24 @@ def test_palm_objective_derivatives_and_opening(palm_model, settings, fixed):
     np.testing.assert_allclose(jac@direction,numerical,atol=2e-5,rtol=1e-6)
     if fixed:
         np.testing.assert_allclose(residual[-valid.sum():],0,atol=1e-12)
+
+
+def test_position_huber_matches_radial_loss_without_excluding_targets(palm_model, settings):
+    from scipy.special import huber
+
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1))
+    p, r, _, _, cameras = m.forward(q)
+    errors = np.array([0., .005, .01, .5])
+    p[:, 0, 0] += errors
+    valid = np.ones((4, 2), bool)
+    problem = PoseProblem(m, p, r, cameras, valid, np.arange(4) * .1,
+        dict(settings, position_huber_m=.01), fixed_base=np.zeros(4))
+    residual = problem.evaluate(q.ravel())[0][:12].reshape(4, 3)
+    cost = .5 * np.sum(residual ** 2, axis=1)
+    scale = settings["position_scale_m"] / settings["hand_position_weight"]
+    np.testing.assert_allclose(cost, huber(.01, errors) / scale ** 2, atol=1e-9)
+    assert cost[-1] > cost[-2] > 0  # large outliers still contribute to fitting
 
 
 def test_missing_hand_penalty_is_local_and_never_neck(palm_model, settings):
@@ -133,8 +154,8 @@ def test_missing_hand_penalty_is_local_and_never_neck(palm_model, settings):
     np.testing.assert_array_equal(first.regularizer.toarray(),first_off.regularizer.toarray())
 
 
-@pytest.mark.parametrize("limit_weight", [0., 3.])
-def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings, limit_weight):
+@pytest.mark.parametrize("limit_weight,huber_m", [(0., 0.), (3., 0.), (3., .01)])
+def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings, limit_weight, huber_m):
     require_cuda()
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1))
@@ -142,6 +163,9 @@ def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings, limit_weight):
     m.acceleration_limits[:] = .2
     settings.update(acceleration_limit_weight=limit_weight, velocity_limit_weight=limit_weight)
     p, r, _, _, cameras = m.forward(q)
+    settings["position_huber_m"] = huber_m
+    if huber_m:
+        p[0, 0] += [.02, 0., 0.]
     valid = np.ones((4, 2), bool)
     valid[1, 0] = False
     opening = 1 - q[:, 16:18] / m.closed_angle
@@ -150,9 +174,18 @@ def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings, limit_weight):
         problem = PoseProblem(m, p, r, cameras, valid, np.arange(4) * .1,
                               dict(settings, solver_backend=backend), fixed_base=np.zeros(4),
                               smooth=True, opening_targets=opening)
-        _, result, info = problem.solve(np.zeros(4), np.tile(m.neutral, (4, 1)), 50)
+        _, result, info = problem.solve(np.zeros(4), np.tile(m.neutral, (4, 1)), 500 if huber_m else 50)
         answers.append((result, info["cost"]))
-    np.testing.assert_allclose(answers[0][0], answers[1][0], atol=2e-5, rtol=2e-5)
+    if huber_m:
+        # Redundant arm joints can differ at the same task-space optimum.
+        # Compare physical predictions far below the benchmark tolerances.
+        a, b = [m.forward(answer[0]) for answer in answers]
+        assert np.max(np.linalg.norm(a[0] - b[0], axis=-1)) < 1e-5
+        assert np.max(rotation_error(a[1], b[1])) < 1e-4
+        for result, _ in answers:
+            assert np.all(result >= m.lower) and np.all(result <= m.upper)
+    else:
+        np.testing.assert_allclose(answers[0][0], answers[1][0], atol=2e-5, rtol=2e-5)
     assert answers[0][1] == pytest.approx(answers[1][1], rel=1e-6, abs=1e-8)
 
 

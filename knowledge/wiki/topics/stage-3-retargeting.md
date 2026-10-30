@@ -346,6 +346,12 @@ sampled pose sequence during base fitting, using the sampled source timestamps.
 Both default to zero. They address discontinuous joint branches before the base
 is frozen; missing-hand and motion-limit penalties still belong only to stage two.
 
+Optional `position_huber_m` applies isotropic vector Huber loss to each observed
+hand's position error in both fitting stages. Zero retains squared error; a
+positive cutoff uses SciPy's Huber cost and an exact transformed-residual
+Jacobian shared by CPU/CUDA. This limits the influence of large target jumps
+without discarding observations or modifying saved errors and benchmark scoring.
+
 Optional `base_placement_method: sdf` replaces movable-base pose fitting with the
 original seeded SDF search over XYZ/yaw. It requires a separately sampled actual
 palm workspace matching the robot, rather than using the historical wrist grid.
