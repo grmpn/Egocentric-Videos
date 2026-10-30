@@ -397,8 +397,18 @@ regions; its optional `region_limit` is recorded in the trajectory report.
 Original source arrays keep their full length and timestamps; unsolved frames
 have episode -1 and NaN joint solutions. Scoring applies the same selection to
 existing full-length runs, including tracking, motion, limits, collisions,
-opening, per-joint diagnostics and invalid-mapping counts. For the current iPhone
-input this is [0,296), with 990 excluded source frames.
+opening, per-joint diagnostics and invalid-mapping counts. The original iPhone
+benchmark used [0,296), with 990 excluded source frames. The user-reviewed
+restart uses [0,269), excluding only right-hand frame 29, configured in
+[`ik_benchmark_reviewed.json`](../../../configs/ik_benchmark_reviewed.json).
+Benchmark `selection.frame_range` uses zero-based half-open source indices;
+`excluded_hand_frames` names individual source frames and left/right hands.
+The shared selection runs before smoothing, base fitting, trajectory fitting
+and scoring. Original arrays remain intact; `retarget_valid` records reviewed
+eligibility. The trajectory report records `benchmark_selection`; mismatched
+solve/scoring selections or masks are rejected. Use
+`--benchmark-config configs/ik_benchmark_reviewed.json --benchmark-directory outputs/ik-benchmark-reviewed`
+with the existing benchmark command. Old scores remain in their original directory.
 
 The [benchmark evaluator](../../../src/egocentric_pipeline/ik_benchmark.py) uses
 ordinary full-robot FK, independently of saved solver errors. Each tracking score

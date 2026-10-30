@@ -6,10 +6,27 @@ limit-satisfying simulation demonstration. Implementation contracts belong to
 [Stage 3](../topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets).
 Generated evidence below is local and ignored, unavailable in a fresh clone.
 
+## Reviewed-region restart
+
+On 2026-10-30 the user authorized source frames **0–268 inclusive** and removal
+of **right-hand frame 29**, approximating later improved HaWoR input. This changes
+the input benchmark; old and new scores must not be interpreted as a solver-only
+comparison. Original source arrays and the old benchmark remain preserved.
+The [reviewed report](../../../outputs/ik-benchmark-reviewed/REPORT.md) records
+fresh solves of the six leading distinct production configurations; the duplicated
+cached runtime comparison is counted once. Further experiments follow those runs.
+[21 focused checks passed](../../../outputs/ik-benchmark-reviewed/validation/selection-tests.log)
+for source preservation, exact boundaries, hand identity, production fitting and
+scoring, legacy behavior and selection mismatch rejection.
+
+The previous Cauchy polish failed its pre-solve directional Jacobian check;
+no polish trajectory or score was produced. The user ended viewer work, and its
+server was stopped. Earlier viewer evidence below remains historical.
+
 ## Ongoing configuration tuning
 
 The user subsequently authorized [experiments toward >90](../plans/milestone-3-ik-tuning.md)
-without changing the benchmark. The first completed run,
+on the original unchanged region before the reviewed restart above. The first completed run,
 [temporal-low](../../../outputs/ik-benchmark/temporal-low/score.json), scores
 **72.620759**: 463/470 position passes, 337/470 orientation passes, 85/296
 joint-feasible frames, and 271/296 collision-free frames. Relative to the original
@@ -68,10 +85,15 @@ Legacy comparisons passed without their budgets or tolerances changing. Current
 probe reached **77.197743** (386/470 position, 219/470 orientation, 264/296 joint,
 269/296 collision passes), but exhausted 2000 evaluations. The moving-base probe
 finished at **73.799957**, also unconverged. The 77.198 result is not yet a
-production export/audited winner. Exploratory vector Cauchy pose-loss probes are
-running next: five observations account for 52% of the best run's chordal
-orientation loss. Their analytic directional check passed; no production Cauchy
-loss feature or acceptance result is claimed.
+production export/audited winner. Exploratory vector Cauchy pose-loss probes
+scored **85.454284** (fixed base) and **86.815339** (moving base), both with all
+296 frames joint-feasible. The latter passed 458/470 positions, 277/470
+orientations and 269/296 collision checks. Both exhausted 2000 evaluations.
+The motivation was five observations contributing 52% of the best run's chordal
+orientation loss. Their analytic directional checks passed; no production Cauchy
+loss feature or acceptance result is claimed. The subsequent orientation-weight
+polish failed its pre-solve derivative check, as recorded above; no polish result
+is claimed. [Diagnostic evidence](../../../outputs/ik-benchmark/validation/tuning/refinement/cauchy-base.json).
 
 The requested [detection-gap check](../../../outputs/ik-benchmark/validation/tuning/first-region-detection-gaps.json)
 found one pair separated by more than ten absent frames inside [0,296): right
@@ -84,6 +106,19 @@ in this interval. Left has no qualifying internal gap; frames 274–295 are a
 absence before the first detection is likewise not an inter-detection gap.
 These are measured discontinuities, not proof of a detector error; inputs and
 scoring masks remain unchanged.
+
+The requested hand-only review was verified at localhost:8080 (now stopped):
+original MANO meshes, source RGB, detection paths without bridges across missing
+frames, and jump buttons for 275/285/295. Optional faint endpoint hands make the
+displacement visible. The original camera-framing issue was corrected; inspected
+[screenshot](../../../outputs/ik-benchmark/validation/tuning/hand-review/review-fixed.png)
+and [review record](../../../outputs/ik-benchmark/validation/tuning/hand-review/review.json)
+confirm the rendered scene. This local diagnostic uses existing reconstruction
+helpers; it does not alter the saved hand or robot trajectory. The screenshot
+used software WebGL and captured the user's selected frame 29 without scrubbing
+their view. Relaunch with workspace Python and `PYTHONPATH=src` using the ignored
+[review script](../../../outputs/ik-benchmark/validation/tuning/hand-review/view.py),
+optionally adding `--open-browser`.
 
 ## Runtime diagnosis — 2026-10-30
 
@@ -235,7 +270,7 @@ combined joint test). These and the 36 colliding frames remain visible.
 
 Use the README's viewer command with
 `outputs/ik-benchmark/config2-missing-hold/trajectory` to reopen the saved run.
-The current viewer is at [localhost:8080](http://localhost:8080).
+The historical viewer used localhost:8080; it is no longer running.
 
 ## Historical full-video acceptance
 

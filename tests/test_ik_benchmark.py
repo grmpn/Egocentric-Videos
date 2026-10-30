@@ -27,6 +27,25 @@ def test_invalid_benchmark_definition_rejected(settings, key, value):
         validate_settings(dict(settings, **{key: value}))
 
 
+def test_reviewed_selection_preserves_source_and_hand_identity(settings):
+    from egocentric_pipeline.manipulation_regions import select_manipulation_data
+
+    observed = np.ones((10, 2), bool)
+    regions = [dict(start=0, stop=10, duration_s=1., seed_indices=[0])]
+    selection = {"frame_range": [1, 8], "excluded_hand_frames": [{"frame": 3, "hand": "right"}]}
+    selected, valid = select_manipulation_data(regions, observed, np.arange(10)/10, selection)
+    assert (selected[0]["start"], selected[0]["stop"]) == (1, 8)
+    assert selected[0]["duration_s"] == pytest.approx(.7)
+    assert observed.all() and regions[0]["stop"] == 10
+    assert valid[3, 0] and not valid[3, 1] and valid.sum() == 19
+    for bad in ({"frame_range": [0, 11]}, {"frame_range": [0, 2]},
+                {"frame_range": [10, 11]}, {"frame_range": [False, 8]},
+                {"excluded_hand_frames": [{"frame": 10, "hand": "right"}]},
+                {"excluded_hand_frames": [{"frame": 2, "hand": "both"}]}):
+        with pytest.raises(ValueError):
+            select_manipulation_data(regions, observed, np.arange(10)/10, bad)
+
+
 def test_scores_use_observed_hand_samples_and_all_evaluated_frames(settings):
     observed = np.array([[True, True], [False, True], [False, False], [True, True]])
     evaluated = np.array([True, True, True, False])

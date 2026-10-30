@@ -59,7 +59,7 @@ def main():
                 joint_retarget_trajectory(mapping_report["alignment_directory"], run / "trajectory", settings,
                     mapping_report["robot_settings"], mapping_report["asset_root"],
                     mapping_directory=args.mapping_directory, render_video=not args.skip_video,
-                    region_limit=benchmark.get("region_limit"))
+                    region_limit=benchmark.get("region_limit"), selection=benchmark.get("selection"))
                 score = evaluate_run(run, args.mapping_directory, benchmark, args.name, args.description)
             except (Exception, KeyboardInterrupt):
                 traceback.print_exc()

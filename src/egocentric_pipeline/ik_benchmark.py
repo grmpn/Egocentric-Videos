@@ -7,6 +7,7 @@ import numpy as np
 
 from .gripper_mapping import load_mapping_for_alignment
 from .hand_pose_filtering import smooth_hand_targets, validate_filter_settings
+from .manipulation_regions import select_manipulation_data, validate_selection
 from .pose_retargeting import rotation_error
 from .robot_constraints import RobotConstraints
 from .run_metadata import read_json, utc_now, write_json
@@ -14,6 +15,7 @@ from .run_metadata import read_json, utc_now, write_json
 
 def validate_settings(settings):
     validate_filter_settings(settings)
+    validate_selection(settings.get("selection"))
     limit = settings.get("region_limit")
     if limit is not None and (type(limit) is not int or limit < 1):
         raise ValueError("region_limit must be a positive integer or null for all regions")
@@ -92,6 +94,14 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
     n = len(arrays["timestamp_s"])
     regions = report["regions"][:settings.get("region_limit")]
     observed = arrays["export_valid"] & ~arrays["motion_infilled"] & mapping["mapping_valid"]
+    selection = settings.get("selection")
+    if report.get("benchmark_selection") != selection:
+        raise ValueError("Solve and scoring selections differ; rerun with the benchmark selection")
+    selected, observed = select_manipulation_data(regions, observed, arrays["timestamp_s"], selection)
+    if selected != regions:
+        raise ValueError("Saved solve regions do not match the benchmark selection")
+    if not np.array_equal(observed, arrays["retarget_valid"]):
+        raise ValueError("Solve and scoring observation masks differ")
     raw = mapping["transform_aligned_from_palm"]
     positions, rotations, filtering = smooth_hand_targets(raw[..., :3, 3], raw[..., :3, :3], observed,
         arrays["timestamp_s"], regions, settings)
@@ -101,7 +111,8 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
     contract = {"settings": settings, "source_run_id": report["source_run_id"], "frame_count": n,
                 "mapping_settings": mapped_report["settings"], "robot_settings": report["robot_settings"],
                 "regions": [[r["start"], r["stop"]] for r in regions],
-                "observation_policy": "export_valid AND NOT motion_infilled AND mapping_valid",
+                "observation_policy": "export_valid AND NOT motion_infilled AND mapping_valid" +
+                    (" AND NOT manually excluded hand frames" if selection else ""),
                 "comparison_target": "filtered mapped palm pose in aligned frame"}
     contract_path = run.parent / "benchmark.json"
     if contract_path.exists() and read_json(contract_path) != contract:
@@ -248,6 +259,10 @@ def update_report(directory):
     if definition:
         lines += [f"Source: `{definition['source_run_id']}`; {definition['frame_count']} source frames; regions `{definition['regions']}`.",
                   "Full definition: [benchmark.json](benchmark.json). Changes require consistent rescoring or a separate benchmark directory.", ""]
+    if settings.get("selection"):
+        selection = settings["selection"]
+        lines += [f"Manual review (zero-based, exclusive stop): `{selection}`.",
+                  "Applied before smoothing and both IK stages; source observations remain preserved.", ""]
     lines += ["## Scoreboard", "", "| Configuration | Total /100 | Position /25 | Orientation /25 | Joint feasibility /25 | Collision-free /25 | Solve (s) |",
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
 

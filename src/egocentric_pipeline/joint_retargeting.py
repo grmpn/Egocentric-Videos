@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation
 from .base_placement import base_transform, transform_points
 from .hand_geometry import mano_palm_frames
 from .hand_pose_filtering import smooth_hand_targets, validate_filter_settings
-from .manipulation_regions import camera_segments, frame_edges, interval_metrics, retained_regions
+from .manipulation_regions import camera_segments, frame_edges, interval_metrics, retained_regions, select_manipulation_data, validate_selection
 from .pose_retargeting import PoseModel, fit_region, initialize_base, rotation_error
 from .retargeting import load_alignment, save_retargeting
 from .robot_workspace import load_robot, verify_asset_source
@@ -90,11 +90,13 @@ def validate_settings(settings):
 
 
 def joint_retarget_trajectory(alignment_directory, output_directory, settings, robot_settings,
-                              asset_root, *, render_video=True, mapping_directory=None, region_limit=None):
+                              asset_root, *, render_video=True, mapping_directory=None, region_limit=None,
+                              selection=None):
     """Process retained camera seeds only; save failed regions for honest review."""
     import torch
 
     validate_settings(settings)
+    validate_selection(selection)
     if region_limit is not None and (type(region_limit) is not int or region_limit < 1):
         raise ValueError("region_limit must be a positive integer or None for all regions")
     output = Path(output_directory).resolve()
@@ -106,6 +108,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "asset_root": str(Path(asset_root).resolve()), "hand_order": ["left", "right"],
               "target_frames": robot_settings["target_frames"], "orientation_frames": robot_settings["tool_frames"],
               "manual_review": "pending", "regions_only": True, "region_limit": region_limit,
+              "benchmark_selection": selection,
               "observation_policy": "export_valid AND NOT motion_infilled; infilled hands are missing data",
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
@@ -180,6 +183,8 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
             raise ValueError("Camera rotations must be finite proper optical-to-aligned rotations")
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
         regions = retained_regions(seeds, times, settings.get("merge_adjacent_regions", False))[:region_limit]
+        regions, valid = select_manipulation_data(regions, valid, times, selection)
+        wrists_aligned[~valid], orientations[~valid] = np.nan, np.nan
         filtered_positions, filtered_rotations, filtering = smooth_hand_targets(
             wrists_aligned, orientations, valid, times, regions, settings)
         edges = frame_edges(times)

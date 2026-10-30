@@ -71,6 +71,58 @@ def retained_regions(seeds, timestamps, merge_adjacent=False):
     return regions
 
 
+def validate_selection(selection):
+    """Optional manual review in zero-based source frames, with exclusive stop."""
+    if selection is None:
+        return
+    if not isinstance(selection, dict) or set(selection) - {"frame_range", "excluded_hand_frames"}:
+        raise ValueError("Selection supports frame_range and excluded_hand_frames only")
+    bounds = selection.get("frame_range")
+    if bounds is not None and (not isinstance(bounds, list) or len(bounds) != 2
+            or any(type(x) is not int for x in bounds) or not 0 <= bounds[0] < bounds[1]):
+        raise ValueError("frame_range must be [start, exclusive_stop] with nonnegative integers")
+    excluded = selection.get("excluded_hand_frames", [])
+    if not isinstance(excluded, list):
+        raise ValueError("excluded_hand_frames must be a list of frame/hand entries")
+    for item in excluded:
+        if (not isinstance(item, dict) or set(item) != {"frame", "hand"}
+                or type(item["frame"]) is not int or item["frame"] < 0
+                or item["hand"] not in ("left", "right")):
+            raise ValueError("Each excluded hand frame needs a nonnegative frame and left/right hand")
+
+
+def select_manipulation_data(regions, observed, timestamps, selection=None):
+    """Clip retained regions and copy eligibility; never edit source observations.
+
+    Eligibility is [T,2] in left/right order. Apply before target smoothing in
+    both fitting and evaluation so rejected samples cannot affect nearby targets.
+    """
+    validate_selection(selection)
+    if selection is None:
+        return regions, observed
+    edges = frame_edges(timestamps)
+    start, stop = selection.get("frame_range", [0, len(timestamps)])
+    if stop > len(timestamps):
+        raise ValueError("Selection frame_range exceeds the source frame count")
+    selected = []
+    for region in regions:
+        a, b = max(start, region["start"]), min(stop, region["stop"])
+        if a >= b:
+            continue
+        if b - a < 3:
+            raise ValueError("Selected regions need at least three frames for acceleration scoring")
+        selected.append(dict(region, start=a, stop=b, duration_s=float(edges[b] - edges[a])))
+    if not selected:
+        raise ValueError("Selection does not overlap any retained manipulation region")
+    valid = observed.copy()
+    for item in selection.get("excluded_hand_frames", []):
+        frame = item["frame"]
+        if not any(r["start"] <= frame < r["stop"] for r in selected):
+            raise ValueError("Excluded hand frame must lie within a selected manipulation region")
+        valid[frame, ("left", "right").index(item["hand"])] = False
+    return selected, valid
+
+
 def interval_metrics(start, stop, passed, observed, edges, settings):
     """Assess a contiguous interval; the percentage comparison is strictly >."""
     if not 0 <= start < stop <= len(passed):

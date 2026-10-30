@@ -1,22 +1,27 @@
 # Milestone 3 — IK configuration experiments
 
-Approved user-directed scope · revision 1 · 2026-10-30 · Explicit instruction to
-start experiments and reach >90 recorded as `20261030-ik-tuning-001` in the
+Approved user-directed scope · revision 2 · 2026-10-30 · Explicit instruction to
+manual-region amendment recorded as `20261030-ik-tuning-036`
+(original >90 tuning approval: `20261030-ik-tuning-001`) in the
 [action log](../logs/2026-10.jsonl). Extends the completed
 [benchmark plan](milestone-3-ik-benchmark.md).
 
 ## Objective and deliverable
 
-Reach **strictly above 90/100** on the existing first-region iPhone IK benchmark
+Reach **strictly above 90/100** on the manually reviewed first-region iPhone IK benchmark
 through reproducible solver/configuration experiments. Deliver the best verified
 configuration, saved trajectory, comparison report, and diagnostic evidence.
 
 ## Scope and boundaries
 
-- Preserve the benchmark: same first retained region [0,296), smoothed Config 2
-  palm targets, source timestamps, observed-hand mask, four equal score terms,
-  position/orientation thresholds, pinned joint limits, acceleration proxy, and
-  collision exclusions. Do not change scoring or remove difficult observations.
+- Use source frames **0–268 inclusive**, excluding **right-hand frame 29**, as
+  explicitly directed by the user on 2026-10-30 to approximate later refined HaWoR
+  input. Apply this selection before smoothing, both solver stages and scoring.
+  Preserve original source arrays and previous [0,296) results; begin a separate
+  benchmark directory. Rerun the top six distinct production configurations,
+  then continue experiments. Keep Config 2 targets, timestamps, four equal score
+  terms, tolerances, joint limits, acceleration proxy and collision exclusions.
+  Do not remove further observations without user direction.
 - Test lower velocity/acceleration regularization; explicit penalties for motion
   exceeding the robot velocity limits and existing benchmark acceleration cap;
   and the original SDF base-placement approach with the current base constraints
@@ -37,7 +42,7 @@ configuration, saved trajectory, comparison report, and diagnostic evidence.
 
 - Execute and record the requested experiment families, with unsuccessful
   attempts and reasons retained. Select a configuration scoring >90 under the
-  unchanged production evaluator; save enough settings and inputs to reproduce it.
+  production evaluator with the approved reviewed region; save enough settings and inputs to reproduce it.
 - Independently verify the selected run's score arithmetic, common region and
   observations, source preservation, FK tracking, joint derivatives/limits,
   and collisions. Do not claim the goal achieved before this evidence exists.

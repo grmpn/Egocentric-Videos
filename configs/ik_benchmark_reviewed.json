@@ -1,0 +1,15 @@
+{
+  "region_limit": 1,
+  "selection": {
+    "frame_range": [0, 269],
+    "excluded_hand_frames": [{"frame": 29, "hand": "right"}]
+  },
+  "position_tolerance_m": 0.01,
+  "orientation_tolerance_degrees": 4.0,
+  "acceleration_limit_rad_s2": 10.0,
+  "joint_position_tolerance_rad": 1e-9,
+  "joint_acceleration_limits_rad_s2": {},
+  "hand_position_window_s": 0.3,
+  "hand_orientation_window_s": 0.3,
+  "hand_filter_polyorder": 2
+}

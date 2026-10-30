@@ -289,8 +289,9 @@ def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
     np.testing.assert_allclose(base, first["sdf_placement"]["base_xyz_yaw"])
 
 
-@pytest.mark.parametrize("region_limit,refine_base", [(None, False), (1, False), (1, True)])
-def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base):
+@pytest.mark.parametrize("region_limit,refine_base,reviewed", [(None, False, False), (1, False, False),
+                                                          (1, True, False), (1, False, True)])
+def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base, reviewed):
     from egocentric_pipeline.ik_benchmark import evaluate_run
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.run_metadata import write_json
@@ -318,6 +319,11 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     # later region. Exercise both legacy full solves and limited new solves.
     seeds = [dict(start=a, stop=b, duration_s=(b-a)/6, retained=keep)
              for a, b, keep in [(0, 1, True), (1, 3, True), (3, 5, False), (5, 8, True)]]
+    selection = None
+    if reviewed:
+        seeds[1].update(stop=4, duration_s=3/6)
+        seeds[2].update(start=4, duration_s=1/6)
+        selection = {"frame_range": [0, 3], "excluded_hand_frames": [{"frame": 1, "hand": "right"}]}
     monkeypatch.setattr("egocentric_pipeline.joint_retargeting.camera_segments",
                         lambda camera, times, config: (camera.copy(), seeds))
     settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=2,
@@ -325,7 +331,7 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     run = tmp_path / "benchmark/run"
     report = joint_retarget_trajectory(directory, run / "trajectory", settings, rs,
         ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
-        region_limit=region_limit)
+        region_limit=region_limit, selection=selection)
     expected_regions = [(0, 3)] if region_limit else [(0, 3), (5, 8)]
     assert [(r["start"], r["stop"]) for r in report["regions"]] == expected_regions
     assert len(report["candidates"]) == len(expected_regions)
@@ -339,6 +345,12 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
         assert data["gripper_action"].shape == (8, 2)
         for name in source:
             np.testing.assert_array_equal(source[name], data[name])
+        expected_valid = valid.copy()
+        if reviewed:
+            expected_valid[1, 1] = False
+            assert np.isnan(data["wrist_position_filtered_aligned_m"][1, 1]).all()
+            assert data["joint_prediction"][1, 1]
+        np.testing.assert_array_equal(data["retarget_valid"], expected_valid)
         assert np.isnan(data["wrist_position_base_m"][~valid]).all()
         if region_limit:
             assert np.isnan(data["joint_solution_rad"][3:]).all()
@@ -346,9 +358,11 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
     assert len(report["coupled_joint_leaders"]) == 2
     benchmark = json.loads((ROOT / "configs/ik_benchmark.json").read_text())
     benchmark.update(hand_position_window_s=.5, hand_orientation_window_s=.5)
+    if reviewed:
+        benchmark["selection"] = selection
     result = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
     assert result["definition"]["regions"] == [[0, 3]]
-    assert result["components"]["position_tracking"]["evaluated"] == int(valid[:3].sum())
+    assert result["components"]["position_tracking"]["evaluated"] == int(expected_valid[:3].sum())
     assert result["components"]["joint_feasibility"]["evaluated"] == 3
     assert result["excluded_frames"] == 5
     expected_time = sum(a[stage]["wall_time_s"] for a in report["candidates"][0]["optimization"]["attempts"]
@@ -362,10 +376,14 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
         np.testing.assert_allclose(data["target_position_aligned_m"][valid], p[valid], atol=1e-10)
         assert data["joint_positions_rad"].shape == (8, 24)
         np.testing.assert_array_equal(data["evaluated"], np.arange(8) < 3)
+        np.testing.assert_array_equal(data["observed"], expected_valid)
         assert np.isnan(data["joint_positions_rad"][3:]).all()
         assert np.isnan(data["position_error_m"][3:]).all()
     rescored = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
     assert result["components"] == rescored["components"]
+    if reviewed:
+        with pytest.raises(ValueError, match="selections differ"):
+            evaluate_run(run, mapping, dict(benchmark, selection=None), "test", "Wrong selection")
     transforms[valid, :3, 3] += .001
     np.savez(mapping / "gripper_mapping.npz", **source, mapping_valid=valid,
              transform_aligned_from_palm=transforms, gripper_action=opening)
