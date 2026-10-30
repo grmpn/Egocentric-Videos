@@ -210,6 +210,27 @@ def vector_deadzone(error, derivative, base_derivative, radius):
     return result, transform @ derivative, transform @ base_derivative
 
 
+def vector_cauchy(error, derivative, base_derivative, cutoff):
+    """Vector Cauchy cost: c²/2 log(1 + ||error||²/c²), with exact Jacobian.
+
+    This limits large pose errors' influence without dropping observations.
+    The zero-cutoff default preserves ordinary least squares exactly.
+    """
+    if not cutoff:
+        return error, derivative, base_derivative
+    norm2 = np.sum(error ** 2, axis=1)
+    z = norm2 / cutoff ** 2
+    factor = np.ones(len(error))
+    nonzero = z > 0
+    factor[nonzero] = np.sqrt(np.log1p(z[nonzero]) / z[nonzero])
+    slope = np.full(len(error), -.5 / cutoff ** 2)
+    large = z > 1e-6
+    slope[large] = (1 / ((1 + z[large]) * factor[large]) - factor[large]) / norm2[large]
+    transform = (factor[:, None, None] * np.eye(error.shape[1])
+                 + slope[:, None, None] * error[:, :, None] * error[:, None, :])
+    return factor[:, None] * error, transform @ derivative, transform @ base_derivative
+
+
 class PoseProblem:
     """Sparse bounded least-squares objective with library geometric Jacobians."""
 
@@ -322,6 +343,8 @@ class PoseProblem:
             difference = aligned + base[:3] - target
             difference, derivative, bd = vector_deadzone(difference, derivative, bd,
                 self.settings.get("position_deadzone_m", 0.))
+            difference, derivative, bd = vector_cauchy(difference, derivative, bd,
+                self.settings.get("position_cauchy_m", 0.))
             cutoff = self.settings.get("position_huber_m", 0.)
             if cutoff:
                 # Isotropic vector Huber loss, expressed as a residual so the
@@ -339,7 +362,7 @@ class PoseProblem:
                 difference[outside] *= factor[:, None]
             append(difference / scale, derivative, bd, frames)
 
-        def rotation_term(pred, target, angular_j, joint_start, frames, scale, deadzone=0.):
+        def rotation_term(pred, target, angular_j, joint_start, frames, scale, deadzone=0., cauchy=0.):
             aligned = rotation @ pred
             # For spatial angular velocity w, dR[:,k] = w cross R[:,k].
             axes = np.einsum("ij,tjk->tik", rotation, angular_j)
@@ -354,6 +377,8 @@ class PoseProblem:
             # tolerance maps exactly to a radius in the existing chordal loss.
             difference, full, bd = vector_deadzone((aligned - target).reshape(-1, 9), full, bd,
                                                   2 * np.sqrt(2) * np.sin(deadzone / 2))
+            difference, full, bd = vector_cauchy(difference, full, bd,
+                                               2 * np.sqrt(2) * np.sin(cauchy / 2))
             append(difference / scale, full, bd, frames)
 
         for hand in range(2):
@@ -365,7 +390,8 @@ class PoseProblem:
             rotation_term(r[frames, hand], self.orientations[frames, hand], rj[hand][frames, 3:],
                           hand * 7, frames, np.sqrt(2) * self.settings["orientation_scale_rad"]
                           / self.settings["hand_orientation_weight"],
-                          self.settings.get("orientation_deadzone_rad", 0.))
+                          self.settings.get("orientation_deadzone_rad", 0.),
+                          self.settings.get("orientation_cauchy_rad", 0.))
         rotation_term(hr, self.cameras, hj[:, 3:], 14, np.arange(self.n),
                       np.sqrt(2) * self.settings["camera_rotation_scale_rad"])
         reg = self.regularizer

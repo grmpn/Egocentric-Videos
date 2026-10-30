@@ -19,6 +19,14 @@ cached runtime comparison is counted once. Further experiments follow those runs
 for source preservation, exact boundaries, hand identity, production fitting and
 scoring, legacy behavior and selection mismatch rejection.
 
+Subsequent tuning adds optional production vector Cauchy fitting for hand pose
+blocks. [12 derivative/loss checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-tests.log),
+[16 settings checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-settings-tests.log)
+and [4 CPU/CUDA comparisons](../../../outputs/ik-benchmark-reviewed/validation/cauchy-cuda-tests.log)
+passed. This retains the scoring targets, isolates camera/motion/opening terms,
+and defaults to the previous objective. Benchmark experiments using it follow
+the six requested reruns; passing tests alone does not establish a score gain.
+
 The previous Cauchy polish failed its pre-solve directional Jacobian check;
 no polish trajectory or score was produced. The user ended viewer work, and its
 server was stopped. Earlier viewer evidence below remains historical.

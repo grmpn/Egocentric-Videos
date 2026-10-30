@@ -35,12 +35,16 @@ def validate_settings(settings):
     for key in ("missing_hand_velocity_weight", "gripper_opening_weight",
                 "velocity_limit_weight", "acceleration_limit_weight",
                 "base_velocity_weight", "base_acceleration_weight", "position_huber_m",
-                "position_deadzone_m", "orientation_deadzone_rad"):
+                "position_deadzone_m", "orientation_deadzone_rad", "position_cauchy_m", "orientation_cauchy_rad"):
         value = settings.get(key, 0.)
         if not np.isfinite(value) or value < 0:
             raise ValueError(f"{key} must be nonnegative finite")
     if settings.get("orientation_deadzone_rad", 0.) >= np.pi:
         raise ValueError("orientation_deadzone_rad must be less than pi")
+    if settings.get("orientation_cauchy_rad", 0.) > np.pi:
+        raise ValueError("orientation_cauchy_rad must be at most pi")
+    if settings.get("position_huber_m", 0.) and settings.get("position_cauchy_m", 0.):
+        raise ValueError("Choose either position_huber_m or position_cauchy_m, not both")
     margin = settings.get("motion_limit_margin", 1.)
     if not np.isfinite(margin) or not 0 < margin <= 1:
         raise ValueError("motion_limit_margin must be in (0,1]")

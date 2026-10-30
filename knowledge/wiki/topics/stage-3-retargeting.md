@@ -359,6 +359,15 @@ radius `2 sqrt(2) sin(angle/2)`; camera orientation remains unchanged. Position
 Huber loss, if enabled, applies to the excess after its fitting tolerance.
 Saved errors and benchmark thresholds still use the original complete targets.
 
+Optional `position_cauchy_m` and `orientation_cauchy_rad` apply vector Cauchy
+loss to the corresponding hand pose blocks after fitting deadzones. Zero keeps
+the existing objective. Cutoffs use metres and the angular cutoff's chordal
+radius, respectively. All observations outside a fitting deadzone still exert
+influence, including large errors. Camera, opening, temporal, motion-limit and
+base-prior residuals are unchanged. An exact residual Jacobian is shared by CPU
+and CUDA. Position Huber and Cauchy are mutually exclusive. Saved errors and
+benchmark thresholds are independent of these fitting losses.
+
 `refine_base_with_trajectory: true` allows the second stage to adjust the shared
 base alongside the source-timed joint trajectory and gripper opening. The default
 still freezes it. Refinement retains the original camera-seed bounds and prior;

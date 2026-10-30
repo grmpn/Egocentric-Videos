@@ -138,6 +138,34 @@ def test_position_huber_matches_radial_loss_without_excluding_targets(palm_model
     assert cost[-1] > cost[-2] > 0  # large outliers still contribute to fitting
 
 
+@pytest.mark.parametrize("fixed", [False, True])
+def test_cauchy_pose_loss_derivatives_and_camera_isolation(palm_model, settings, fixed):
+    m, _, _ = palm_model
+    q = np.tile(m.neutral, (4, 1)) + .01
+    p, r, _, _, cameras = m.forward(q)
+    p[:, 0, 0] += [0., 1e-9, .005, .5]
+    r[:, 0] = Rotation.from_rotvec(np.array([0., .02, .3, 2.])[:, None] * [0., 0., 1.]).as_matrix() @ r[:, 0]
+    valid = np.ones((4, 2), bool)
+    valid[2, 1] = False
+    config = dict(settings, position_cauchy_m=.003, orientation_cauchy_rad=.05,
+                  position_deadzone_m=.001, orientation_deadzone_rad=.01)
+    problem = PoseProblem(m, p, r, cameras, valid, np.array([0., .03, .07, .10]), config,
+                          fixed_base=np.zeros(4) if fixed else None, smooth=True)
+    x = q.ravel() if fixed else np.r_[np.zeros(4), q.ravel()]
+    residual, jacobian = problem.evaluate(x)
+    direction = np.random.default_rng(13).normal(size=len(x))
+    eps = 1e-7
+    numerical = (problem.evaluate(x + eps*direction)[0] - problem.evaluate(x - eps*direction)[0]) / (2*eps)
+    np.testing.assert_allclose(jacobian @ direction, numerical, atol=2e-5, rtol=1e-6)
+    ordinary = PoseProblem(m, p, r, cameras, valid, np.array([0., .03, .07, .10]), settings,
+                          fixed_base=np.zeros(4) if fixed else None, smooth=True).evaluate(x)[0]
+    np.testing.assert_array_equal(residual[12*valid.sum():], ordinary[12*valid.sum():])
+    excess = np.maximum(np.array([0., 1e-9, .005, .5]) - .001, 0)
+    expected = .5 * .003**2 * np.log1p((excess/.003)**2) / settings['position_scale_m']**2
+    np.testing.assert_allclose(.5*np.sum(residual[:12].reshape(4, 3)**2, axis=1), expected, atol=1e-9)
+    assert expected[-1] > expected[-2] > 0
+
+
 def test_fitting_deadzones_preserve_errors_and_camera_objective(palm_model, settings):
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1))
@@ -522,8 +550,8 @@ def test_cuda_symbolic_reuse_updates_values_rhs_and_structure():
 
 @pytest.mark.parametrize("fixed", [False, True])
 @pytest.mark.parametrize("prior_weight", [0., .3])
-@pytest.mark.parametrize("deadzone", [False, True])
-def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight, deadzone):
+@pytest.mark.parametrize("deadzone,cauchy", [(False, False), (True, False), (True, True)])
+def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, prior_weight, deadzone, cauchy):
     require_cuda()
     m, _, _ = model
     times = np.array([0., .03, .07, .10, .15])
@@ -539,6 +567,8 @@ def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, 
         options = dict(settings, solver_backend=backend, base_initialization_weight=prior_weight)
         if deadzone:
             options.update(position_deadzone_m=.002, orientation_deadzone_rad=.01)
+        if cauchy:
+            options.update(position_cauchy_m=.003, orientation_cauchy_rad=.05)
         problem = PoseProblem(m, wrists, rotations, cameras, valid, times, options,
                               fixed_base=base if fixed else None, smooth=fixed)
         b, q, info = problem.solve(base, np.tile(m.neutral, (len(times), 1)), 1000 if deadzone else 150)
@@ -916,7 +946,14 @@ def test_restart_ranking_uses_original_observations(model, settings, monkeypatch
                                      ('base_initialization_weight', -1), ('base_prior_translation_scale_m', 0),
                                      ('base_prior_yaw_scale_rad', np.inf), ('position_deadzone_m', -1),
                                      ('orientation_deadzone_rad', np.pi), ('orientation_deadzone_rad', np.nan),
+                                     ('position_cauchy_m', -1), ('position_cauchy_m', np.inf),
+                                     ('orientation_cauchy_rad', np.nan), ('orientation_cauchy_rad', 4.),
                                      ('refine_base_with_trajectory', 1)])
 def test_invalid_refinement_settings(settings, key, value):
     with pytest.raises(ValueError):
         validate_settings(dict(settings, **{key: value}))
+
+
+def test_conflicting_position_losses_rejected(settings):
+    with pytest.raises(ValueError, match="either"):
+        validate_settings(dict(settings, position_huber_m=.01, position_cauchy_m=.003))
