@@ -186,7 +186,8 @@ def base_hand_meshes(arrays, report, model_paths):
     return meshes
 
 
-def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_models=None, show_mano=True):
+def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_models=None, show_mano=True,
+                     show_target_grippers=False):
     """Orbit/pan/zoom and source-timed playback; failed arm poses are hidden."""
     from scipy.spatial.transform import Rotation
     from skrobot.coordinates import Coordinates
@@ -201,7 +202,7 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     if not report["episodes"]:
         raise ValueError("No retained episodes to animate; review annotated_video.mp4 and candidate diagnostics")
     meshes = []
-    if show_mano:
+    if show_mano and not show_target_grippers:
         if mano_models is None:
             alignment = read_json(Path(report["alignment_directory"]) / "alignment_report.json")
             mano_models = [alignment["inputs"][f"mano_{name}"]["path"] for name in ("left", "right")]
@@ -210,6 +211,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     settings = report["robot_settings"]
     pose_fitting = report.get("method") == "joint_base"
     palm_targets = report.get("settings", {}).get("hand_target_mode") == "gripper_palm"
+    if show_target_grippers and not palm_targets:
+        raise ValueError("Detached target grippers require a saved gripper-palm IK run")
     target_frames = report.get("target_frames", settings.get("target_frames", settings["tool_frames"]))
     wrist_matching = target_frames != settings["tool_frames"]
     shifted_matching = pose_fitting and not palm_targets and np.any(report["settings"].get("wrist_offset_tool_m", [0, 0, 0]))
@@ -227,6 +230,22 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     server.scene.set_background_image(np.full((1, 1, 3), [28, 33, 45], dtype=np.uint8))
     for link in robot.link_list:
         viewer.add(link)
+    target_grippers, gripper_handles = [], []
+    if show_target_grippers:
+        from .gripper_model import load_grippers
+
+        target_grippers = load_grippers(asset_root or report["asset_root"], settings)
+        for hand, gripper in enumerate(target_grippers):
+            handles = []
+            for link in gripper.model.link_list:
+                mesh = link.concatenated_visual_mesh
+                if mesh is not None:
+                    handle = server.scene.add_mesh_simple(
+                        f"/target_grippers/{gripper.side}/{link.name}", vertices=mesh.vertices, faces=mesh.faces,
+                        color=(70, 145, 245) if hand == 0 else (245, 155, 60),
+                        opacity=.6, side="double", visible=False)
+                    handles.append((link, handle))
+            gripper_handles.append(handles)
     base_axes = server.scene.add_frame("/base", axes_length=.2, axes_radius=.004)
     mesh_handles = [server.scene.add_mesh_simple(
         f"/base/mano_{name}", vertices=np.zeros_like(vertices[0]), faces=faces,
@@ -242,6 +261,8 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
     targets, endpoint_markers, tcp_markers, wrist_markers, paths = [], [], [], [], []
     for hand, name in enumerate(("left", "right")):
         hand_valid = valid[:, hand]
+        if show_target_grippers:
+            hand_valid = hand_valid & (arrays["episode_id"] >= 0)
         colors = np.array([COLORS[frame_state(i, arrays, report)[0]] for i in np.flatnonzero(hand_valid)], np.uint8).reshape(-1, 3)
         paths.append(server.scene.add_point_cloud(f"/{name}/path", points=wrists[hand_valid, hand].astype(np.float32), colors=colors, point_size=.018))
         targets.append(server.scene.add_icosphere(f"/{name}/wrist", radius=.023, color=(70, 145, 245) if hand == 0 else (245, 155, 60)))
@@ -262,7 +283,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         "the original hand orientation and articulation.")
     server.gui.add_markdown(
         "## Fixed-base trajectory review\nDrag to orbit · Right-drag to pan · Scroll to zoom\n\n"
-        + ("Blue/orange: original MANO hands and smoothed gripper palm targets" if palm_targets else "Blue/orange: original left/right hand and wrist")
+        + ("Blue/orange: detached left/right target grippers at smoothed palm poses; opening follows the mapped hand command."
+           if show_target_grippers else "Blue/orange: original MANO hands and smoothed gripper palm targets"
+           if palm_targets else "Blue/orange: original left/right hand and wrist")
         + f" · White: {endpoint_label}"
         + (" · Cyan: gripper TCP" if wrist_matching else "")
         + (" · Pink: physical robot wrist" if shifted_matching else "")
@@ -272,7 +295,14 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         + explanation + (" Frame collision/benchmark-limit results appear below; acceleration is a benchmark proxy."
                           " Path colours retain the historical raw-target pose gate; benchmark errors use filtered Config 2 targets."
                           if benchmark is not None else " Collisions and dynamic limits are unchecked."))
-    slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=0)
+    initial_frame = 0
+    if show_target_grippers:
+        visible_frames = np.flatnonzero(valid.all(axis=1) & (arrays["episode_id"] >= 0))
+        if not len(visible_frames):
+            visible_frames = np.flatnonzero(valid.any(axis=1) & (arrays["episode_id"] >= 0))
+        if len(visible_frames):
+            initial_frame = int(visible_frames[0])
+    slider = server.gui.add_slider("Frame", min=0, max=len(wrists) - 1, step=1, initial_value=initial_frame)
     play = server.gui.add_checkbox("Play", initial_value=False)
     focus_control = server.gui.add_button("Focus robot")
     camera_control = server.gui.add_checkbox("Camera path", initial_value=True)
@@ -307,6 +337,19 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
         def change_opacity(event):
             for handle in mesh_handles:
                 handle.opacity = event.target.value
+    if target_grippers:
+        gripper_control = server.gui.add_checkbox("Detached target grippers", initial_value=True)
+        gripper_opacity = server.gui.add_slider("Target gripper opacity", min=.1, max=1., step=.05, initial_value=.6)
+
+        @gripper_control.on_update
+        def toggle_target_grippers(event):
+            update(int(slider.value))
+
+        @gripper_opacity.on_update
+        def change_gripper_opacity(event):
+            for handles in gripper_handles:
+                for _, handle in handles:
+                    handle.opacity = event.target.value
     status = server.gui.add_markdown("")
 
     @camera_control.on_update
@@ -346,6 +389,20 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
                 handle.visible = eid >= 0 and (hand is None or bool(arrays["ik_success"][frame, hand])
                                                or (pose_fitting and predicted_control.value))
         for hand in range(2):
+            if target_grippers:
+                visible = gripper_control.value and eid >= 0 and bool(valid[frame, hand])
+                if visible:
+                    gripper = target_grippers[hand]
+                    gripper.set_opening(arrays["gripper_action_target"][frame, hand])
+                    # These targets are palm poses already in the aligned frame.
+                    # Place the detached palm root directly; do not apply a TCP offset.
+                    gripper.model.newcoords(Coordinates(pos=wrists[frame, hand],
+                        rot=arrays["wrist_orientation_filtered_aligned"][frame, hand]))
+                for link, handle in gripper_handles[hand]:
+                    handle.visible = visible
+                    if visible:
+                        handle.position = link.worldpos()
+                        handle.wxyz = Rotation.from_matrix(link.worldrot()).as_quat(scalar_first=True)
             if meshes:
                 handle = mesh_handles[hand]
                 handle.visible = mesh_control.value and eid >= 0 and bool(valid[frame, hand])
@@ -435,9 +492,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             if play.value:
                 slider.value = (int(slider.value) + 1) % len(wrists)
 
-    update(0)
+    update(initial_frame)
     viewer.set_camera(angles=[np.pi / 3, 0, 3 * np.pi / 4], distance=2.4, center=np.mean(wrists[valid], axis=0))
-    if palm_targets and arrays["episode_id"][0] >= 0:
+    if palm_targets and arrays["episode_id"][initial_frame] >= 0:
         focus_robot()
     viewer.show(open_browser=open_browser)
     threading.Thread(target=playback, daemon=True).start()

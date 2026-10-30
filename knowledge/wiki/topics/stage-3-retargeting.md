@@ -460,6 +460,15 @@ without solving IK; saved poses outside the evaluation mask are explicitly
 labeled as excluded. Previous full-video scores remain linked from the
 [comparison evidence](../experiments/ik-benchmark-iphone.md).
 
+`view_retargeting.py --target-grippers` replaces MANO meshes with detached
+pinned-asset EZGrippers at the saved smoothed palm poses in aligned coordinates.
+Opening uses `gripper_action_target`; the existing axes, robot and benchmark
+errors remain visible. The detached palm root is placed directly without a TCP
+offset. Missing/rejected observations hide that hand's target gripper; paths use
+solved regions. The new view starts at the first frame with both targets when
+available and offers target visibility/opacity controls. Viewer review/tests
+were explicitly deferred to the user for this requested mode.
+
 ## Part 3 placement and IK contract
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.

@@ -468,6 +468,9 @@ must match the complete alignment and pinned robot. The checked-in gripper IK
 configuration enables 0.3-second position/orientation smoothing, fits the actual
 palm, and optimizes opening in the second stage. Its missing-hand penalty excludes
 the neck. The viewer shows saved opening, filtered targets and benchmark results.
+Add `--target-grippers` to show detached blue/orange target grippers instead of
+MANO hands, using the smoothed palm positions/orientations and mapped opening
+commands. Target meshes are hidden for missing/excluded observations.
 
 [Benchmark settings](configs/ik_benchmark.json) use 1 cm / 4° tracking thresholds,
 URDF position/velocity limits and an explicitly assumed 10 rad/s² acceleration
