@@ -6,6 +6,36 @@ limit-satisfying simulation demonstration. Implementation contracts belong to
 [Stage 3](../topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets).
 Generated evidence below is local and ignored, unavailable in a fresh clone.
 
+## Ongoing configuration tuning
+
+The user subsequently authorized [experiments toward >90](../plans/milestone-3-ik-tuning.md)
+without changing the benchmark. The first completed run,
+[temporal-low](../../../outputs/ik-benchmark/temporal-low/score.json), scores
+**72.620759**: 463/470 position passes, 337/470 orientation passes, 85/296
+joint-feasible frames, and 271/296 collision-free frames. Relative to the original
+missing-hand configuration, only temporal weights changed from 1/0.5 to 0.1/0.05.
+Orientation median improves from 12.66° to 2.30°, but acceleration failures offset
+most of the gain. Its 396.96 seconds of solving partly overlapped focused checks;
+do not interpret it as an isolated solver-speed comparison.
+
+The original selected initialization has 112.8 rad/s² acceleration RMS and a
+2.54-radian maximum frame step, motivating optional temporal regularization
+during base fitting. New motion-limit penalties passed
+[60 IK tests](../../../outputs/ik-benchmark/validation/tuning/motion-tests.log),
+including CPU/CUDA agreement, and a further
+[hinge boundary check](../../../outputs/ik-benchmark/validation/tuning/hinge-boundary.log).
+SDF support passed [three focused checks](../../../outputs/ik-benchmark/validation/tuning/sdf-tests.log)
+and uses a separately built
+[one-million-sample palm workspace](../../../outputs/ik-benchmark/palm-workspace/workspace_report.json).
+Optional base-stage continuity passed [five checks](../../../outputs/ik-benchmark/validation/tuning/base-continuity-tests-retry.log).
+One initial new-mode assertion assumed the second stage must further reduce
+acceleration despite stronger first-stage smoothing; its failure and correction
+are preserved in event `20261030-ik-tuning-006`. Legacy acceptance is unchanged.
+
+Further temporal, orientation/limit-penalty, and SDF experiments remain in
+progress. No >90 result or final tuning acceptance is established yet. The
+[automatic report](../../../outputs/ik-benchmark/REPORT.md) owns the full scoreboard.
+
 ## Comparison and results
 
 [Automatic report](../../../outputs/ik-benchmark/REPORT.md) preserves every run's

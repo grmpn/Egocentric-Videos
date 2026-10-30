@@ -417,9 +417,16 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         # One posture per region avoids independent random branches at every frame.
         initial_q = model.neutral if attempt == 0 else rng.uniform(.8 * model.lower, .8 * model.upper)
         q0 = np.tile(initial_q, (len(sampled), 1))
+        base_settings = dict(settings, velocity_weight=settings.get("base_velocity_weight", 0.),
+            acceleration_weight=settings.get("base_acceleration_weight", 0.),
+            missing_hand_velocity_weight=0., velocity_limit_weight=0., acceleration_limit_weight=0.)
+        base_smooth = bool(base_settings["velocity_weight"] or base_settings["acceleration_weight"])
         problem = PoseProblem(model, wrists[sampled], orientations[sampled], cameras[sampled],
-                              valid[sampled], timestamps[sampled], settings, fixed_base=sdf_base)
+                              valid[sampled], timestamps[sampled], base_settings,
+                              fixed_base=sdf_base, smooth=base_smooth)
         base, sampled_q, first = problem.solve(initial_base, q0, settings["base_max_evaluations"])
+        print(f"Attempt {attempt + 1}: base/initialization cost {first['cost']:.3f}, "
+              f"{first['evaluations']} evaluations, {first['wall_time_s']:.2f}s", flush=True)
         if sdf_info is not None:
             first["base_placement_method"] = "sdf"
             first["sdf_placement"] = sdf_info
@@ -434,6 +441,8 @@ def fit_region(model, wrists, orientations, cameras, valid, timestamps, initial_
         problem = PoseProblem(model, wrists, orientations, cameras, valid, timestamps, settings,
                               fixed_base=base, smooth=True, opening_targets=opening_targets)
         _, after, second = problem.solve(base, before, settings["trajectory_max_evaluations"])
+        print(f"Attempt {attempt + 1}: trajectory cost {second['cost']:.3f}, "
+              f"{second['evaluations']} evaluations, {second['wall_time_s']:.2f}s", flush=True)
         p, r, *_ = model.forward(after)
         rotation = base_transform(base)[:3, :3].T
         pe = np.linalg.norm(p @ rotation.T + base[:3] - raw_wrists, axis=-1)

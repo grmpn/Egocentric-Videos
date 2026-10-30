@@ -341,6 +341,11 @@ are reduced through coupled leaders and mimic multipliers. `motion_limit_margin`
 in (0,1] optionally leaves headroom; it changes the fitting objective only. All
 new weights default to zero, preserving earlier configurations.
 
+`base_velocity_weight` and `base_acceleration_weight` optionally regularize the
+sampled pose sequence during base fitting, using the sampled source timestamps.
+Both default to zero. They address discontinuous joint branches before the base
+is frozen; missing-hand and motion-limit penalties still belong only to stage two.
+
 Optional `base_placement_method: sdf` replaces movable-base pose fitting with the
 original seeded SDF search over XYZ/yaw. It requires a separately sampled actual
 palm workspace matching the robot, rather than using the historical wrist grid.

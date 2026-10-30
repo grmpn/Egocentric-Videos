@@ -656,7 +656,8 @@ def test_workspace_workflow_ignores_infilled_geometry(tmp_path, aligned_input):
 
 
 @pytest.mark.parametrize("stride", [1, 2])
-def test_known_pose_region_fit_with_missing_observation(model, settings, stride):
+@pytest.mark.parametrize("base_weight", [0., .02])
+def test_known_pose_region_fit_with_missing_observation(model, settings, stride, base_weight):
     m, _, _ = model
     times = np.arange(8) / 6
     q = np.tile(m.neutral, (8, 1))
@@ -669,7 +670,8 @@ def test_known_pose_region_fit_with_missing_observation(model, settings, stride)
     valid[2, 0] = False
     wrists[~valid], rotations[~valid] = np.nan, np.nan
     settings.update(base_max_evaluations=60, trajectory_max_evaluations=60, fit_attempts=1,
-                    base_frame_stride=stride)
+                    base_frame_stride=stride, base_velocity_weight=base_weight,
+                    base_acceleration_weight=base_weight)
     b, before, after, info = fit_region(m, wrists, rotations, rot @ cameras, valid, times, base, settings)
     assert np.isfinite(after).all()
     assert np.all(after >= m.lower) and np.all(after <= m.upper)
@@ -682,7 +684,7 @@ def test_known_pose_region_fit_with_missing_observation(model, settings, stride)
     if stride == 2:
         np.testing.assert_array_equal(before[-1], before[-2])
         np.testing.assert_allclose(before[1], (before[0] + before[2]) / 2)
-    else:
+    elif base_weight == 0:
         assert info["after_smoothing"]["acceleration_rms_rad_s2"] < info["before_smoothing"]["acceleration_rms_rad_s2"]
     # Interpolated alternate-frame poses can be smoother than observations.
     # Refinement must report, rather than conceal, that acceleration increase.
@@ -774,7 +776,7 @@ def test_restart_ranking_uses_original_observations(model, settings, monkeypatch
         q = target_q.copy() if attempt == 0 else raw_q.copy()
         if problem.fixed_base is None:
             q[1::2, 3] += .02  # before is rougher, so raw-pose ranking decides
-        return base, q, {'cost': 0. if attempt == 0 else 100.}
+        return base, q, {'cost': 0. if attempt == 0 else 100., 'evaluations': 1, 'wall_time_s': 0.}
     monkeypatch.setattr(PoseProblem, 'solve', solve)
     settings.update(base_frame_stride=1, fit_attempts=2)
     _, _, q, info = fit_region(m, p, r, cameras, np.ones((8, 2), bool), times, np.zeros(4), settings,
