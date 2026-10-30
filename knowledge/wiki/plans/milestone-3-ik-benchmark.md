@@ -1,12 +1,13 @@
 # Milestone 3 — IK benchmark and gripper integration
 
-Approved revision 1 · 2026-10-29 · User approval recorded as
-`20261029-ik-benchmark-004` in the [action log](../logs/2026-10.jsonl).
+Approved revision 2 · 2026-10-30 · User-directed first-region amendment recorded as
+`20261030-ik-first-region-001` in the [action log](../logs/2026-10.jsonl).
+Revision 1's full-iPhone acceptance remains historical evidence.
 
 ## Objective and deliverable
 
 Build the requested reusable 100-point IK benchmark, integrate the latest Config 2
-gripper targets into two-stage retargeting, and deliver a full-iPhone comparison
+gripper targets into two-stage retargeting, and deliver a first-region iPhone comparison
 with saved trajectories and an interactive robot/target viewer.
 
 ## Scope and boundaries
@@ -16,6 +17,11 @@ with saved trajectories and an interactive robot/target viewer.
   artifacts in its own directory. Update `REPORT.md` after each experiment with
   benchmark settings, a scoreboard of all registered configurations, diagnostic
   statistics, run links, and configuration explanations at the bottom.
+- For speed, solve and score only the first retained manipulation region, after
+  configured adjacent-region merging. Rescore existing comparisons from saved
+  trajectories without rerunning IK; preserve prior full-video scores. All current
+  statistics and solve timing must cover that region only, including both stages
+  and all retries; distinguish saved solver time from whole-run overhead.
 - State **smoothed hand-derived position/orientation targets** at the report's
   top. Use existing 0.3-second, order-2 XYZ/SO(3) filtering on mapped palm poses
   before both IK stages, separately per hand/eligible span/region. Preserve raw
@@ -53,10 +59,13 @@ with saved trajectories and an interactive robot/target viewer.
   smoothing boundaries, and known colliding/noncolliding poses through focused
   production-workflow tests and representative CPU/CUDA agreement checks.
 - Compare the current IK reference and Config 2 gripper IK with the additional
-  missing-hand penalty off/on over the same full-iPhone regions. Use the latest
+  missing-hand penalty off/on over the same first iPhone region. Use the latest
   smoothed IK settings as the reference; explain objective differences. Score
   against common filtered Config 2 targets and report raw-target errors separately.
 - Recompute scores from saved data, verify report updates preserve earlier runs,
   and inspect representative viewer poses, openings, missing-hand gaps and region
   boundaries. Save validation evidence with runs; update wiki/status/logs and
   commit verified work. No required minimum score; failures remain visible.
+- Verify region selection happens before solving, later regions do not enter any
+  comparison statistic, and source arrays/timestamps and saved trajectories remain
+  intact. Keep legacy unrestricted retargeting available outside this benchmark.

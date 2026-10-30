@@ -66,11 +66,13 @@ def validate_settings(settings):
 
 
 def joint_retarget_trajectory(alignment_directory, output_directory, settings, robot_settings,
-                              asset_root, *, render_video=True, mapping_directory=None):
+                              asset_root, *, render_video=True, mapping_directory=None, region_limit=None):
     """Process retained camera seeds only; save failed regions for honest review."""
     import torch
 
     validate_settings(settings)
+    if region_limit is not None and (type(region_limit) is not int or region_limit < 1):
+        raise ValueError("region_limit must be a positive integer or None for all regions")
     output = Path(output_directory).resolve()
     output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
@@ -79,7 +81,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
               "alignment_directory": str(Path(alignment_directory).resolve()),
               "asset_root": str(Path(asset_root).resolve()), "hand_order": ["left", "right"],
               "target_frames": robot_settings["target_frames"], "orientation_frames": robot_settings["tool_frames"],
-              "manual_review": "pending", "regions_only": True,
+              "manual_review": "pending", "regions_only": True, "region_limit": region_limit,
               "observation_policy": "export_valid AND NOT motion_infilled; infilled hands are missing data",
               "units": {"position": "metres", "joint_angles": "radians", "time": "seconds"},
               "transform_convention": "column vectors; T_destination_from_source; Z-up yaw-only base rotation",
@@ -138,7 +140,7 @@ def joint_retarget_trajectory(alignment_directory, output_directory, settings, r
                 or not np.allclose(np.linalg.det(cameras), 1., atol=1e-6)):
             raise ValueError("Camera rotations must be finite proper optical-to-aligned rotations")
         smooth, seeds = camera_segments(arrays["camera_position_aligned_m"], times, settings)
-        regions = retained_regions(seeds, times, settings.get("merge_adjacent_regions", False))
+        regions = retained_regions(seeds, times, settings.get("merge_adjacent_regions", False))[:region_limit]
         filtered_positions, filtered_rotations, filtering = smooth_hand_targets(
             wrists_aligned, orientations, valid, times, regions, settings)
         edges = frame_edges(times)

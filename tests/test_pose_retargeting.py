@@ -153,7 +153,8 @@ def test_palm_cpu_cuda_fixed_base_agreement(palm_model, settings):
     assert answers[0][1] == pytest.approx(answers[1][1], rel=1e-6, abs=1e-8)
 
 
-def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings):
+@pytest.mark.parametrize("region_limit", [None, 1])
+def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit):
     from egocentric_pipeline.ik_benchmark import evaluate_run
     from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.run_metadata import write_json
@@ -177,26 +178,54 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
              transform_aligned_from_palm=transforms, gripper_action=opening)
     write_json(mapping / "mapping_report.json", {"schema_version": 1, "status": "completed",
         "hand_order": ["left", "right"], "robot_settings": rs, "settings": {"mapping_mode": "wrist_roll"}})
-    settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=1)
+    # Two adjacent seeds form the first region; a discarded gap separates the
+    # later region. Exercise both legacy full solves and limited new solves.
+    seeds = [dict(start=a, stop=b, duration_s=(b-a)/6, retained=keep)
+             for a, b, keep in [(0, 1, True), (1, 3, True), (3, 5, False), (5, 8, True)]]
+    monkeypatch.setattr("egocentric_pipeline.joint_retargeting.camera_segments",
+                        lambda camera, times, config: (camera.copy(), seeds))
+    settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=2,
+                    merge_adjacent_regions=True)
     run = tmp_path / "benchmark/run"
     report = joint_retarget_trajectory(directory, run / "trajectory", settings, rs,
-        ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False)
+        ROOT / "data/models/purdue-alex-assets", mapping_directory=mapping, render_video=False,
+        region_limit=region_limit)
+    expected_regions = [(0, 3)] if region_limit else [(0, 3), (5, 8)]
+    assert [(r["start"], r["stop"]) for r in report["regions"]] == expected_regions
+    assert len(report["candidates"]) == len(expected_regions)
+    assert report["regions"][0]["seed_indices"] == [0, 1]
+    if region_limit:
+        assert all(span["stop"] <= 3 for span in report["hand_target_filtering"]["spans"])
     with np.load(run / "trajectory/trajectory_retargeted.npz") as data:
         assert data["joint_solution_rad"].shape == (8, 18)
         assert data["gripper_action"].shape == (8, 2)
         for name in source:
             np.testing.assert_array_equal(source[name], data[name])
         assert np.isnan(data["wrist_position_base_m"][~valid]).all()
+        if region_limit:
+            assert np.isnan(data["joint_solution_rad"][3:]).all()
+            assert (data["episode_id"][3:] == -1).all()
     assert len(report["coupled_joint_leaders"]) == 2
     benchmark = json.loads((ROOT / "configs/ik_benchmark.json").read_text())
     benchmark.update(hand_position_window_s=.5, hand_orientation_window_s=.5)
     result = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
-    assert result["components"]["position_tracking"]["evaluated"] == int(valid.sum())
-    assert result["components"]["joint_feasibility"]["evaluated"] == 8
+    assert result["definition"]["regions"] == [[0, 3]]
+    assert result["components"]["position_tracking"]["evaluated"] == int(valid[:3].sum())
+    assert result["components"]["joint_feasibility"]["evaluated"] == 3
+    assert result["excluded_frames"] == 5
+    expected_time = sum(a[stage]["wall_time_s"] for a in report["candidates"][0]["optimization"]["attempts"]
+                        for stage in ("joint_base", "fixed_base_trajectory"))
+    assert result["solve_s"] == pytest.approx(expected_time)
+    assert result["metrics"]["joint_velocity_rad_s"]["samples"] == 2 * 24
+    assert result["metrics"]["joint_acceleration_rad_s2"]["samples"] == 24
+    assert all(int(frame) < 3 for frame in result["collision_frames"])
     assert result["missing_robot_frames"] == 0
     with np.load(run / "benchmark_frame_metrics.npz") as data:
         np.testing.assert_allclose(data["target_position_aligned_m"][valid], p[valid], atol=1e-10)
         assert data["joint_positions_rad"].shape == (8, 24)
+        np.testing.assert_array_equal(data["evaluated"], np.arange(8) < 3)
+        assert np.isnan(data["joint_positions_rad"][3:]).all()
+        assert np.isnan(data["position_error_m"][3:]).all()
     rescored = evaluate_run(run, mapping, benchmark, "test", "Small production workflow")
     assert result["components"] == rescored["components"]
     transforms[valid, :3, 3] += .001

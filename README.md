@@ -448,8 +448,9 @@ and [bundled evidence](knowledge/wiki/experiments/joint-base-bundled.md).
 ## IK benchmark with Config 2 gripper targets
 
 Use a full-source saved gripper mapping and the pinned workspace/GPU environment.
-The benchmark runner preserves each experiment, scores all four requested
-components out of 25, and updates `outputs/ik-benchmark/REPORT.md` after every run:
+The benchmark runner solves only the **first retained manipulation region** after
+adjacent-region merging (`region_limit: 1`), scores all four requested components
+out of 25, and updates `outputs/ik-benchmark/REPORT.md` after every run:
 
 ```bash
 env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/benchmark_ik.py \
@@ -476,6 +477,13 @@ and [limit sources](knowledge/wiki/decisions/ik-benchmark-limits.md) explain the
 denominators, source timing and collision exclusions. The legacy wrist IK default
 remains available through `retarget_trajectory.py`; palm mode also accepts
 `--gripper-mapping-directory` there.
+
+The current three comparisons use only iPhone frames **[0,296)**, rescored from
+their saved trajectories. Diagnostics and solve time cover that region only;
+time sums both stages and every retry, excluding setup/export and between-solve
+overhead. The [previous full-video report](outputs/ik-benchmark/history/full-regions-20261029/REPORT.md)
+and metrics remain archived. Full-source inputs and trajectories are preserved;
+the viewer labels later saved poses as outside the benchmark's evaluation region.
 
 ## Direct hand-to-gripper review
 

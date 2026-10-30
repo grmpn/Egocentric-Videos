@@ -14,6 +14,9 @@ from .run_metadata import read_json, utc_now, write_json
 
 def validate_settings(settings):
     validate_filter_settings(settings)
+    limit = settings.get("region_limit")
+    if limit is not None and (type(limit) is not int or limit < 1):
+        raise ValueError("region_limit must be a positive integer or null for all regions")
     for key in ("position_tolerance_m", "orientation_tolerance_degrees", "acceleration_limit_rad_s2"):
         if not np.isfinite(settings[key]) or settings[key] <= 0:
             raise ValueError(f"{key} must be positive finite")
@@ -87,16 +90,17 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
     if mapped_report["robot_settings"] != report["robot_settings"]:
         raise ValueError("Scoring and mapping require the same pinned robot")
     n = len(arrays["timestamp_s"])
+    regions = report["regions"][:settings.get("region_limit")]
     observed = arrays["export_valid"] & ~arrays["motion_infilled"] & mapping["mapping_valid"]
     raw = mapping["transform_aligned_from_palm"]
     positions, rotations, filtering = smooth_hand_targets(raw[..., :3, 3], raw[..., :3, :3], observed,
-        arrays["timestamp_s"], report["regions"], settings)
+        arrays["timestamp_s"], regions, settings)
     evaluated = np.zeros(n, bool)
-    for region in report["regions"]:
+    for region in regions:
         evaluated[region["start"]:region["stop"]] = True
     contract = {"settings": settings, "source_run_id": report["source_run_id"], "frame_count": n,
                 "mapping_settings": mapped_report["settings"], "robot_settings": report["robot_settings"],
-                "regions": [[r["start"], r["stop"]] for r in report["regions"]],
+                "regions": [[r["start"], r["stop"]] for r in regions],
                 "observation_policy": "export_valid AND NOT motion_infilled AND mapping_valid",
                 "comparison_target": "filtered mapped palm pose in aligned frame"}
     contract_path = run.parent / "benchmark.json"
@@ -150,7 +154,7 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
     opening_error = np.abs(1 - opening_error / closed - mapping["gripper_action"])
     frame_speed, frame_acceleration = np.full_like(full_q, np.nan), np.full_like(full_q, np.nan)
     velocities, accelerations = [], []
-    for region in report["regions"]:
+    for region in regions:
         sl = slice(region["start"], region["stop"])
         v, a, speed, accel = joint_motion(full_q[sl], arrays["timestamp_s"][sl])
         frame_speed[sl], frame_acceleration[sl] = speed, accel
@@ -173,12 +177,21 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description):
                "opening_action_error": distribution(opening_error[mask]),
                "per_joint": {joint: {"velocity_rad_s": distribution(v[:, j]), "acceleration_rad_s2": distribution(a[:, j])}
                              for j, joint in enumerate(constraints.names)}}
+    # Saved per-attempt timings allow honest subset comparisons without solving
+    # again. Whole-trajectory wall time also includes other regions and overhead.
+    selected_bounds = {(r["start"], r["stop"]) for r in regions}
+    solve_s = sum(attempt[stage]["wall_time_s"]
+                  for candidate in report["candidates"]
+                  if (candidate["seed"]["start"], candidate["seed"]["stop"]) in selected_bounds
+                  for attempt in candidate["optimization"]["attempts"]
+                  for stage in ("joint_base", "fixed_base_trajectory"))
     result = {"schema_version": 1, "name": name, "description": description, "scored_at": utc_now(),
               "status": "completed", "score": total, "components": components, "metrics": metrics,
-              "solve_s": report["timing"]["solve_s"], "timing": report["timing"],
+              "solve_s": solve_s,
+              "timing": {"solve_s": solve_s, "scope": "selected regions; both solver stages, all attempts; excludes setup/export and between-solve overhead"},
               "definition": contract, "limits": constraints.metadata(), "target_filtering": filtering,
               "excluded_frames": int((~evaluated).sum()),
-              "mapping_invalid_observations": int((arrays["export_valid"] & ~arrays["motion_infilled"] & ~mapping["mapping_valid"]).sum()),
+              "mapping_invalid_observations": int((evaluated[:, None] & arrays["export_valid"] & ~arrays["motion_infilled"] & ~mapping["mapping_valid"]).sum()),
               "joint_position_passing_frames": int((position_ok & evaluated).sum()),
               "joint_velocity_passing_frames": int((velocity_ok & evaluated).sum()),
               "joint_acceleration_passing_frames": int((acceleration_ok & evaluated).sum()),
@@ -212,6 +225,8 @@ def update_report(directory):
     definition = read_json(root / "benchmark.json") if (root / "benchmark.json").exists() else None
     settings = definition["settings"] if definition else read_json(root / "benchmark_settings.json")
     lines = ["# IK benchmark", "", "**Targets: smoothed hand-derived gripper palm position and orientation.**",
+             (f"**Scope: first {settings['region_limit']} retained manipulation region(s), after adjacent-region merging.**"
+              if settings.get("region_limit") else "**Scope: all retained manipulation regions.**"),
              f"XYZ/SO(3) Savitzky–Golay windows {settings['hand_position_window_s']}/{settings['hand_orientation_window_s']} seconds, order {settings['hand_filter_polyorder']}; independent eligible spans within each region.",
              f"**Acceleration: {settings['acceleration_limit_rad_s2']:g} rad/s² benchmark proxy, not a verified Alex hardware limit.**",
              "Position/velocity bounds come from the pinned Purdue Alex model. See each run's complete limits and exclusions.",
@@ -226,6 +241,8 @@ def update_report(directory):
              "Collision checks use the actual URDF collision meshes at saved frames, with structural and documented asset exclusions.",
              "This does not test inter-frame collisions, scene contact, torque or dynamics. Scores do not replace prior demo gates.",
              "Error/motion summaries use finite samples and report exclusions in score.json; score denominators retain failures.", ""]
+    if any(score and "scope" in score.get("timing", {}) for _, _, score in entries):
+        lines += ["Solve time sums both stages and all retries in the selected regions only; excludes setup/export and between-solve overhead. Whole-run timings remain in the original trajectory reports.", ""]
     if settings.get("joint_acceleration_limits_rad_s2"):
         lines += [f"Per-joint acceleration overrides (rad/s²): `{settings['joint_acceleration_limits_rad_s2']}`.", ""]
     if definition:

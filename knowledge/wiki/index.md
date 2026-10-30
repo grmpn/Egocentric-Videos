@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — fulfilled: 100-point scoring, smoothed Config 2 targets, opening and missing-hand motion penalty; three full comparisons verified.
+- [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — revision 2 fulfilled: first-region solving/scoring, three rescored comparisons, preserved full-video evidence.
 - [IK benchmark joint limits](decisions/ik-benchmark-limits.md) — pinned Alex model limits and approved acceleration proxy with external-source rationale.
 
 - [Milestone 3: Config 2 wrist offset](plans/milestone-3-gripper-wrist-offset.md) — requested 25 mm backward placement verified; separate full-video comparison viewer.
@@ -31,7 +31,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — three preserved experiments, 134 passing tests, independent scores and final gripper viewer; remaining orientation/limit/collision failures.
+- [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — first-region scores, 91 passing focused tests, independent audit and viewer review; historical full-video evidence preserved.
 - [Direct hand-to-gripper mapping](topics/direct-gripper-mapping.md) — detached gripper, MANO landmark/pose/action contracts and interactive tuning without IK.
 - [Direct iPhone gripper review](experiments/direct-gripper-iphone.md) — full-video Config 2/3/4 MP4s, geometry/camera/motion checks and historical comparison evidence.
 - [Hand-pose refinement evidence](experiments/hand-pose-refinement.md) — seven controlled variants, full iPhone rerun, raw/smoothed pass rates and all-experiment viewer.

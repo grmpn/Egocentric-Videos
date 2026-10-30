@@ -20,7 +20,8 @@ def settings():
 
 
 @pytest.mark.parametrize("key,value", [("position_tolerance_m", np.nan), ("orientation_tolerance_degrees", 181),
-                                       ("acceleration_limit_rad_s2", 0), ("joint_position_tolerance_rad", -1)])
+                                       ("acceleration_limit_rad_s2", 0), ("joint_position_tolerance_rad", -1),
+                                       ("region_limit", 0), ("region_limit", True), ("region_limit", 1.5)])
 def test_invalid_benchmark_definition_rejected(settings, key, value):
     with pytest.raises(ValueError):
         validate_settings(dict(settings, **{key: value}))
@@ -89,6 +90,7 @@ def test_report_preserves_prior_experiments_and_discloses_failure(tmp_path, sett
     update_report(tmp_path)
     text = (tmp_path / "REPORT.md").read_text()
     assert "smoothed hand-derived" in text and "10 rad/s² benchmark proxy" in text
+    assert "first 1 retained manipulation region" in text
     assert "a (running)" in text and "b (failed)" in text
     assert "Configuration a" in text and "Configuration b" in text
     update_report(tmp_path)

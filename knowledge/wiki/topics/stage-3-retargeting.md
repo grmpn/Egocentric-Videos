@@ -302,7 +302,7 @@ for measured evidence; world smoothness alone does not establish overlay fidelit
 
 Implemented under the [approved benchmark plan](../plans/milestone-3-ik-benchmark.md).
 [README commands](../../../README.md#ik-benchmark-with-config-2-gripper-targets)
-run an experiment and open its viewer. The [full-iPhone comparison and acceptance](../experiments/ik-benchmark-iphone.md)
+run an experiment and open its viewer. The [iPhone comparison and acceptance](../experiments/ik-benchmark-iphone.md)
 verify this scope and preserve the remaining tracking, limit and collision failures.
 
 `hand_target_mode: gripper_palm` consumes a full-source saved direct mapping;
@@ -338,6 +338,16 @@ human wrist for MANO reconstruction. Physical robot wrist, palm match point and
 TCP remain separate. `gripper_action_target` / `gripper_action` are [T,2] in
 left/right order; predictions through missing observations remain labeled.
 
+As of the 2026-10-30 amendment, benchmark `region_limit: 1` selects the first
+retained manipulation region **after** adjacent-region merging, before target
+filtering or either solve stage. The general retargeting API defaults to all
+regions; its optional `region_limit` is recorded in the trajectory report.
+Original source arrays keep their full length and timestamps; unsolved frames
+have episode -1 and NaN joint solutions. Scoring applies the same selection to
+existing full-length runs, including tracking, motion, limits, collisions,
+opening, per-joint diagnostics and invalid-mapping counts. For the current iPhone
+input this is [0,296), with 990 excluded source frames.
+
 The [benchmark evaluator](../../../src/egocentric_pipeline/ik_benchmark.py) uses
 ordinary full-robot FK, independently of saved solver errors. Each tracking score
 is 25 times the fraction of observed hand samples passing ≤0.01 m or ≤4°;
@@ -366,10 +376,14 @@ inter-frame clearance, scene contact or dynamic execution.
 Each experiment retains settings, trajectory/report/video, original/filtered
 targets, full-joint/frame metrics, collisions and solver attempts under
 `outputs/ik-benchmark/`. `REPORT.md` is regenerated from preserved experiment and
-score records after successes or failures. Its timing includes both solve stages
-and retries, separated from loading/export/rendering. It links complete raw-error,
-opening and per-joint diagnostics. The viewer labels unverified poses, shows
-opening/filtered target axes and reads benchmark checks without solving IK.
+score records after successes or failures. Its timing sums saved solver durations
+for both stages and every retry in the selected region(s), excluding setup/export
+and between-solve overhead. Whole-run timing remains in the trajectory report.
+It links complete raw-error, opening and per-joint diagnostics. The viewer labels
+unverified poses, shows opening/filtered target axes and reads benchmark checks
+without solving IK; saved poses outside the evaluation mask are explicitly
+labeled as excluded. Previous full-video scores remain linked from the
+[comparison evidence](../experiments/ik-benchmark-iphone.md).
 
 ## Part 3 placement and IK contract
 

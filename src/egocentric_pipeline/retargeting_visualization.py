@@ -398,7 +398,9 @@ def view_retargeting(directory, *, asset_root=None, open_browser=False, mano_mod
             if palm_targets:
                 detail += (f"\n\nOpening L/R (0 closed, 1 open): {np.round(arrays['gripper_action'][frame],3).tolist()}"
                            f" · target {np.round(arrays['gripper_action_target'][frame],3).tolist()}")
-            if benchmark is not None:
+            if benchmark is not None and not benchmark["evaluated"][frame]:
+                detail += "\n\nBenchmark: outside selected evaluation regions."
+            elif benchmark is not None:
                 detail += (f"\n\nBenchmark: {np.round(benchmark['position_error_m'][frame]*1000,2).tolist()} mm · "
                            f"{np.round(np.rad2deg(benchmark['orientation_error_rad'][frame]),2).tolist()}°"
                            f" · All joint limits: {bool(benchmark['joint_feasible'][frame])}"
