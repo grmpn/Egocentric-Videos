@@ -1,76 +1,56 @@
 # Milestone 3 — IK configuration experiments
 
-Approved user-directed scope · revision 5 · 2026-10-30 · Explicit manual-region
-amendment recorded as `20261030-ik-tuning-036`; right-target
-roll experiment explicitly authorized as `20261030-ik-tuning-054`, then corrected
-by the user to left-target roll with original right orientation (`20261030-ik-tuning-058`)
-(original >90 tuning approval: `20261030-ik-tuning-001`) in the
-[action log](../logs/2026-10.jsonl). Extends the completed
-[benchmark plan](milestone-3-ik-benchmark.md).
-
-**Resumed at user request, 2026-11-03** (`20261103-ik-tuning-001` in the
-[November action log](../logs/2026-11.jsonl)). Continue maximizing the updated
-benchmark score using the accepted left +180° / original right convention.
-The 2026-10-30 stop is superseded; the scope and acceptance below remain in force.
-Preserve comparisons in `outputs/ik-benchmark-left-roll-flip/`.
-
-**Current focus, user-directed 2026-11-03** (`20261103-ik-tuning-006`):
-stop score tuning and compare SDF versus full-IK **base optimization only**.
-Use the current constraints and accepted targets; report XYZ/yaw differences and
-base-solve times. Do not run or compare trajectory refinement in this experiment.
+Approved user-directed scope · revision 6 · 2026-11-03 · Held-out evaluation and
+SDF/full-IK comparison explicitly requested and clarified by the user in
+`20261103-ik-heldout-001` ([November action log](../logs/2026-11.jsonl)).
+Extends the fulfilled [benchmark plan](milestone-3-ik-benchmark.md).
+Earlier tuning/roll approvals remain in the [October log](../logs/2026-10.jsonl);
+revision 5 is preserved in Git at `a24de68`.
 
 ## Objective and deliverable
 
-Reach **strictly above 90/100** on the manually reviewed first-region iPhone IK benchmark
-through reproducible solver/configuration experiments. Deliver the best verified
-configuration, saved trajectory, comparison report, and diagnostic evidence.
+Evaluate the frozen `slack5-orientation8` configuration on held-out iPhone
+regions 2 and 3. Deliver per-region benchmark scores and total/stage solve times
+for **full-IK base fitting followed by fixed-base IK**, versus **SDF base fitting
+followed by fixed-base IK**, with saved configurations, trajectories and an
+independently checked comparison report. The previous first-region >90 objective
+was achieved at 91.022; this extension measures transfer without further tuning.
 
 ## Scope and boundaries
 
-- Use source frames **0–268 inclusive**, excluding **right-hand frame 29**, as
-  explicitly directed by the user on 2026-10-30 to approximate later refined HaWoR
-  input. Apply this selection before smoothing, both solver stages and scoring.
-  Preserve original source arrays and previous [0,296) results; begin a separate
-  benchmark directory. Rerun the top six distinct production configurations,
-  then continue experiments. Keep Config 2 targets, timestamps, four equal score
-  terms, tolerances, joint limits, acceleration proxy and collision exclusions.
-  Do not remove further observations without user direction.
-- Compare the corrected user-requested left palm target rotated 180° about its
-  local forward +X axis, keeping the right orientation and both palm positions/
-  openings unchanged. Preserve the earlier right-flip comparison. Rerun
-  `robust-position-limits` and open a detached-target viewer without viewer
-  review/tests. Keep this changed-target comparison in its own benchmark
-  directory. The user subsequently accepted this left-roll convention as correct;
-  use its explicit mapping config for future Config 2 work.
-- Test lower velocity/acceleration regularization; explicit penalties for motion
-  exceeding the robot velocity limits and existing benchmark acceleration cap;
-  and the original SDF base-placement approach with the current base constraints
-  and new palm position targets. Other solver/objective improvements serving the
-  requested score are authorized, including better orientation fitting and
-  collision avoidance if diagnostics justify them.
-- Keep each experiment's settings, trajectory, timings (both stages and retries),
-  failures, and score evidence under `outputs/ik-benchmark/`; update its existing
-  report. Use controlled comparisons to distinguish improvements and tradeoffs.
-- Preserve source geometry, scale, timestamps, hand identity, missing-data
-  semantics, earlier runs, and CPU/CUDA and saved-viewer compatibility. Use
-  existing dependencies where possible. Retain existing historical acceptance
-  gates separately from the benchmark.
-- This is simulation/kinematic tuning, not hardware playback, scale calibration,
-  physical dynamics certification, or a new milestone.
+- Region 2 is source **[432,893)**; region 3 is **[947,1286)**, with exclusive stops.
+  Preserve the established adjacent-region merge for region 3. Apply selection
+  before smoothing, both fitting stages and scoring. Do not solve region 1 or
+  remove additional observations. Missing/infilled hand semantics remain unchanged.
+- Use the accepted **left +180° / original right Config 2** palm targets, source
+  timestamps, geometry, units and hand identity. Keep four equal benchmark terms,
+  1 cm / 4° tracking tolerances, pinned joint limits, the 10 rad/s² acceleration
+  proxy and collision exclusions unchanged.
+- Reuse the exact saved `slack5-orientation8` settings. Both methods start fresh
+  for each region, with one attempt and existing evaluation caps. The full-IK
+  method jointly fits the base and sampled poses; SDF uses the verified actual-palm
+  workspace, current camera-centred bounds/prior and existing search settings.
+  Both then hold their base fixed during trajectory IK. The only configuration
+  differences select SDF placement and its required workspace/search settings.
+- Preserve each run under `outputs/ik-benchmark-heldout-20261103/`. Run sequentially
+  for timing clarity. Include SDF placement, pose initialization and trajectory
+  solving in total solve time; report stages separately and distinguish setup,
+  export, cached workspace construction and any failed attempts. Do not compare
+  incremental warm-start times with complete fresh-run totals.
+- Preserve prior first-region scores, base-only comparison and original data.
+  No held-out tuning, new model/benchmark changes, hardware playback or new milestone.
+  Existing viewers may remain open; viewer testing is not part of this request.
 
 ## Acceptance
 
-- Execute and record the requested experiment families, with unsuccessful
-  attempts and reasons retained. Select a configuration scoring >90 under the
-  production evaluator with the approved reviewed region; save enough settings and inputs to reproduce it.
-- Independently verify the selected run's score arithmetic, common region and
-  observations, source preservation, FK tracking, joint derivatives/limits,
-  and collisions. Do not claim the goal achieved before this evidence exists.
-- Test any new objective terms at their boundaries and on nonuniform timestamps,
-  including meaningful CPU/CUDA checks and regression coverage for existing modes.
-- Inspect representative robot/target poses, missing-hand spans, and remaining
-  failures; preserve plots/viewer evidence. Record the best result and unresolved
-  tradeoffs honestly if experiments have not yet reached the target.
-- Update canonical documentation, status and action log and commit verified
-  changes at coherent checkpoints. Benchmark success alone does not complete the
-  broader limit-satisfying simulation milestone.
+- Complete and preserve the four requested production runs, including unsuccessful
+  outcomes, iteration-cap/convergence status and exact benchmark denominators.
+- Independently check common observations/targets within each region, source-array
+  preservation, transform/FK correctness, all physical joint limits/derivatives,
+  collisions, score arithmetic and per-stage/total timing.
+- Save and inspect representative numerical diagnostic plots for held-out tracking,
+  motion-limit and collision failures; report what remains unverified. Do not change
+  scoring or selected observations in response to the results.
+- Update the canonical evidence page, status, navigation and append-only action log;
+  commit verified work. Benchmark scores do not establish physical simulation or
+  hardware acceptance.

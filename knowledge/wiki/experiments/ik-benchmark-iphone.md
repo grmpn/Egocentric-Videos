@@ -1,10 +1,72 @@
-# First-region iPhone IK benchmark and gripper integration
+# iPhone IK benchmark and gripper integration
 
 Verified 2026-10-30 under the [approved revision 2](../plans/milestone-3-ik-benchmark.md).
 The benchmark scope is fulfilled; these results do **not** complete the roadmap's
 limit-satisfying simulation demonstration. Implementation contracts belong to
 [Stage 3](../topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets).
 Generated evidence below is local and ignored, unavailable in a fresh clone.
+
+## Held-out regions 2 and 3 — 2026-11-03
+
+The user requested the frozen **slack5-orientation8** configuration on regions 2
+and 3, comparing fresh **full-IK base fitting → fixed-base IK** with fresh
+**SDF base fitting → fixed-base IK**. Four sequential production solves used the
+accepted left-roll targets and unchanged score/limits; no parameters or extra
+observation exclusions were chosen from these results. These regions were held
+out from this tuning series; earlier historical full-video runs remain preserved.
+
+| Region | Method | Score /100 | Base/pose initialization | Trajectory IK | Total solve |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 2 | Full-IK base + IK | **96.115** | 53.55 s | 85.87 s | **139.42 s** |
+| 2 | SDF base + IK | 73.812 | 49.29 s | 93.35 s | **142.65 s** |
+| 3 | Full-IK base + IK | **77.414** | 43.29 s | 73.47 s | **116.76 s** |
+| 3 | SDF base + IK | 37.840 | 19.95 s | 77.46 s | **97.41 s** |
+
+Region 2 is **[432,893)**: 461 frames / 739 observed hand samples. Region 3 is
+**[947,1286)**: 339 frames / 588 samples, preserving its existing adjacent-segment
+merge. Both methods have identical observations/targets within each region.
+SDF placement takes **13.31 / 11.96 s**, included in the base/pose and total columns.
+Full-IK fitting optimizes the base and stride-two sampled poses; SDF uses all
+selected positions, then fits sampled poses at its fixed base. Both use the same
+full-frame trajectory IK. No saved base or joint trajectory initializes these runs.
+Loading, preparation, export/scoring and historical workspace construction are
+excluded from solve times. CPU remained approximately 800 MHz; settings unchanged.
+
+Full-IK base placement scores higher in both regions. Both full-IK runs pass every
+joint-feasibility frame. Region 3 remains difficult: full-IK placement passes
+365/588 positions, 507/588 orientations and 208/339 collision checks. SDF placement
+passes 142/588 positions, 160/588 orientations and only 33/339 joint-feasibility
+checks, while passing 306/339 collision checks. These are results of the specified
+solves, not proofs of unreachability or global solver rankings.
+
+All trajectory stages reached the **1000-evaluation cap**. Base/pose fitting
+reached 700 evaluations except region 3 SDF's fixed-base pose initialization,
+which converged in 136. Both SDF searches used their 100-iteration budgets.
+The [full report](../../../outputs/ik-benchmark-heldout-20261103/REPORT.md) includes
+component counts, exact settings, stage times/termination and saved trajectories.
+
+[Preflight passed](../../../outputs/ik-benchmark-heldout-20261103/validation/preflight.json):
+settings frozen, no extra observation exclusions, actual-palm workspace and
+current URDF bounds matched. Independent audits passed for
+[region 2](../../../outputs/ik-benchmark-heldout-20261103/region-2/audit.json) and
+[region 3](../../../outputs/ik-benchmark-heldout-20261103/region-3/audit.json), checking
+all 24 original arrays, common targets, ordinary FK, all physical joint values
+and derivatives, actual collision pairs, score arithmetic, fixed bases/bounds,
+and complete stage/total timings. Inspected saved numerical diagnostic plots for
+[region 2](../../../outputs/ik-benchmark-heldout-20261103/validation/region-2-diagnostics.png)
+and [region 3](../../../outputs/ik-benchmark-heldout-20261103/validation/region-3-diagnostics.png):
+SDF runs show larger tracking excursions and acceleration failures; full-IK region
+3 still has substantial tracking and collision failures. No held-out tuning followed.
+
+Requested region 3 viewers are open separately: [full-base + IK](http://localhost:8080)
+and [SDF-base + IK](http://localhost:8081), both with detached mapped target grippers
+and the smoothed palm paths supplied to IK, alongside solved robot motion.
+Startup/client connections are recorded in the
+[full-IK log](../../../outputs/ik-benchmark-heldout-20261103/validation/viewer-region-3-full-base-ik-targets.log)
+and [SDF log](../../../outputs/ik-benchmark-heldout-20261103/validation/viewer-region-3-sdf-base-ik-targets.log).
+**No viewer tests, screenshots or visual review were performed**, as requested.
+The numerical diagnostic plots are separate saved-data figures. Roadmap physical
+simulation acceptance remains open.
 
 ## Accepted-roll tuning resumed — 2026-11-03
 

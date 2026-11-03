@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [Milestone 3: IK configuration experiments](plans/milestone-3-ik-tuning.md) — authorized tuning toward >90 on the manually reviewed first region.
+- [Milestone 3: IK configuration experiments](plans/milestone-3-ik-tuning.md) — approved held-out evaluation of frozen slack5-orientation8 after first-region tuning.
 - [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — revision 2 fulfilled: first-region solving/scoring, three rescored comparisons, preserved full-video evidence.
 - [IK benchmark joint limits](decisions/ik-benchmark-limits.md) — pinned Alex model limits and approved acceleration proxy with external-source rationale.
 
@@ -32,7 +32,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — first-region scores, 91 passing focused tests, independent audit and viewer review; historical full-video evidence preserved.
+- [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — accepted-roll tuning, held-out SDF/full-IK comparisons, independent audits and preserved historical evidence.
 - [Direct hand-to-gripper mapping](topics/direct-gripper-mapping.md) — detached gripper, MANO landmark/pose/action contracts and interactive tuning without IK.
 - [Direct iPhone gripper review](experiments/direct-gripper-iphone.md) — full-video Config 2/3/4 MP4s, geometry/camera/motion checks and historical comparison evidence.
 - [Hand-pose refinement evidence](experiments/hand-pose-refinement.md) — seven controlled variants, full iPhone rerun, raw/smoothed pass rates and all-experiment viewer.
@@ -51,7 +51,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Action history
 
-- [November 2026 events](logs/2026-11.jsonl) — resumed accepted-roll benchmark tuning.
+- [November 2026 events](logs/2026-11.jsonl) — accepted-roll tuning, base comparison and held-out evaluation.
 
 - [October 2026 events](logs/2026-10.jsonl) — timestamped maintenance and project work.
 - [September 2026 events](logs/2026-09.jsonl) — imported historical actions and timestamped maintenance work.
