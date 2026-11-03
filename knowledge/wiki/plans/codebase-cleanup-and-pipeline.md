@@ -1,14 +1,14 @@
 # Codebase cleanup and integrated pipeline
 
-Draft · revision 1 · 2026-11-03 · Awaiting explicit implementation approval.
-Request/default selection: `20261103-cleanup-plan-001` in the
+Draft · revision 2 · 2026-11-03 · Awaiting explicit implementation approval.
+Request/defaults: `20261103-cleanup-plan-001`; deprecation clarification:
+`20261103-cleanup-plan-003` in the
 [November action log](../logs/2026-11.jsonl).
 
 ## Objective and deliverable
 
-Deliver a smaller, navigable codebase and one reproducible MP4-to-annotated-robot-dataset
-workflow supporting current Milestone 3 work. This includes the missing robot-to-LeRobot
-integration, not just relocation. The workflow is:
+Deliver a smaller codebase and one reproducible MP4-to-annotated-robot-dataset workflow
+for Milestone 3, including robot-to-LeRobot integration:
 
 ```mermaid
 flowchart TD
@@ -34,8 +34,8 @@ flowchart TD
   trajectories with explicit validity; leave unsolved frames invalid and do not
   synthesize motion between regions. Preserve RGB, original world/canonical hands,
   Z-up geometry, units, handedness, timestamps and missing/infilled provenance.
-  Candidate segmentation does not certify IK feasibility. Retain hand-only dataset
-  support; reject incompatible appends.
+  Candidate segmentation does not certify IK feasibility. Reject incompatible appends.
+  Preserve historical datasets as evidence; retire the hand-only export workflow.
 - Keep annotation after v3.1 export. Modified HaWoR, annotation reordering, solver
   retuning, new simulation and hardware execution are excluded. Existing tracking
   and collision failures remain visible; cleanup does not complete milestone acceptance.
@@ -51,9 +51,10 @@ flowchart TD
 2. **Executable workflow:** put primary processing entry points in `pipeline/`;
    reserve `scripts/` for setup, benchmarks, diagnostics and viewers. Group `src/`
    by video ingestion, tracking, geometry, retargeting, datasets/annotations,
-   evaluation and visualization. Consolidate redundant commands; remove obsolete
-   code only after checking consumers/evidence. Reuse current algorithms and expose
-   stage boundaries. Add minimal `pipeline/run.sh` chaining stages with explicit
+   evaluation and visualization. Remove `scripts/video_to_dataset.py` and other deprecated
+   scripts, code, configs and tests; migrate active consumers and documentation.
+   Reuse needed functionality in the new pipeline, without legacy compatibility wrappers.
+   Add minimal `pipeline/run.sh` chaining stages with explicit
    interpreters, logs and failure propagation; support existing intermediate reuse.
 3. **Setup and usability:** audit environments/dependency conflicts; consolidate
    compatible modern stages with reproducible declarations and explicit interpreter
@@ -64,7 +65,7 @@ flowchart TD
 
 ## Acceptance
 
-- Reload relocated evidence and verify maintained links; preserve historical data.
+- Verify relocated evidence/links and removal of deprecated entry points and active references.
 - Run focused import/CLI, stage-contract and dataset create/append/annotation tests.
   Check full-video episode counts, gap/region boundaries, transforms, synchronization,
   validity and unchanged prior episodes/annotations with the official reader.
