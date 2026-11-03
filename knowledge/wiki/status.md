@@ -1,11 +1,11 @@
 # Project status
 
 - Current milestone: **3 — Retarget hands and trajectories in simulation**.
-- Stage: **Implementing** — approved cleanup/integration revision 2; broader simulation acceptance remains open.
-- Active plan: [Codebase cleanup and integrated pipeline, revision 2](plans/codebase-cleanup-and-pipeline.md) (approved 2026-11-03). Prior [held-out evaluation scope](plans/milestone-3-ik-tuning.md) is fulfilled.
-- Milestone deliverable: repeatable simulation demonstration, exported robot trajectories and limit-check evidence; not yet accepted. Approved cleanup deliverable: one MP4-to-annotated-robot-LeRobot workflow and a smaller, organized repository.
-- Completed outcome: Milestone 2 evidence relocated with all 535 file hashes preserved; completed runs and historical datasets reloaded; frozen solver/mapping defaults verified. [Relocation and checks](topics/hawor-pipeline.md). Prior [held-out evaluation](experiments/ik-benchmark-iphone.md#held-out-regions-2-and-3--2026-11-03) remains valid.
-- Current work: full-video robot export and capability/command reorganization are implemented. Dataset create/append/annotation checks, saved 1,286-frame iPhone export/review, and all 284 processing checks passed. Replaced gravity/workspace environments retired after verification. Final shell retry is validating real local VLM annotation with verified intermediates.
-- Blockers or decisions: no scope decision pending. First local VLM startup exceeded six minutes; readiness and shutdown bounds corrected. Held-out tracking/collision failures and the [10 rad/s² acceleration proxy](decisions/ik-benchmark-limits.md) remain limitations.
-- Next action: finish the real annotation shell retry and inspect the resulting full-video dataset, then record cleanup acceptance.
-- Last verification: **2026-11-03** — [dataset tests](../../outputs/cleanup/robot-dataset-tests-final.log), [iPhone review](../../outputs/cleanup/iphone-review.json), processing [CPU](../../outputs/cleanup/pipeline-cpu-tests.log) plus [dependency correction](../../outputs/cleanup/benchmark-regression-retry.log) and [CUDA](../../outputs/cleanup/pipeline-gpu-tests.log), and [environment retirement](../../outputs/cleanup/environment-retirement-audit.json). Broader simulation acceptance remains unverified.
+- Stage: **Validating** — cleanup/integration is complete; broader simulation acceptance remains open.
+- Active plan: [Codebase cleanup and integrated pipeline, revision 2](plans/codebase-cleanup-and-pipeline.md), approved and fulfilled 2026-11-03. Prior [held-out evaluation scope](plans/milestone-3-ik-tuning.md) is also fulfilled.
+- Milestone deliverable: repeatable simulation demonstration, exported robot trajectories and limit-check evidence; not yet accepted.
+- Completed outcome: one full-video MP4-to-annotated-robot-LeRobot workflow, preserved Milestone 2 evidence, frozen defaults, organized capabilities/commands and consolidated processing runtime. [Cleanup acceptance and review artifacts](topics/integrated-pipeline.md#cleanup-verification--2026-11-03).
+- Current work: cleanup implementation and validation finished. No next milestone or solver experiment started.
+- Blockers or decisions: remaining simulation demonstration scope needs agreement. Tracking/collision failures and the [10 rad/s² acceleration proxy](decisions/ik-benchmark-limits.md) remain limitations; generated labels remain pending human semantic review.
+- Next action: agree the remaining Milestone 3 simulation demonstration and acceptance evidence using the integrated workflow.
+- Last verification: **2026-11-03** — 284 processing checks, official create/append/annotation tests, inspected 1,286-frame iPhone export, and [completed 121-frame shell run](../../outputs/cleanup/small-video-complete-console.log) with [annotation preservation/server shutdown](../../outputs/cleanup/small-annotation-review.json). Old gravity/workspace environments retired after replacement checks.

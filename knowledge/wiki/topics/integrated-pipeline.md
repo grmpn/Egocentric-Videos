@@ -101,3 +101,55 @@ Reusable modules live under `src/egocentric_pipeline/{video,tracking,geometry,
 retargeting,datasets,evaluation,visualization}`. Primary commands remain thin
 entry points. [HaWoR](hawor-pipeline.md), [retargeting](stage-3-retargeting.md), and
 [dataset](lerobot-pipeline.md) topics own the stage contracts.
+
+## Cleanup verification — 2026-11-03
+
+Local evidence under `outputs/cleanup/` is ignored by Git. The approved cleanup
+preserved all 535 relocated Milestone 2 file hashes and reloaded its completed
+runs, prepared metadata and historical datasets; see the
+[relocation audit](../../../outputs/cleanup/relocation-validation.json).
+
+The consolidated runtime passed 265 non-CUDA and 19 CUDA processing checks:
+[initial CPU results](../../../outputs/cleanup/pipeline-cpu-tests.log),
+[missing-dependency correction and retry](../../../outputs/cleanup/benchmark-regression-retry.log),
+and [CUDA results](../../../outputs/cleanup/pipeline-gpu-tests.log).
+[Official dataset tests](../../../outputs/cleanup/robot-dataset-tests-final.log)
+cover create/append, full-video gaps, incompatible/repeated inputs and failed-append
+preservation. The [final annotation fixture](../../../outputs/cleanup/annotation-final-test.log)
+verifies robot/numeric fields and prior labels remain unchanged. The separate
+[CPU-only CI selection](../../../outputs/cleanup/cpu-tests.log) passed 95 checks;
+hosted CI was not run. The [runtime retirement audit](../../../outputs/cleanup/environment-retirement-audit.json)
+and [post-retirement imports](../../../outputs/cleanup/post-retirement-imports.log)
+record removal of the old gravity/workspace environments after replacement checks.
+
+The saved iPhone export contains one 1,286-frame episode, regions `[0,269)`,
+`[432,893)`, `[947,1286)`, and 217 gap frames. Official reader boundary checks,
+exact selected solver joints and frozen settings passed; 665 frames have at least
+one valid action component and 482 have all 18. Inspect the
+[report](../../../outputs/cleanup/iphone-review.json),
+[RGB boundaries](../../../outputs/cleanup/iphone-review-frames.jpg), and
+[paths/base changes/action gaps](../../../outputs/cleanup/iphone-review-trajectory.png).
+These checks preserve the saved failures and do not establish simulation or
+hardware acceptance. iPhone language annotation was not part of this export check.
+
+The small complete MP4 passed fresh preparation, HaWoR inference/overlay, gravity,
+mapping, frozen CUDA fitting and independent evaluation. The final
+[successful shell run](../../../outputs/cleanup/small-video-complete-console.log)
+reused those verified intermediates, exported all 121 frames, generated real local
+VLM plan/subtask annotations, and stopped its owned server. The
+[numeric/visual review](../../../outputs/cleanup/small-review.json) checked regions
+`[0,52)` and `[74,105)`, all 38 gap frames, and exact solver/settings parity.
+[RGB boundaries](../../../outputs/cleanup/small-review-frames.jpg) and
+[paths/base changes/action gaps](../../../outputs/cleanup/small-review-trajectory.png)
+were inspected. There are 63 frames with some valid actions and 30 with all 18;
+the rejected demonstration and 13 collision frames remain visible in the
+[evaluation](../../../outputs/cleanup/small-video-final/robot/score.json).
+[Annotation preservation and shutdown review](../../../outputs/cleanup/small-annotation-review.json)
+checks the official reader and unchanged non-language columns. Labels remain
+pending human semantic review. The VLM emitted a semaphore cleanup warning on
+shutdown; its engine and server exited and its port closed.
+
+Earlier attempts exposed the overlay subprocess import path, a live shell-edit
+interruption and insufficient cold VLM startup time. They were corrected and their
+logs retained in the [action log](../logs/2026-11.jsonl). Cleanup revision 2 is
+fulfilled; broader Milestone 3 simulation acceptance remains open.
