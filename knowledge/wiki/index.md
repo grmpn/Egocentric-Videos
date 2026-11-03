@@ -51,6 +51,8 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Action history
 
+- [November 2026 events](logs/2026-11.jsonl) — resumed accepted-roll benchmark tuning.
+
 - [October 2026 events](logs/2026-10.jsonl) — timestamped maintenance and project work.
 - [September 2026 events](logs/2026-09.jsonl) — imported historical actions and timestamped maintenance work.
 

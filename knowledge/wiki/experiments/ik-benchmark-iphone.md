@@ -6,6 +6,39 @@ limit-satisfying simulation demonstration. Implementation contracts belong to
 [Stage 3](../topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets).
 Generated evidence below is local and ignored, unavailable in a fresh clone.
 
+## Accepted-roll tuning resumed — 2026-11-03
+
+The user resumed score maximization on the accepted **left +180° / original
+right** mapping. The reviewed **[0,269)** region, **461 observations**, right-frame-29
+exclusion, targets, timestamps, four equal score terms and all limits are unchanged.
+The [accepted-roll report](../../../outputs/ik-benchmark-left-roll-flip/REPORT.md)
+preserves each configuration, trajectory, timing and unsuccessful comparison.
+
+| Run | Score /100 | Position passes | Orientation passes | Joint-feasible frames | Collision-free frames |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| robust-position-limits (baseline) | 85.127 | 459/461 | 295/461 | 227/269 | 249/269 |
+| cauchy-orientation-base | **89.666** | 458/461 | 318/461 | 269/269 | 243/269 |
+| limits16 | 87.659 | 458/461 | 269/461 | 269/269 | 250/269 |
+| orientation8-limits16 | 89.178 | 456/461 | 299/461 | 269/269 | 250/269 |
+| slack5-orientation8 | 89.255 | 448/461 | 317/461 | 269/269 | 245/269 |
+| slack5-orientation16 | 83.391 | 316/461 | 334/461 | 269/269 | 249/269 |
+
+The Cauchy run is a fresh solve using the previous original-target leader's
+settings. The four following runs independently refine the accepted-roll baseline;
+reported solve times exclude that seed. Stronger motion penalties remove the
+baseline's acceleration failures, but high ordinary orientation weight sacrifices
+position accuracy. The Cauchy run reaches its 2000-evaluation cap; continuation
+and fitting-threshold refinements are running. >90 is not yet achieved.
+
+[All six independent audits passed](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-slack5-orientation16.json)
+([log](../../../outputs/ik-benchmark-left-roll-flip/validation/20261103/audit-first-comparisons.log)):
+source arrays, identical selected targets and observations, all physical joints,
+derivatives, ordinary FK, collisions and score arithmetic. Inspected
+[comparison plots](../../../outputs/ik-benchmark-left-roll-flip/validation/20261103/cauchy-orientation-base-comparison.png)
+show the remaining orientation spikes and close-hand finger collisions. No viewer
+review/tests were performed. The CPU still reports approximately 800 MHz; no
+system settings changed. These are kinematic scores, not physical simulation acceptance.
+
 ## Reviewed-region restart
 
 On 2026-10-30 the user authorized source frames **0–268 inclusive** and removal

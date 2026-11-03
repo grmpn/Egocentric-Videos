@@ -8,10 +8,11 @@ by the user to left-target roll with original right orientation (`20261030-ik-tu
 [action log](../logs/2026-10.jsonl). Extends the completed
 [benchmark plan](milestone-3-ik-benchmark.md).
 
-**Stopped at user request, 2026-10-30.** The user accepted left +180° / original
-right as the correct target convention and directed all IK experimentation to
-stop (`20261030-ik-tuning-063`). Commit the completed work; resume experiments only
-on a new instruction. The >90 objective remains unachieved.
+**Resumed at user request, 2026-11-03** (`20261103-ik-tuning-001` in the
+[November action log](../logs/2026-11.jsonl)). Continue maximizing the updated
+benchmark score using the accepted left +180° / original right convention.
+The 2026-10-30 stop is superseded; the scope and acceptance below remain in force.
+Preserve comparisons in `outputs/ik-benchmark-left-roll-flip/`.
 
 ## Objective and deliverable
 
