@@ -1,1 +1,1 @@
-"""Reusable MP4 preparation and unchanged HaWoR world-trajectory packaging."""
+"""Reusable MP4-to-annotated-robot-trajectory capabilities."""

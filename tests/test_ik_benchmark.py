@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from egocentric_pipeline.ik_benchmark import joint_motion, score_components, update_report, validate_settings
-from egocentric_pipeline.robot_constraints import RobotConstraints
+from egocentric_pipeline.evaluation.ik_benchmark import joint_motion, score_components, update_report, validate_settings
+from egocentric_pipeline.evaluation.robot_constraints import RobotConstraints
 from egocentric_pipeline.run_metadata import write_json
 
 
@@ -28,7 +28,7 @@ def test_invalid_benchmark_definition_rejected(settings, key, value):
 
 
 def test_reviewed_selection_preserves_source_and_hand_identity(settings):
-    from egocentric_pipeline.manipulation_regions import select_manipulation_data
+    from egocentric_pipeline.retargeting.manipulation_regions import select_manipulation_data
 
     observed = np.ones((10, 2), bool)
     regions = [dict(start=0, stop=10, duration_s=1., seed_indices=[0])]

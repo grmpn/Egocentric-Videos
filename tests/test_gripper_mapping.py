@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation, Slerp
 
-from egocentric_pipeline.gripper_mapping import grasp_forward_segment, load_mapping, map_grasp_landmarks, save_mapping
+from egocentric_pipeline.retargeting.gripper_mapping import grasp_forward_segment, load_mapping, map_grasp_landmarks, save_mapping
 from egocentric_pipeline.run_metadata import read_json
 
 
@@ -30,7 +30,7 @@ def settings():
 
 @pytest.fixture
 def grippers():
-    from egocentric_pipeline.gripper_model import load_grippers
+    from egocentric_pipeline.retargeting.gripper_model import load_grippers
 
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.exists():
@@ -348,7 +348,7 @@ def test_thumb_point_blend_invalid_geometry(grippers):
 
 
 def test_overlay_camera_transform_preserves_cv_projection():
-    from egocentric_pipeline.gripper_overlay import camera_pose_opengl
+    from egocentric_pipeline.visualization.gripper_overlay import camera_pose_opengl
 
     rotation = Rotation.from_euler('xyz', [.4, -.3, .8]).as_matrix()
     position = np.array([.7, -.2, .3])
@@ -497,8 +497,8 @@ def test_reject_invalid_configuration(settings, change):
 
 
 def test_detached_gripper_matches_full_model_and_free_tcp_pose():
-    from egocentric_pipeline.gripper_model import load_grippers
-    from egocentric_pipeline.robot_workspace import load_robot, verify_asset_source
+    from egocentric_pipeline.retargeting.gripper_model import load_grippers
+    from egocentric_pipeline.retargeting.robot_workspace import load_robot, verify_asset_source
 
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.is_dir():
@@ -541,8 +541,8 @@ def test_detached_gripper_matches_full_model_and_free_tcp_pose():
 
 @pytest.mark.parametrize("mode", ["landmark_frame", "fingertip_correspondence", "mcp_plane", "thumb_ip_plane", "wrist_roll", "wrist_roll_tips", "roll_blend", "thumb_point_blend"])
 def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings, mode, grippers):
-    from egocentric_pipeline.hand_geometry import load_mano_model, reconstruct_mano
-    from egocentric_pipeline.gripper_visualization import review_rgb
+    from egocentric_pipeline.geometry.hand_geometry import load_mano_model, reconstruct_mano
+    from egocentric_pipeline.visualization.gripper_visualization import review_rgb
     from smplx.vertex_ids import vertex_ids
     import torch
 
@@ -593,7 +593,7 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
         settings = read_json(ROOT / ("configs/experiments/gripper_wrist_roll.json" if mode == "wrist_roll_tips" else f"configs/experiments/gripper_{mode}.json"))
     config = tmp_path / "mapping-config.json"
     config.write_text(json.dumps(settings))
-    command = [sys.executable,str(ROOT / "scripts/map_gripper.py"),"--alignment-directory",str(alignment),
+    command = [sys.executable,str(ROOT / "pipeline/map_gripper.py"),"--alignment-directory",str(alignment),
                "--output-directory",str(output),"--frame-start","1","--frame-stop","5","--config",str(config)]
     subprocess.run(command, check=True, env={**os.environ,"PYTHONPATH":str(ROOT / "src")}, capture_output=True, text=True)
     arrays, report = load_mapping(output)

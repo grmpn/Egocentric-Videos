@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from egocentric_pipeline.canonical import canonicalize
-from egocentric_pipeline.dataset_transaction import staged_dataset
+from egocentric_pipeline.geometry.canonical import canonicalize
+from egocentric_pipeline.datasets.dataset_transaction import staged_dataset
 
 
 def test_independent_hand_anchors_and_pose_inversion():

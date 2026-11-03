@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from egocentric_pipeline.hand_pose_filtering import smooth_hand_targets
-from egocentric_pipeline.manipulation_regions import retained_regions
+from egocentric_pipeline.retargeting.hand_pose_filtering import smooth_hand_targets
+from egocentric_pipeline.retargeting.manipulation_regions import retained_regions
 
 
 def signal(n=31):

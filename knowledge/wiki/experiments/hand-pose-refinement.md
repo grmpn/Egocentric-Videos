@@ -180,25 +180,26 @@ fit to its own smoother targets and some motion metrics. Defaults remain disable
 no acceptance threshold or observation policy changed.
 Physical scale, gravity, collisions, dynamic limits and successful task execution
 remain unverified. This fulfills the refinement experiment, not the roadmap's
-accepted simulation demonstration. Focused repository cleanup remains due before
-another milestone.
+accepted simulation demonstration. The later
+[cleanup workflow](../topics/integrated-pipeline.md) supersedes these historical commands.
 
-The user-requested comparison page serves all nine saved results at
+The historical user-requested comparison page served all nine saved results at
 `http://localhost:8090`, with both raw and smoothed pass rates. Representative
 views clearly label their final-region-only coverage. The source frames outside
 those fits are unassigned, and robot predictions remain explicitly unverified.
-To reopen after stopping the services, from the repository root run:
+The output-local comparison launcher retains its original imports and is historical.
+To inspect an individual saved result with the current viewer, run:
 
 ```bash
-PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv-workspace/bin/python \
-  outputs/retargeting/pose-refinement-20261022/open-experiments.py
+PYTHONPATH=src OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv-pipeline/bin/python \
+  scripts/view_retargeting.py outputs/retargeting/pose-refinement-20261022/trajectory
 ```
 
 The [full trajectory](../../../outputs/retargeting/pose-refinement-20261022/trajectory/trajectory_retargeted.npz),
 [report](../../../outputs/retargeting/pose-refinement-20261022/trajectory/retargeting_report.json)
 and [synchronized video](../../../outputs/retargeting/pose-refinement-20261022/trajectory/annotated_video.mp4)
-are available independently of the viewers. Repeat the CLI with the saved
-`config.json`, the original iPhone gravity directory and a new output directory.
+are available independently of the viewers. Exact reproduction of the historical
+solver requires its recorded Git revision and saved configuration.
 
 ## Smoothed hands on source video
 

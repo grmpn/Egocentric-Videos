@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import pytest
 
-from egocentric_pipeline.workspace import WorkspaceGrid, build_grid
+from egocentric_pipeline.retargeting.workspace import WorkspaceGrid, build_grid
 
 
 def test_voxel_indices_negative_coordinates_boundaries_and_round_trip():
@@ -90,7 +90,7 @@ def test_reject_bad_grid_inputs(clouds, spacing, padding):
 
 def test_fk_known_rotated_base_fixed_tool_offset_and_seeded_prefix(tmp_path):
     pytest.importorskip("skrobot")
-    from egocentric_pipeline.robot_workspace import arm_parameters, load_robot, sample_arm, verify_fk
+    from egocentric_pipeline.retargeting.robot_workspace import arm_parameters, load_robot, sample_arm, verify_fk
     urdf = tmp_path / "arm.urdf"
     urdf.write_text('''<robot name="analytic"><link name="base"/><link name="shoulder"/><link name="arm"/><link name="tool"/>
       <joint name="mount" type="fixed"><parent link="base"/><child link="shoulder"/>
@@ -143,7 +143,7 @@ def test_cli_build_and_reload_actual_purdue_assets(tmp_path, legacy_tcp):
     report = json.loads((output / "workspace_report.json").read_text())
     assert report["status"] == "completed" and report["grid"]["reload_exact"]
     grid = WorkspaceGrid.load(output / "workspace_grid.npz")
-    from egocentric_pipeline.robot_workspace import arm_parameters, load_robot, position_target, verify_asset_source
+    from egocentric_pipeline.retargeting.robot_workspace import arm_parameters, load_robot, position_target, verify_asset_source
     robot = load_robot(verify_asset_source(assets, settings), settings["base_frame"])
     for hand, name in enumerate(("left", "right")):
         with np.load(output / f"samples_{name}.npz", allow_pickle=False) as data:

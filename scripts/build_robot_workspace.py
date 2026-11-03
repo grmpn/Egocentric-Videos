@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.robot_workspace import build_workspace
+from egocentric_pipeline.retargeting.robot_workspace import build_workspace
 from egocentric_pipeline.run_metadata import read_json
 
 

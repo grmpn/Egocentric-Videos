@@ -6,9 +6,9 @@ from pathlib import Path
 import re
 import traceback
 
-from egocentric_pipeline.gripper_mapping import load_mapping
-from egocentric_pipeline.ik_benchmark import evaluate_run, update_report, validate_settings as validate_benchmark_settings
-from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory, validate_settings
+from egocentric_pipeline.retargeting.gripper_mapping import load_mapping
+from egocentric_pipeline.evaluation.ik_benchmark import evaluate_run, update_report, validate_settings as validate_benchmark_settings
+from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory, validate_settings
 from egocentric_pipeline.run_metadata import read_json, utc_now, write_json
 
 

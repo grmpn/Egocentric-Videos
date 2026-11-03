@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.gripper_overlay import render_gripper_overlay
+from egocentric_pipeline.visualization.gripper_overlay import render_gripper_overlay
 
 
 def main():

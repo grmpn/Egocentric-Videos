@@ -121,7 +121,7 @@ identifies the inspected frames and limitations; generated reports' original
 Open the saved run with the existing command (no inference or fitting rerun):
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_retargeting.py \
     outputs/retargeting/iphone-20261021/trajectory --open-browser
 ```
 
@@ -235,20 +235,15 @@ overlap. No collision, dynamic-limit, physical calibration or hardware validatio
 is implied. Generated reports retain their original `manual_review: pending`;
 the separate review record owns the completed inspection.
 
-Reproduce fitting in a new output directory with the recorded execution setting:
-
-```bash
-env -u LD_LIBRARY_PATH OPENBLAS_NUM_THREADS=1 PATH="$PWD/.conda/envs/hawor/bin:$PATH" PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
-    --method joint \
-    --alignment-directory outputs/retargeting/iphone-20261021/gravity \
-    --asset-root data/models/purdue-alex-assets \
-    --output-directory outputs/retargeting/iphone-no-infill-repeat
-```
+The original no-infill fitting command is historical. The current pipeline uses
+mapped gripper targets and the accepted frozen settings; see the
+[integrated workflow](../topics/integrated-pipeline.md). Original numerical
+settings and evidence remain in this run's report and Git history.
 
 Use the existing viewer on the completed result:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_retargeting.py \
     outputs/retargeting/iphone-no-infill-20261021/trajectory --open-browser
 ```
 
@@ -340,7 +335,7 @@ At handoff, first-region playback is on `http://localhost:8082`; full-run playba
 is on `http://localhost:8083`. To reopen the full result:
 
 ```bash
-env -u LD_LIBRARY_PATH OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/view_retargeting.py \
+env -u LD_LIBRARY_PATH OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-pipeline/bin/python scripts/view_retargeting.py \
     outputs/retargeting/iphone-smooth1000-20261021/trajectory --open-browser
 ```
 
@@ -357,7 +352,7 @@ The [approved GPU plan](../plans/milestone-3-gpu-ik.md) is fulfilled. The latest
 stride, 700/500 residual-evaluation budgets and acceptance gates are unchanged.
 The [solver contract](../topics/stage-3-retargeting.md#gpu-sparse-solver) owns the
 CUDA/CPU split and numerical limitations; setup is in
-[environment/README.md](../../../environment/README.md#cuda-trajectory-ik).
+[environment/README.md](../../../environment/README.md#processing-environment).
 
 | Measurement | Previous CPU run | CUDA rerun |
 | --- | ---: | ---: |

@@ -20,7 +20,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 - [Milestone 3: Config 2 wrist offset](plans/milestone-3-gripper-wrist-offset.md) — requested 25 mm backward placement verified; separate full-video comparison viewer.
 
-- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 10 fulfilled: interpolated-thumb Config 4 and full iPhone overlay MP4s for Configs 2/3/4; default selection pending.
+- [Milestone 3: Direct hand-to-gripper mapping](plans/milestone-3-direct-gripper-mapping.md) — revision 10 fulfilled: interpolated-thumb Config 4 and full iPhone overlay MP4s for Configs 2/3/4; subsequent accepted Config 2 default recorded in the retargeting topic.
 - [Milestone 3: Hand-pose smoothing and region continuity](plans/milestone-3-hand-pose-refinement.md) — fulfilled: configurable target filtering, base prior and merging; controlled comparisons and full rerun, with pose/motion tradeoffs.
 - [Milestone 3: GPU trajectory IK](plans/milestone-3-gpu-ik.md) — fulfilled GPU solver, matched benchmark and latest smoothing-configuration rerun.
 - [Milestone 3: Joint base and trajectory optimization](plans/milestone-3-joint-base-optimization.md) — original fitting and infill-exclusion evidence preserved; approved stronger-smoothing experiment verified.
@@ -33,18 +33,20 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
+- [Integrated pipeline](topics/integrated-pipeline.md) — full-video shell workflow, stage outputs, reuse, failure recovery, viewers and experiment boundaries.
+
 - [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — accepted-roll tuning, held-out SDF/full-IK comparisons, independent audits and preserved historical evidence.
 - [Direct hand-to-gripper mapping](topics/direct-gripper-mapping.md) — detached gripper, MANO landmark/pose/action contracts and interactive tuning without IK.
 - [Direct iPhone gripper review](experiments/direct-gripper-iphone.md) — full-video Config 2/3/4 MP4s, geometry/camera/motion checks and historical comparison evidence.
 - [Hand-pose refinement evidence](experiments/hand-pose-refinement.md) — seven controlled variants, full iPhone rerun, raw/smoothed pass rates and all-experiment viewer.
 - [iPhone retargeting evidence](experiments/retargeting-iphone.md) — full demonstration, infill exclusion, 1,000× temporal-weight comparison and verified CUDA rerun (6.29× faster solve).
 - [Joint base/pose fitting evidence](experiments/joint-base-bundled.md) — original benchmark and subsequent experiments, including gripper-offset/hand-weight results and visual evidence; posture, motion and orientation tradeoffs.
-- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — implemented gravity, workspace, placement/segmentation and positional IK contracts and limitations.
+- [Stage 3: Fixed-base trajectory preparation](topics/stage-3-retargeting.md) — gravity, workspace experiments, full base/pose IK, fixed-region contracts and limitations.
 - [Stage 3 Part 3 acceptance](experiments/retargeting-bundled.md) — historical TCP runs and current wrist-aligned episodes, independent transform/SDF/IK audits, annotated video and MANO playback with preserved failures/discontinuities.
 - [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
-- [LeRobot pipeline](topics/lerobot-pipeline.md) — v3.1 creation/append, canonical transforms, annotation preservation and local inference limits.
+- [LeRobot pipeline](topics/lerobot-pipeline.md) — full-video robot contract 2.0, region/gap validity, official v3.1 create/append and annotation preservation.
 - [VLM annotation workflow reference](topics/vlm-annotation-workflow.md) — proposed task hierarchy and independent activity modes, source-time mapping, and later fixed-base filtering; not implemented or an approved plan.
 - [HuRo source review](topics/huro-source-review.md) — external detection-gap handling, infiller bypass, retargeting, and language annotation; static inspection only.
 - [Milestone 2 Eidon validation](experiments/milestone-2-eidon-validation.md) — all three attempts, real dataset append/reload, visual quality limits and remaining pilot acceptance.

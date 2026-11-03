@@ -258,7 +258,7 @@ dynamics remain unverified.
 To reopen:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-mcp-plane-20261027/mapping --port 8091
 ```
 
@@ -303,7 +303,7 @@ dynamics remain unverified; this is geometric correspondence between mesh marker
 To reopen:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-tip-match-20261027/mapping --port 8091
 ```
 
@@ -344,7 +344,7 @@ the 0.03 m snapshot is validation evidence, not an adopted tuning change.
 To reopen:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-wrist-offset-20261027/mapping --port 8091
 ```
 
@@ -373,7 +373,7 @@ The midpoint result was reviewed at frame 119. Physical contact calibration rema
 To reopen:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-mcp-midpoint-20261027/mapping --port 8091
 ```
 
@@ -399,7 +399,7 @@ passed before the user selected the midpoint direction.
 To reopen:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-index-20261027/mapping --port 8091
 ```
 
@@ -450,7 +450,7 @@ The previous thumb-axis viewer used the
 and was reviewed at frame **119**. To reopen it:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-refinement-20261027/mapping --port 8091
 ```
 
@@ -555,7 +555,7 @@ snapshot viewer was stopped after its reload verification.
 To reopen the baseline:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_gripper_mapping.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_gripper_mapping.py \
     outputs/retargeting/gripper-mapping-20261027/mapping --port 8091
 ```
 

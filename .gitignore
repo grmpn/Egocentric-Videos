@@ -31,3 +31,6 @@ __pycache__/
 
 # Robot workspace FK and interactive visualization
 /.venv-workspace/
+
+# Consolidated gravity, retargeting and visualization runtime
+/.venv-pipeline/

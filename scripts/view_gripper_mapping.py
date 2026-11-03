@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.gripper_visualization import GripperMappingViewer
+from egocentric_pipeline.visualization.gripper_visualization import GripperMappingViewer
 
 
 def main():

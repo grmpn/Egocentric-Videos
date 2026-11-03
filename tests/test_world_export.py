@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from egocentric_pipeline.run_metadata import read_json, sha256_file, write_json
-from egocentric_pipeline.world_export import WORLD_FIELDS, export_world
+from egocentric_pipeline.tracking.world_export import WORLD_FIELDS, export_world
 
 
 def detection(frame, hand, confidence=0.75):

@@ -7,7 +7,7 @@ an arm/base, solve IK or apply the earlier target filters.
 
 ## Geometry and opening
 
-The [gripper model](../../../src/egocentric_pipeline/gripper_model.py) extracts each
+The [gripper model](../../../src/egocentric_pipeline/retargeting/gripper_model.py) extracts each
 palm-rooted subtree from the pinned canonical Purdue URDF. Each standalone URDF
 contains the palm, four finger links and nominal TCP, with the original mesh
 geometry, joint bounds and mimic relationships. Generated mesh references point
@@ -16,7 +16,7 @@ to the local pinned assets; source files are unchanged. The asset's
 `1.30 * (1 - action)` radians; scikit-robot propagates the two mimics. This is the
 existing nominal kinematic opening rule, not a physical contact simulation.
 
-[Landmark reconstruction and mapping](../../../src/egocentric_pipeline/gripper_mapping.py)
+[Landmark reconstruction and mapping](../../../src/egocentric_pipeline/retargeting/gripper_mapping.py)
 use the original aligned MANO root poses, articulation and shape. The physical
 wrist is joint 0, index MCP/PIP are joints 1/2, and thumb MCP is joint **14**, not the
 thumb CMC at joint 13. The thumb chain is 13/14/15 (CMC/MCP/IP). This interpretation
@@ -64,7 +64,7 @@ All positions use aligned metres; rotations are proper, without reflection.
 
 Near-zero fingertip/forward vectors and near-collinear constructions are invalid;
 thresholds live in [configuration](../../../configs/experiments/gripper_mapping.json). No gap
-is filled. The [shared forward segment](../../../src/egocentric_pipeline/gripper_mapping.py)
+is filled. The [shared forward segment](../../../src/egocentric_pipeline/retargeting/gripper_mapping.py)
 drives the mapper and displayed index-MCP→PIP construction line. A translucent
 triangle shows the three points defining the orientation plane.
 
@@ -215,7 +215,7 @@ per-hand missing/degenerate/unreachable counts, reachable ranges, tip offsets an
 maximum tip-midpoint or wrist-anchor error and roll range. Licensed models and generated geometry remain local
 inputs/evidence, outside Git.
 
-The [viewer](../../../src/egocentric_pipeline/gripper_visualization.py) reconstructs
+The [viewer](../../../src/egocentric_pipeline/visualization/gripper_visualization.py) reconstructs
 the same raw MANO meshes and checks their landmarks against the saved result.
 Source RGB is decoded by original frame index. It initially selects the first
 frame with both mappings available, while retaining every frame and missing-data
@@ -242,11 +242,14 @@ It is explicitly a preview: mapped output saving is disabled in this mode. Turni
 it off restores the current hand-derived mapping. Missing hands/grippers stay
 hidden during mapped playback; manual inspection can show a gripper without a hand.
 
-See the [README commands](../../../README.md#direct-hand-to-gripper-review) and
+See the [README commands](integrated-pipeline.md#review-and-experiments) and
 [first-region acceptance evidence](../experiments/direct-gripper-iphone.md).
-Configs 2/3/4 now cover the full iPhone recording. Default selection, alternative
-position targets and reintegration with IK remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
-dynamics are unverified.
+Configs 2/3/4 cover the full iPhone recording. The accepted processing default is
+left +180° / original-right Config 2, integrated with the frozen joint/base solver;
+see [accepted defaults](stage-3-retargeting.md#accepted-processing-defaults).
+Alternative position targets remain experimental. Physical scale/gravity,
+grasp/contact accuracy and dynamic execution remain unverified; independent
+evaluation reports the retained tracking and collision failures.
 
 ## Saved RGB overlays
 
