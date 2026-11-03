@@ -28,12 +28,12 @@ def require_cuda():
 
 @pytest.fixture
 def settings():
-    return dict(json.loads((ROOT / "configs/joint_retargeting.json").read_text()), solver_backend="cpu")
+    return dict(json.loads((ROOT / "configs/experiments/joint_retargeting.json").read_text()), solver_backend="cpu")
 
 
 @pytest.fixture
 def model(settings):
-    robot_settings = json.loads((ROOT / "configs/robot_workspace.json").read_text())
+    robot_settings = json.loads((ROOT / "configs/defaults/robot_workspace.json").read_text())
     urdf = ROOT / "data/models/purdue-alex-assets" / robot_settings["urdf"]
     if not urdf.exists():
         pytest.skip("Requires pinned Purdue Alex assets; see environment/README.md")
@@ -397,7 +397,7 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
             assert np.isnan(data["joint_solution_rad"][3:]).all()
             assert (data["episode_id"][3:] == -1).all()
     assert len(report["coupled_joint_leaders"]) == 2
-    benchmark = json.loads((ROOT / "configs/ik_benchmark.json").read_text())
+    benchmark = json.loads((ROOT / "configs/experiments/ik_benchmark.json").read_text())
     benchmark.update(hand_position_window_s=.5, hand_orientation_window_s=.5)
     if reviewed:
         benchmark["selection"] = selection
@@ -778,7 +778,7 @@ def test_workspace_workflow_ignores_infilled_geometry(tmp_path, aligned_input):
     from egocentric_pipeline.workspace import WorkspaceGrid
 
     directory, source, _, rs = aligned_input
-    settings = json.loads((ROOT / "configs/trajectory_retargeting.json").read_text())
+    settings = json.loads((ROOT / "configs/experiments/trajectory_retargeting.json").read_text())
     settings.update(optimizer_iterations=2, optimizer_population=2, ik_attempts=1, ik_iterations=5)
     rs = dict(rs, voxel_size_m=.1)
     workspace = tmp_path / "workspace"

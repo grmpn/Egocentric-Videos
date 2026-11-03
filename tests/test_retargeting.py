@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def settings():
-    return json.loads((ROOT / "configs/trajectory_retargeting.json").read_text())
+    return json.loads((ROOT / "configs/experiments/trajectory_retargeting.json").read_text())
 
 
 def sphere_grid():
@@ -197,7 +197,7 @@ def test_real_robot_sequential_ik_missing_and_unreachable(settings, legacy_tcp):
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.exists():
         pytest.skip("Requires pinned Purdue assets; see environment/README.md")
-    robot_settings = json.loads((ROOT / "configs/robot_workspace.json").read_text())
+    robot_settings = json.loads((ROOT / "configs/defaults/robot_workspace.json").read_text())
     if legacy_tcp:
         robot_settings.pop("target_frames")
     robot = load_robot(verify_asset_source(assets, robot_settings), robot_settings["base_frame"])

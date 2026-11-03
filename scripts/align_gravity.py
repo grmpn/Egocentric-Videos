@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-manifest", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True, help="New directory; existing outputs are never overwritten")
-    parser.add_argument("--config", type=Path, default=root / "configs/gravity_alignment.json")
+    parser.add_argument("--config", type=Path, default=root / "configs/defaults/gravity_alignment.json")
     parser.add_argument("--checkpoint", type=Path, default=root / "data/models/geocalib/geocalib-pinhole-v1.0.tar")
     parser.add_argument("--hawor-root", type=Path, default=root / "external/HaWoR", help="Owns the existing licensed MANO model files")
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")

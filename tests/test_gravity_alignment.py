@@ -139,7 +139,7 @@ def test_failed_estimator_keeps_diagnostics_and_never_accepts_export(tmp_path, m
         diagnostics["frames"] = [{"frame_index": 0, "accepted": False, "reason": "pitch_or_roll_filter"}]
         return []
     monkeypatch.setattr(pipeline, "predict_up", fail)
-    settings = json.loads(Path('configs/gravity_alignment.json').read_text())
+    settings = json.loads(Path('configs/defaults/gravity_alignment.json').read_text())
     output = tmp_path / "failed"
     with pytest.raises(ValueError, match="Insufficient"):
         align_run(manifest_path, output, tmp_path / "weights", model_root, settings)

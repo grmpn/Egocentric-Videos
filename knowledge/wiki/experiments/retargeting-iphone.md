@@ -23,7 +23,7 @@ No measured intrinsics were supplied: HaWoR uses its existing approximate
 [All settings match](../../../outputs/retargeting/iphone-20261021/settings-check.json):
 the joint configuration equals the previous saved `hand-1p0.json`; robot and
 gravity settings also equal that experiment's inputs. The current
-[default configuration](../../../configs/joint_retargeting.json) already had
+[default configuration](../../../configs/experiments/joint_retargeting.json) already had
 hand position/orientation weights **1.0**, posture **0.5**, gripper-local offset
 `[0.05, 0, 0]` m, base stride **2**, no camera-position objective, seed **42**,
 three attempts, and base/trajectory evaluation budgets **700/500**. The user

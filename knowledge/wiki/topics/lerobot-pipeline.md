@@ -161,7 +161,7 @@ with SIGSEGV. A controlled import reproduces the crash with legacy paths and
 succeeds without them. Both dataset CLIs now re-execute with a clean library path;
 the video command configures the pinned CUDA 11.7/HaWoR paths only for its inference
 child. Programmatic callers must likewise use the isolated dataset runtime. The
-[historical reproduction](../../../outputs/hawor/milestone-2/setup/library-isolation.json)
+[historical reproduction](../../../outputs/milestone-2/hawor/setup/library-isolation.json)
 is local to the laptop and absent from this desktop clone.
 On the native desktop, the child also needs Conda's `lib` directory for its newer
 C++ runtime. Torch-library discovery resolves Python-directory symlinks so Conda

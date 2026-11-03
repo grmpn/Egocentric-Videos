@@ -23,7 +23,7 @@ distinction between detection, gap grouping, and infilling.
 Original inputs stay under `data/source/`; prepared RGB and source/frame mappings
 live under `data/prepared/`. Each attempt receives its own directory under
 `outputs/hawor/milestone-1/` for the baseline entry point, or
-`outputs/hawor/milestone-2/` for the reusable pipeline default, containing native evidence, exported trajectories, a run manifest,
+`outputs/runs/` for the reusable pipeline default, containing native evidence, exported trajectories, a run manifest,
 and review artifacts. The Milestone 1 entry point creates a report for that attempt,
 including reportable failures. Input files and previous runs must not be overwritten.
 
@@ -33,6 +33,18 @@ absolute paths. Resolve those by inserting `milestone-1/` after `outputs/hawor/`
 [local relocation evidence](../../../outputs/hawor/relocation-20260923.json) records
 the move. The archived recreation environment is evidence, not a relocatable
 runtime. Maintained review links point at the new locations.
+
+On 2026-11-03 Milestone 2 evidence moved from `outputs/hawor/milestone-2/`
+to `outputs/milestone-2/hawor/`. Dataset, annotation and complete-pipeline
+artifacts from the mixed desktop setup directory moved to
+`outputs/milestone-2/desktop-20260924/`; shared setup evidence remains in place.
+The [relocation inventory](../../../outputs/cleanup/relocations.json) records
+old/new paths and byte-preservation checks for all 535 moved files. Raw sources,
+historical logs, embedded metadata and datasets were not rewritten. Embedded
+historical paths should be translated using that record; `load_run` resolves
+run-local artifacts beside the supplied relocated manifest. The
+[reload checks](../../../outputs/cleanup/relocation-validation.json) cover completed
+runs, historical datasets and the existing bundled alignments.
 
 Use the [README](../../../README.md) for commands and the
 [environment guide](../../../environment/README.md) for setup. Those documents own

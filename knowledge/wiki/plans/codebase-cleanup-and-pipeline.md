@@ -1,6 +1,7 @@
 # Codebase cleanup and integrated pipeline
 
-Draft · revision 2 · 2026-11-03 · Awaiting explicit implementation approval.
+Approved · revision 2 · 2026-11-03 · Approval: `20261103-cleanup-implementation-001`
+in the [November action log](../logs/2026-11.jsonl).
 Request/defaults: `20261103-cleanup-plan-001`; deprecation clarification:
 `20261103-cleanup-plan-003` in the
 [November action log](../logs/2026-11.jsonl).

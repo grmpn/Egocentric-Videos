@@ -35,11 +35,11 @@ def grippers():
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.exists():
         pytest.skip("Pinned robot assets are local inputs")
-    return load_grippers(assets, read_json(ROOT / "configs/robot_workspace.json"))
+    return load_grippers(assets, read_json(ROOT / "configs/defaults/robot_workspace.json"))
 
 
 def test_exact_tip_mapping_fk_twist_and_equivariance(grippers):
-    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
     # Includes observed extrema and the user's two reference frames.
     points = landmarks([.003720637467527735, .02107880248989149, .12549593759450284, .15052035605268244, .2799])
     observed = np.ones(points.shape[:2], bool)
@@ -76,7 +76,7 @@ def test_exact_tip_mapping_fk_twist_and_equivariance(grippers):
 
 
 def test_tip_mapping_rejects_unreachable_degenerate_and_missing(grippers):
-    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_mapping.json"), "mapping_mode": "fingertip_correspondence"}
     points = landmarks([.05]*5)
     observed = np.ones((5,2), bool)
     observed[0,0] = False
@@ -108,7 +108,7 @@ def landmarks(distances):
 
 @pytest.mark.parametrize("mode", ["mcp_plane", "thumb_ip_plane"])
 def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers, mode):
-    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_mapping.json"), "mapping_mode": mode}
     points = landmarks([.02107880248989149, .12549593759450284])
     # Tilt the fingertip line away from the MCP jaw line: individual tips must
     # differ, while their midpoint and distance remain exact.
@@ -146,7 +146,7 @@ def test_mcp_plane_axes_fk_center_and_unchanged_opening(grippers, mode):
 
 @pytest.mark.parametrize("mode", ["mcp_plane", "thumb_ip_plane"])
 def test_mcp_plane_degenerate_and_missing_observations(grippers, mode):
-    settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_mapping.json"), "mapping_mode": mode}
     points = landmarks([.05]*5)
     observed = np.ones((5,2), bool)
     observed[0,0] = False
@@ -168,7 +168,7 @@ def test_mcp_plane_degenerate_and_missing_observations(grippers, mode):
 @pytest.mark.parametrize("forward_axis", ["wrist_to_mcp_midpoint", "wrist_to_tip_midpoint"])
 @pytest.mark.parametrize("backward", [None, 0.025])
 def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers, forward_axis, backward):
-    settings = {**read_json(ROOT / "configs/gripper_wrist_roll.json"), "forward_axis": forward_axis}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_wrist_roll.json"), "forward_axis": forward_axis}
     settings.pop("wrist_backward_offset_m")
     if backward is not None:
         settings["wrist_backward_offset_m"] = backward
@@ -207,7 +207,7 @@ def test_wrist_anchor_roll_reference_and_rigid_equivariance(grippers, forward_ax
 
 @pytest.mark.parametrize("forward_axis", ["wrist_to_mcp_midpoint", "wrist_to_tip_midpoint"])
 def test_wrist_roll_missing_degenerate_and_unreachable(grippers, forward_axis):
-    settings = {**read_json(ROOT / "configs/gripper_wrist_roll.json"), "forward_axis": forward_axis}
+    settings = {**read_json(ROOT / "configs/experiments/gripper_wrist_roll.json"), "forward_axis": forward_axis}
     points = landmarks([.05]*7)
     open_points = points[..., :5 if forward_axis == "wrist_to_tip_midpoint" else 3, :].copy()
     observed = np.ones((7,2), bool)
@@ -229,7 +229,7 @@ def test_wrist_roll_missing_degenerate_and_unreachable(grippers, forward_axis):
 
 
 def test_tip_forward_differs_from_mcp_forward_and_matches_offset_wrist(grippers):
-    settings = read_json(ROOT / "configs/gripper_wrist_roll.json")
+    settings = read_json(ROOT / "configs/experiments/gripper_wrist_roll.json")
     points = landmarks([.05])
     points[...,3:5,:] += [0., .04, .03]
     result = map_grasp_landmarks(points, np.ones((1,2),bool), settings, grippers,
@@ -244,7 +244,7 @@ def test_tip_forward_differs_from_mcp_forward_and_matches_offset_wrist(grippers)
 
 
 def test_roll_blend_endpoints_weights_fk_and_equivariance(grippers):
-    settings = read_json(ROOT / "configs/gripper_roll_blend.json")
+    settings = read_json(ROOT / "configs/experiments/gripper_roll_blend.json")
     angles = [0.,30.,37.5,45.,90.,-37.5]
     points = landmarks([.05]*len(angles)); opened = points[...,:5,:].copy()
     observed = np.ones(points.shape[:2],bool)
@@ -273,7 +273,7 @@ def test_roll_blend_endpoints_weights_fk_and_equivariance(grippers):
 
 
 def test_roll_blend_invalid_inputs_and_thresholds(grippers):
-    settings = read_json(ROOT / "configs/gripper_roll_blend.json")
+    settings = read_json(ROOT / "configs/experiments/gripper_roll_blend.json")
     points=landmarks([.05]*5);opened=points[...,:5,:].copy();observed=np.ones((5,2),bool)
     observed[0,0]=False
     points[1,0,5]=points[1,0,2]  # Config 1 plane undefined.
@@ -290,7 +290,7 @@ def test_roll_blend_invalid_inputs_and_thresholds(grippers):
 
 
 def test_thumb_point_blend_geometry_fk_and_equivariance(grippers):
-    settings = read_json(ROOT / "configs/gripper_thumb_point_blend.json")
+    settings = read_json(ROOT / "configs/experiments/gripper_thumb_point_blend.json")
     angles = [0., 30., 37.5, 45., 90., -37.5]
     points = landmarks([.05]*len(angles))
     opened = points[..., :5, :].copy()
@@ -331,7 +331,7 @@ def test_thumb_point_blend_geometry_fk_and_equivariance(grippers):
 
 
 def test_thumb_point_blend_invalid_geometry(grippers):
-    settings = read_json(ROOT / "configs/gripper_thumb_point_blend.json")
+    settings = read_json(ROOT / "configs/experiments/gripper_thumb_point_blend.json")
     points = landmarks([.05]*4)
     opened = points[..., :5, :].copy()
     observed = np.ones((4, 2), bool)
@@ -503,7 +503,7 @@ def test_detached_gripper_matches_full_model_and_free_tcp_pose():
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.is_dir():
         pytest.skip("Pinned Purdue assets are local inputs")
-    robot_settings = read_json(ROOT / "configs/robot_workspace.json")
+    robot_settings = read_json(ROOT / "configs/defaults/robot_workspace.json")
     full = load_robot(verify_asset_source(assets, robot_settings), robot_settings["base_frame"])
     full_links = {link.name: link for link in full.link_list}
     full_joints = {joint.name: joint for joint in full.joint_list}
@@ -588,9 +588,9 @@ def test_cli_selected_frames_mano_landmarks_rgb_and_snapshot(tmp_path, settings,
                   "mano_left":{"path":str(models[0])},"mano_right":{"path":str(models[1])}}}))
     output = tmp_path / "mapping"
     if mode != "landmark_frame":
-        settings = {**read_json(ROOT / "configs/gripper_mapping.json"), "mapping_mode": mode}
+        settings = {**read_json(ROOT / "configs/experiments/gripper_mapping.json"), "mapping_mode": mode}
     if mode in ("wrist_roll_tips", "roll_blend", "thumb_point_blend"):
-        settings = read_json(ROOT / ("configs/gripper_wrist_roll.json" if mode == "wrist_roll_tips" else f"configs/gripper_{mode}.json"))
+        settings = read_json(ROOT / ("configs/experiments/gripper_wrist_roll.json" if mode == "wrist_roll_tips" else f"configs/experiments/gripper_{mode}.json"))
     config = tmp_path / "mapping-config.json"
     config.write_text(json.dumps(settings))
     command = [sys.executable,str(ROOT / "scripts/map_gripper.py"),"--alignment-directory",str(alignment),

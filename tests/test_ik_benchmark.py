@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def settings():
-    return json.loads((ROOT / "configs/ik_benchmark.json").read_text())
+    return json.loads((ROOT / "configs/experiments/ik_benchmark.json").read_text())
 
 
 @pytest.mark.parametrize("key,value", [("position_tolerance_m", np.nan), ("orientation_tolerance_degrees", 181),
@@ -84,7 +84,7 @@ def test_actual_robot_collisions_bounds_and_coupled_mimics(settings):
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.exists():
         pytest.skip("Pinned robot assets are local inputs")
-    constraints = RobotConstraints(assets, json.loads((ROOT / "configs/robot_workspace.json").read_text()), settings)
+    constraints = RobotConstraints(assets, json.loads((ROOT / "configs/defaults/robot_workspace.json").read_text()), settings)
     assert constraints.collision_pairs() == []
     first = "right_ezgripper_knuckle_palm_l1_1"
     second = "right_ezgripper_knuckle_l1_l2_1"

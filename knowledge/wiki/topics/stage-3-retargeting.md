@@ -11,6 +11,19 @@ Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
 not HuRo's numbered stages. All three approved part plans are fulfilled within
 their documented positional scope; dynamic simulation and physical execution are unverified.
 
+## Accepted processing defaults
+
+The approved cleanup promotes [retargeting defaults](../../../configs/defaults/retargeting.json)
+byte-for-byte from the frozen held-out `slack5-orientation8` run: full joint
+base fitting followed by fixed-base trajectory refinement, CUDA, one attempt,
+and 700/1000 evaluation caps. The [mapping default](../../../configs/defaults/gripper_mapping.json)
+is accepted Config 2 with left +180° roll and original right roll. Gravity and
+robot settings also live in `configs/defaults/`; alternate mappings, SDF and
+benchmark selections live in `configs/experiments/`. Processing every retained
+region is the default; benchmark selections remain explicit experiment inputs.
+[Parity/reload evidence](../../../outputs/cleanup/relocation-validation.json) is
+local-only. The integrated dataset workflow is still being implemented.
+
 ## Repository role and sequence
 
 The requested Stage 3 output is hand trajectories expressed in the robot base
@@ -149,7 +162,7 @@ scaled residuals, defaulting to 1.0. `neutral_weight` is 0.5 for all 16 joint
 deviations. Squared-cost coefficients are the squares of these multipliers;
 reported posture RMS is the unweighted deviation in radians. Acceptance uses
 unweighted physical errors and is unchanged by these weights.
-The [configuration](../../../configs/joint_retargeting.json) owns weights,
+The [configuration](../../../configs/experiments/joint_retargeting.json) owns weights,
 tolerances and finite evaluation budgets. On 2026-10-21 the user selected the
 last hand-weight-1 experiment settings as defaults for the iPhone run; the
 existing configuration already matched every setting (`20261021-iphone-001`
@@ -416,14 +429,14 @@ existing full-length runs, including tracking, motion, limits, collisions,
 opening, per-joint diagnostics and invalid-mapping counts. The original iPhone
 benchmark used [0,296), with 990 excluded source frames. The user-reviewed
 restart uses [0,269), excluding only right-hand frame 29, configured in
-[`ik_benchmark_reviewed.json`](../../../configs/ik_benchmark_reviewed.json).
+[`ik_benchmark_reviewed.json`](../../../configs/experiments/ik_benchmark_reviewed.json).
 Benchmark `selection.frame_range` uses zero-based half-open source indices;
 `excluded_hand_frames` names individual source frames and left/right hands.
 The shared selection runs before smoothing, base fitting, trajectory fitting
 and scoring. Original arrays remain intact; `retarget_valid` records reviewed
 eligibility. The trajectory report records `benchmark_selection`; mismatched
 solve/scoring selections or masks are rejected. Use
-`--benchmark-config configs/ik_benchmark_reviewed.json --benchmark-directory outputs/ik-benchmark-reviewed`
+`--benchmark-config configs/experiments/ik_benchmark_reviewed.json --benchmark-directory outputs/ik-benchmark-reviewed`
 with the existing benchmark command. Old scores remain in their original directory.
 
 The [benchmark evaluator](../../../src/egocentric_pipeline/ik_benchmark.py) uses
@@ -480,7 +493,7 @@ were explicitly deferred to the user for this requested mode.
 
 Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.
 [README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
-owns run/view commands. The [configuration](../../../configs/trajectory_retargeting.json)
+owns run/view commands. The [configuration](../../../configs/experiments/trajectory_retargeting.json)
 owns adjustable numerical thresholds and search effort. The workflow consumes
 completed Part 1 and Part 2 reports/arrays, verifies the prepared RGB/source
 timeline and pinned robot assets, and creates a new output directory.

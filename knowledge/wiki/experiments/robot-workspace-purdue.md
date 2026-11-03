@@ -78,7 +78,7 @@ held-out configurations per arm. Original outputs are preserved.
 
 After reviewing these results, the user selected **10 million samples per arm**
 as the preferred default on 2026-10-15. The
-[default configuration](../../../configs/robot_workspace.json) now matches the
+[default configuration](../../../configs/defaults/robot_workspace.json) now matches the
 validated 10m run; the 100k run remains historical comparison evidence.
 
 | Samples per arm | Both-arm build time | Left sampling/check/export | Right sampling/check/export | Peak process RSS |

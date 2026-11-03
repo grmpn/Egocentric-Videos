@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--mapping-directory", type=Path, required=True)
     parser.add_argument("--benchmark-directory", type=Path, default=root / "outputs/ik-benchmark")
-    parser.add_argument("--benchmark-config", type=Path, default=root / "configs/ik_benchmark.json")
+    parser.add_argument("--benchmark-config", type=Path, default=root / "configs/experiments/ik_benchmark.json")
     parser.add_argument("--run-id", required=True, help="Unique directory name; existing experiments are preserved")
     parser.add_argument("--name", required=True)
     parser.add_argument("--description", required=True)

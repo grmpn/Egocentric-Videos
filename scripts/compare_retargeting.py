@@ -14,9 +14,9 @@ def main():
     parser.add_argument("--workspace-directory", type=Path, required=True)
     parser.add_argument("--asset-root", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--joint-config", type=Path, default=root / "configs/joint_retargeting.json")
-    parser.add_argument("--workspace-config", type=Path, default=root / "configs/trajectory_retargeting.json")
-    parser.add_argument("--robot-config", type=Path, default=root / "configs/robot_workspace.json")
+    parser.add_argument("--joint-config", type=Path, default=root / "configs/experiments/joint_retargeting.json")
+    parser.add_argument("--workspace-config", type=Path, default=root / "configs/experiments/trajectory_retargeting.json")
+    parser.add_argument("--robot-config", type=Path, default=root / "configs/defaults/robot_workspace.json")
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args()
     report = compare_retargeting(args.alignment_directory, args.workspace_directory, args.output_directory,

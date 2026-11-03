@@ -129,7 +129,7 @@ def test_cli_build_and_reload_actual_purdue_assets(tmp_path, legacy_tcp):
     assets = root / "data/models/purdue-alex-assets"
     if not assets.exists():
         pytest.skip("Requires the pinned Purdue Alex assets; see environment/README.md")
-    settings = json.loads((root / "configs/robot_workspace.json").read_text())
+    settings = json.loads((root / "configs/defaults/robot_workspace.json").read_text())
     if legacy_tcp:
         settings.pop("target_frames")
     settings.update(samples_per_arm=64, held_out_samples_per_arm=16, fk_check_samples_per_arm=4)

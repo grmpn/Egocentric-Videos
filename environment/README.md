@@ -345,12 +345,14 @@ iPhone pilot or metric trajectory accuracy. Dataset annotations retain their
 `pending` review status. The test server is stopped. The earlier standalone
 three-contact-sheet client smoke also passed in 6.20 seconds.
 
-Desktop setup evidence is local-only under
-`outputs/setup/desktop-20260924/`: `setup_check.json`, `compiled-kernels.json`,
-`bundled-reload.json`, `bundled-annotation.log`, and `overlay-review.jpg` record
-the checks above. `bundled-dataset/` contains the annotated example; failed
-attempts and their logs are preserved alongside it. This clone does not contain
-the laptop's datasets or generated runs.
+Desktop setup evidence is local-only under `outputs/setup/desktop-20260924/`:
+`setup_check.json` and `compiled-kernels.json` record the shared runtime checks.
+The Milestone 2 dataset, annotation, end-to-end attempts and review evidence now
+live under `outputs/milestone-2/desktop-20260924/`, including `bundled-reload.json`,
+`bundled-annotation.log`, `overlay-review.jpg` and `bundled-dataset/`. The
+[relocation record](../outputs/cleanup/relocations.json) lists every moved file;
+historical logs and embedded absolute paths remain unchanged. This clone does
+not contain the laptop's datasets or generated runs.
 
 ## Gravity alignment environment
 
@@ -419,7 +421,7 @@ git clone --no-checkout https://github.com/PatrizioAcquadro/purdue-alex-assets.g
 git -C data/models/purdue-alex-assets checkout --detach 9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b
 ```
 
-The [workspace configuration](../configs/robot_workspace.json) pins the asset
+The [workspace configuration](../configs/defaults/robot_workspace.json) pins the asset
 revision, canonical SAKE URDF, base/tool frames and seven-joint chains. The build
 command verifies the revision and unchanged tracked assets. The downloaded
 repository retains its license/provenance files and meshes; it stays ignored.

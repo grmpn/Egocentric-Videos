@@ -158,7 +158,7 @@ GPU execution and visual inspection remain separate local acceptance gates.
 ## Milestone 2 dataset workflow
 
 [Eidon validation and remaining acceptance](knowledge/wiki/experiments/milestone-2-eidon-validation.md)
-reports all three attempts. The [historical laptop review index](outputs/hawor/milestone-2/README.md)
+reports all three attempts. The [historical laptop review index](outputs/milestone-2/hawor/README.md)
 links generated evidence retained on that machine; it is absent from this desktop clone.
 
 Use the separate Python 3.12 environment so LeRobot does not replace HaWoR's Torch:
@@ -193,11 +193,12 @@ Reuse an already-completed attempt without GPU inference:
 
 ```bash
 PYTHONPATH=src .venv-lerobot/bin/python scripts/video_to_dataset.py \
-    --run-manifest outputs/hawor/milestone-2/PATH/run_manifest.json \
+    --run-manifest outputs/milestone-2/hawor/PATH/run_manifest.json \
     --dataset-root data/lerobot/iphone-pilot --task "Pick up the cup and place it on the mat"
 ```
 
-Runs/reports are under `outputs/hawor/milestone-2/`; older evidence and baseline
+New runs/reports are under `outputs/runs/`; Milestone 2 evidence is under
+`outputs/milestone-2/`. Older evidence and baseline
 commands use `milestone-1/`. The dataset contains RGB, world/canonical root poses,
 MANO articulation/shape, masks, confidence, per-episode provenance, canonical
 previews, and a generated `DATA_CARD.md`. The [contract and limitations](knowledge/wiki/topics/lerobot-pipeline.md)
@@ -258,7 +259,7 @@ The report distinguishes completed numerical checks from pending visual review.
 Failures return nonzero with diagnostics when a run directory was allocated;
 insufficient gravity support never produces an accepted trajectory.
 
-Settings live in [configs/gravity_alignment.json](configs/gravity_alignment.json);
+Settings live in [configs/defaults/gravity_alignment.json](configs/defaults/gravity_alignment.json);
 use `--config PATH` for another explicit configuration. `--device cpu` is available
 when CUDA is unavailable; the validated default is CUDA. The command clears inherited
 `LD_LIBRARY_PATH` before importing modern Torch. `--help` lists model/input overrides.
@@ -335,12 +336,12 @@ Run it in the existing [workspace environment](environment/README.md#robot-works
 ```bash
 env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
     --alignment-directory outputs/gravity/part-1-20261014/bundled \
-    --workspace-directory outputs/workspace/example-10m \
+    --method workspace --workspace-directory outputs/workspace/example-10m \
     --output-directory outputs/retargeting/example
 ```
 
 The output directory must be new. Use `--config` to select settings based on
-[trajectory_retargeting.json](configs/trajectory_retargeting.json); `--asset-root`
+[trajectory_retargeting.json](configs/experiments/trajectory_retargeting.json); `--asset-root`
 can relocate the same pinned model. The default requires a 3 cm workspace margin,
 strictly more than 95% passing observed frames, gaps at most 0.2 s and episodes
 at least 1 s. Missing hands remain unverified. Exit code 2 means processing
@@ -399,7 +400,7 @@ them on the GPU.
 
 ```bash
 env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/retarget_trajectory.py \
-    --method joint \
+    --method joint --config configs/experiments/joint_retargeting.json \
     --alignment-directory outputs/gravity/part-1-20261014/bundled \
     --asset-root data/models/purdue-alex-assets \
     --output-directory outputs/retargeting/joint-example
@@ -415,8 +416,8 @@ Both retargeting methods exclude every motion-infilled hand as missing data:
 excluded hands contribute no fitting target, pose error or observed success.
 Joint predictions through gaps remain explicitly unobserved. New inputs must
 include boolean infill provenance; historical saved runs retain their earlier policy.
-`--config` selects alternative solver settings; defaults are in
-[joint_retargeting.json](configs/joint_retargeting.json). Success is measured
+`--config` above selects the historical wrist experiment. Current processing defaults are in
+[retargeting.json](configs/defaults/retargeting.json) and require the accepted gripper mapping. Success is measured
 from saved FK residuals separately from optimizer termination.
 `neutral_weight` is 0.5. `hand_position_weight` and `hand_orientation_weight`
 multiply the scaled hand residuals (defaults 1.0); halving a weight quarters its
@@ -454,7 +455,7 @@ out of 25, and updates `outputs/ik-benchmark/REPORT.md` after every run:
 
 ```bash
 env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src .venv-workspace/bin/python scripts/benchmark_ik.py \
-    --config configs/gripper_ik.json \
+    --config configs/experiments/gripper_ik.json \
     --mapping-directory outputs/ik-benchmark/mapping-config2 \
     --run-id config2-new-experiment \
     --name 'Config 2 with missing-hand motion penalty' \
@@ -472,7 +473,7 @@ Add `--target-grippers` to show detached blue/orange target grippers instead of
 MANO hands, using the smoothed palm positions/orientations and mapped opening
 commands. Target meshes are hidden for missing/excluded observations.
 
-[Benchmark settings](configs/ik_benchmark.json) use 1 cm / 4° tracking thresholds,
+[Benchmark settings](configs/experiments/ik_benchmark.json) use 1 cm / 4° tracking thresholds,
 URDF position/velocity limits and an explicitly assumed 10 rad/s² acceleration
 cap. Changing common scoring settings requires a new benchmark directory or
 consistent rescoring. [Contracts](knowledge/wiki/topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets)
@@ -516,13 +517,14 @@ The fixed nominal TCP is separate. Individual tip offsets are expected with this
 orientation and displayed alongside midpoint error. Unreachable/degenerate mappings
 are hidden and labeled; older runs retain their original behavior.
 
-Settings are in [gripper_mapping.json](configs/gripper_mapping.json). Original MANO
+The current default is [accepted Config 2](configs/defaults/gripper_mapping.json); the
+[older mapping](configs/experiments/gripper_mapping.json) remains an explicit experiment. Original MANO
 geometry and timestamps are preserved; physical contact remains uncalibrated.
 
-For comparison, pass `--config configs/gripper_thumb_ip_plane.json` (Config 1),
-`--config configs/gripper_wrist_roll_left_flip.json` (accepted Config 2),
-`--config configs/gripper_roll_blend.json` (Config 3), or
-`--config configs/gripper_thumb_point_blend.json` (Config 4) to `map_gripper.py`, with
+For comparison, pass `--config configs/experiments/gripper_thumb_ip_plane.json` (Config 1),
+`--config configs/defaults/gripper_mapping.json` (accepted Config 2),
+`--config configs/experiments/gripper_roll_blend.json` (Config 3), or
+`--config configs/experiments/gripper_thumb_point_blend.json` (Config 4) to `map_gripper.py`, with
 a different output directory for each. Open each saved directory with
 `view_gripper_mapping.py --port PORT --open-browser`, choosing a free port to
 preserve existing viewers. Config 1 changes the plane/jaw landmarks; Config 2

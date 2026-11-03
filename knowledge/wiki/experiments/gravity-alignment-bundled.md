@@ -10,7 +10,7 @@ accuracy. Later robot verification is recorded in [Part 3 acceptance](retargetin
 Use the [gravity setup](../../../environment/README.md#gravity-alignment-environment)
 and [command](../../../README.md#stage-3-part-1-gravity-alignment). The validated
 input is the existing 121-frame, 30 FPS bundled `video_0.mp4` HaWoR run at
-`outputs/setup/desktop-20260924/video-to-dataset-smoke/20260924T173234197039Z-658b3f620373/20260924T173234243231Z-a62ff6c94a08/run_manifest.json`.
+`outputs/milestone-2/desktop-20260924/video-to-dataset-smoke/20260924T173234197039Z-658b3f620373/20260924T173234243231Z-a62ff6c94a08/run_manifest.json`.
 Its completion/artifact checks passed; no HaWoR inference was repeated.
 
 All linked outputs below are ignored, local-only evidence, unavailable in a fresh

@@ -10,11 +10,11 @@ the [desktop setup evidence](../../../environment/README.md#native-desktop-and-a
 
 ## Selection and reproducibility
 
-The three four-second intervals in [the fixed selection](../../../configs/eidon-validation.json)
+The three four-second intervals in [the fixed selection](../../../configs/experiments/eidon-validation.json)
 were chosen before inference across cooking, laundry and cleaning, with contributors
 2 and 5. Only their full source MP4s were downloaded from `eidon-ai/tracker-pov` at
 revision `47c55ccc6d0308894ab482009c6fa91569057a08`; CC-BY-4.0 attribution and metadata
-are retained. [Local source records](../../../outputs/hawor/milestone-2/eidon-validation/sources.json)
+are retained. [Local source records](../../../outputs/milestone-2/hawor/eidon-validation/sources.json)
 include hashes, byte counts and ffprobe results. Inputs and generated evidence are
 ignored/local-only and unavailable in a fresh clone.
 
@@ -48,9 +48,9 @@ long-clip performance claim follows.
 Both originally launched dataset parents crashed on importing modern Torch after
 HaWoR completed because they inherited legacy library paths. The corrected CLI in
 `5ef3b56` recovered both through `--run-manifest`, without repeating inference.
-The [original batch outcomes](../../../outputs/hawor/milestone-2/eidon-validation/execution-results.json)
+The [original batch outcomes](../../../outputs/milestone-2/hawor/eidon-validation/execution-results.json)
 retain these crashes; per-source `packaging-retry.log` records recovery. The
-[local review index](../../../outputs/hawor/milestone-2/README.md) links each manifest,
+[local review index](../../../outputs/milestone-2/hawor/README.md) links each manifest,
 benchmark, overlay, preview and source record.
 
 ## Visual review and suitability
@@ -81,9 +81,9 @@ world/mask/confidence value, exact source/clip timestamps, all encoded video fra
 timestamps, source/run hashes, and canonical inversion. It checks RGB and official
 reader indexing at frames 0/60/119 per episode. Cooking's prior Parquet, video,
 provenance and canonical preview retain their hashes after append. See
-[validation details](../../../outputs/hawor/milestone-2/eidon-validation/dataset-validation.json),
-[append preservation](../../../outputs/hawor/milestone-2/eidon-validation/append-preservation.json),
-and the generated [data card](../../../outputs/hawor/milestone-2/eidon-validation/dataset/DATA_CARD.md).
+[validation details](../../../outputs/milestone-2/hawor/eidon-validation/dataset-validation.json),
+[append preservation](../../../outputs/milestone-2/hawor/eidon-validation/append-preservation.json),
+and the generated [data card](../../../outputs/milestone-2/hawor/eidon-validation/dataset/DATA_CARD.md).
 
 The implementation passed 88 full-suite tests, followed by six focused checks
 after final plotting/annotation changes and targeted CLI/compatibility checks.
@@ -103,7 +103,7 @@ Linux desktop, followed by timestamp/video review. No Milestone 3 work is starte
 The user requested another validation with manually inspectable outputs. Restored
 all three original MP4s to `data/source/eidon/recordings/` from the same pinned
 revision, totaling 766,650,813 bytes. Byte counts match the fixed selection;
-[source records](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/sources.json)
+[source records](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/sources.json)
 retain new SHA-256 measurements and ffprobe output. Historical laptop hashes are
 not available on this desktop for a direct comparison.
 
@@ -154,12 +154,12 @@ frame. These reconstructions remain unsuitable as high-quality pilot evidence.
 The VLM uses RGB/task text rather than these trajectories.
 
 Local-only inspection outputs are in
-[`outputs/hawor/milestone-2/eidon-annotation-20260925/`](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/):
+[`outputs/milestone-2/hawor/eidon-annotation-20260925/`](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/):
 
-- [Review page](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/review.html): video with active labels, RGB/overlay switch, speed and seek controls, trajectories, raw label JSONL and reproduced VLM contact sheets. Chrome checks verified both videos, labels, seeking/source-time display, speed and overlay switching.
-- [Commands and outputs](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/README.md): `dataset/` contains the annotated LeRobot result; the server is stopped, with 408 MiB GPU memory used afterward.
-- [Annotation/reload evidence](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/annotation-validation.json), [annotation log](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/annotation.log), and [browser checks](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/browser-check.json).
-- [Preparation results](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/preparation-results.json), [initial GPU failure](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-preflight.json), and [restart verification](../../../outputs/hawor/milestone-2/eidon-annotation-20260925/gpu-after-restart.json).
+- [Review page](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/review.html): video with active labels, RGB/overlay switch, speed and seek controls, trajectories, raw label JSONL and reproduced VLM contact sheets. Chrome checks verified both videos, labels, seeking/source-time display, speed and overlay switching.
+- [Commands and outputs](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/README.md): `dataset/` contains the annotated LeRobot result; the server is stopped, with 408 MiB GPU memory used afterward.
+- [Annotation/reload evidence](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/annotation-validation.json), [annotation log](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/annotation.log), and [browser checks](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/browser-check.json).
+- [Preparation results](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/preparation-results.json), [initial GPU failure](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/gpu-preflight.json), and [restart verification](../../../outputs/milestone-2/hawor/eidon-annotation-20260925/gpu-after-restart.json).
 
 The wrapper's arguments, sampling behavior and output fields are explained in the
 [annotation topic](../topics/lerobot-pipeline.md#mutation-and-annotation-preservation).

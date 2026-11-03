@@ -37,7 +37,7 @@ def main():
     parser.add_argument("--source-dataset")
     parser.add_argument("--video-id")
     parser.add_argument("--license-reference")
-    parser.add_argument("--output-root", type=Path, default=Path("outputs/hawor/milestone-2"))
+    parser.add_argument("--output-root", type=Path, default=Path("outputs/runs"))
     args = parser.parse_args()
     try:
         extra = read_json(args.source_metadata) if args.source_metadata else None

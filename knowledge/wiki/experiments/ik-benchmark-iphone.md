@@ -225,7 +225,7 @@ commit. Original-target tuning ended at 88.558; >90 was not achieved.
 
 The user corrected the requested side to **left +180° / original right** after
 reviewing the right-flip run below. The
-[left config](../../../configs/gripper_wrist_roll_left_flip.json) regenerates from
+[left config](../../../configs/defaults/gripper_mapping.json) regenerates from
 the original mapping. Its
 [numerical check passed](../../../outputs/ik-benchmark-left-roll-flip/validation/mapping-check.json):
 original right orientation restored, only left local Y/Z axes reversed, unchanged
@@ -246,7 +246,7 @@ No viewer tests or visual review were performed, as requested.
 ### Earlier right flip
 
 The user requested a 180° right-target rotation about local forward +X.
-The [separate mapping config](../../../configs/gripper_wrist_roll_right_flip.json)
+The [separate mapping config](../../../configs/experiments/gripper_wrist_roll_right_flip.json)
 postmultiplies only the right palm orientation; palm positions, opening, source
 data and eligibility are preserved. The
 [mapping check](../../../outputs/ik-benchmark-right-roll-flip/validation/mapping-check.json)
