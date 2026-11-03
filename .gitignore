@@ -9,7 +9,8 @@
 /data/
 /outputs/
 
-# Local milestone summaries and supporting figures
+# Existing local milestone summaries and figures stay private at this legacy path.
+# knowledge/wiki/ (including action logs) is intentionally tracked.
 /knowledge/agent/summaries/
 
 # Python/Conda build and test caches
@@ -18,3 +19,15 @@ __pycache__/
 .pytest_cache/
 .conda/
 /environment/condaenv.*.requirements.txt
+
+# Isolated LeRobot dataset/annotation environment
+/.venv-lerobot/
+
+# Isolated local VLM server (separate Torch/CUDA from HaWoR and LeRobot)
+/.venv-vlm/
+
+# Isolated GeoCalib inference and rigid hand geometry
+/.venv-gravity/
+
+# Robot workspace FK and interactive visualization
+/.venv-workspace/

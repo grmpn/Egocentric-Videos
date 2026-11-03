@@ -55,3 +55,23 @@ jobs:
 
       - name: Run the complete project test suite
         run: PYTHONPATH=src python -m pytest tests
+
+  lerobot-integration:
+    name: LeRobot create, append, and annotation (CPU fixture)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Install isolated dataset dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install -r environment/lerobot-requirements.txt
+      - name: Exercise the production reader, writer, and annotation CLI
+        run: PYTHONPATH=src python -m pytest tests/test_lerobot_export.py tests/test_canonical.py

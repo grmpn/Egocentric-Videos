@@ -1,0 +1,567 @@
+# iPhone IK benchmark and gripper integration
+
+Verified 2026-10-30 under the [approved revision 2](../plans/milestone-3-ik-benchmark.md).
+The benchmark scope is fulfilled; these results do **not** complete the roadmap's
+limit-satisfying simulation demonstration. Implementation contracts belong to
+[Stage 3](../topics/stage-3-retargeting.md#ik-benchmark-and-gripper-targets).
+Generated evidence below is local and ignored, unavailable in a fresh clone.
+
+## Held-out regions 2 and 3 — 2026-11-03
+
+The user requested the frozen **slack5-orientation8** configuration on regions 2
+and 3, comparing fresh **full-IK base fitting → fixed-base IK** with fresh
+**SDF base fitting → fixed-base IK**. Four sequential production solves used the
+accepted left-roll targets and unchanged score/limits; no parameters or extra
+observation exclusions were chosen from these results. These regions were held
+out from this tuning series; earlier historical full-video runs remain preserved.
+
+| Region | Method | Score /100 | Base/pose initialization | Trajectory IK | Total solve |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 2 | Full-IK base + IK | **96.115** | 53.55 s | 85.87 s | **139.42 s** |
+| 2 | SDF base + IK | 73.812 | 49.29 s | 93.35 s | **142.65 s** |
+| 3 | Full-IK base + IK | **77.414** | 43.29 s | 73.47 s | **116.76 s** |
+| 3 | SDF base + IK | 37.840 | 19.95 s | 77.46 s | **97.41 s** |
+
+Region 2 is **[432,893)**: 461 frames / 739 observed hand samples. Region 3 is
+**[947,1286)**: 339 frames / 588 samples, preserving its existing adjacent-segment
+merge. Both methods have identical observations/targets within each region.
+SDF placement takes **13.31 / 11.96 s**, included in the base/pose and total columns.
+Full-IK fitting optimizes the base and stride-two sampled poses; SDF uses all
+selected positions, then fits sampled poses at its fixed base. Both use the same
+full-frame trajectory IK. No saved base or joint trajectory initializes these runs.
+Loading, preparation, export/scoring and historical workspace construction are
+excluded from solve times. CPU remained approximately 800 MHz; settings unchanged.
+
+Full-IK base placement scores higher in both regions. Both full-IK runs pass every
+joint-feasibility frame. Region 3 remains difficult: full-IK placement passes
+365/588 positions, 507/588 orientations and 208/339 collision checks. SDF placement
+passes 142/588 positions, 160/588 orientations and only 33/339 joint-feasibility
+checks, while passing 306/339 collision checks. These are results of the specified
+solves, not proofs of unreachability or global solver rankings.
+
+All trajectory stages reached the **1000-evaluation cap**. Base/pose fitting
+reached 700 evaluations except region 3 SDF's fixed-base pose initialization,
+which converged in 136. Both SDF searches used their 100-iteration budgets.
+The [full report](../../../outputs/ik-benchmark-heldout-20261103/REPORT.md) includes
+component counts, exact settings, stage times/termination and saved trajectories.
+
+[Preflight passed](../../../outputs/ik-benchmark-heldout-20261103/validation/preflight.json):
+settings frozen, no extra observation exclusions, actual-palm workspace and
+current URDF bounds matched. Independent audits passed for
+[region 2](../../../outputs/ik-benchmark-heldout-20261103/region-2/audit.json) and
+[region 3](../../../outputs/ik-benchmark-heldout-20261103/region-3/audit.json), checking
+all 24 original arrays, common targets, ordinary FK, all physical joint values
+and derivatives, actual collision pairs, score arithmetic, fixed bases/bounds,
+and complete stage/total timings. Inspected saved numerical diagnostic plots for
+[region 2](../../../outputs/ik-benchmark-heldout-20261103/validation/region-2-diagnostics.png)
+and [region 3](../../../outputs/ik-benchmark-heldout-20261103/validation/region-3-diagnostics.png):
+SDF runs show larger tracking excursions and acceleration failures; full-IK region
+3 still has substantial tracking and collision failures. No held-out tuning followed.
+
+Requested region 3 viewers are open separately: [full-base + IK](http://localhost:8080)
+and [SDF-base + IK](http://localhost:8081), both with detached mapped target grippers
+and the smoothed palm paths supplied to IK, alongside solved robot motion.
+Startup/client connections are recorded in the
+[full-IK log](../../../outputs/ik-benchmark-heldout-20261103/validation/viewer-region-3-full-base-ik-targets.log)
+and [SDF log](../../../outputs/ik-benchmark-heldout-20261103/validation/viewer-region-3-sdf-base-ik-targets.log).
+**No viewer tests, screenshots or visual review were performed**, as requested.
+The numerical diagnostic plots are separate saved-data figures. Roadmap physical
+simulation acceptance remains open.
+
+## Accepted-roll tuning resumed — 2026-11-03
+
+The user resumed score maximization on the accepted **left +180° / original
+right** mapping. The reviewed **[0,269)** region, **461 observations**, right-frame-29
+exclusion, targets, timestamps, four equal score terms and all limits are unchanged.
+The [accepted-roll report](../../../outputs/ik-benchmark-left-roll-flip/REPORT.md)
+preserves each configuration, trajectory, timing and unsuccessful comparison.
+
+| Run | Score /100 | Position passes | Orientation passes | Joint-feasible frames | Collision-free frames |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| robust-position-limits (baseline) | 85.127 | 459/461 | 295/461 | 227/269 | 249/269 |
+| cauchy-orientation-base | 89.666 | 458/461 | 318/461 | 269/269 | 243/269 |
+| limits16 | 87.659 | 458/461 | 269/461 | 269/269 | 250/269 |
+| orientation8-limits16 | 89.178 | 456/461 | 299/461 | 269/269 | 250/269 |
+| slack5-orientation8 | 89.255 | 448/461 | 317/461 | 269/269 | 245/269 |
+| slack5-orientation16 | 83.391 | 316/461 | 334/461 | 269/269 | 249/269 |
+| cauchy-continued | **91.022** | 458/461 | 331/461 | 269/269 | 250/269 |
+
+The Cauchy run is a fresh solve using the previous original-target leader's
+settings. The four following runs independently refine the accepted-roll baseline;
+reported solve times exclude that seed. Stronger motion penalties remove the
+baseline's acceleration failures, but high ordinary orientation weight sacrifices
+position accuracy. Same-objective Cauchy continuation reached **91.021619**
+with another 2000 evaluations. Its **240.11 s** is incremental; cumulative solve
+time including the fresh seed is **531.42 s**. The
+[independent audit passed](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-cauchy-continued.json),
+meeting the >90 benchmark target. The user accepted current performance and
+redirected work to base optimization. The pending fitting-threshold run was
+intentionally interrupted; its generic failed status is not a solver defect.
+
+[All six independent audits passed](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-slack5-orientation16.json)
+([log](../../../outputs/ik-benchmark-left-roll-flip/validation/20261103/audit-first-comparisons.log)):
+source arrays, identical selected targets and observations, all physical joints,
+derivatives, ordinary FK, collisions and score arithmetic. Inspected
+[comparison plots](../../../outputs/ik-benchmark-left-roll-flip/validation/20261103/cauchy-orientation-base-comparison.png)
+show the remaining orientation spikes and close-hand finger collisions. No viewer
+review/tests were performed. The CPU still reports approximately 800 MHz; no
+system settings changed. These are kinematic scores, not physical simulation acceptance.
+
+## Base-only SDF versus full IK — 2026-11-03
+
+At the user's explicit direction, compared **base optimization only** on the same
+269 frames / 461 accepted-roll observations. No trajectory refinement ran.
+The [comparison report](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/REPORT.md)
+contains settings, inputs, current-constraint checks, reproduction driver and timing details.
+
+| Method | X (m) | Y (m) | Z (m) | Yaw | Base solve |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| SDF | 0.081587 | −0.035888 | −0.568018 | 177.1348° | 11.105 s |
+| Full IK | 0.169849 | 0.050389 | −0.409020 | 178.0428° | 62.759 s |
+
+SDF minus IK is **(−8.83, −8.63, −15.90) cm**, or **20.13 cm** total, and
+**−0.908° yaw**. Full IK took **5.65×** as long in these single runs.
+Both reached their configured budgets: 100 SDF iterations / 6464 evaluations,
+700 IK evaluations. These are budget-limited results, not converged optima.
+Both used the same camera bounds/prior reference and all frames. IK starts at
+the camera seed with neutral joints; SDF searches a seeded population in the box.
+Loading and historical 30.93 s workspace construction are excluded. Full IK used the current
+Cauchy orientation settings for the base stage; no motion regularization or
+saved base/joint seed was applied.
+
+[Constraint checks](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/constraint-checks.json)
+verify the current actual-palm SDF, pinned URDF arm bounds, accepted roll targets,
+reviewed mask and common camera-centred XYZ ±2 m / yaw ±π bounds and base prior.
+The positional SDF is unchanged by target roll. Its neutral-head mean camera loss
+and positional coverage differ from full IK's hand orientation fitting and
+bounded-neck summed camera loss. SDF does not certify orientation, collisions or
+motion feasibility. Z remains an aligned-frame placement parameter, not floor height.
+
+[Three focused constraint tests passed](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/constraint-tests.log).
+The [independent comparison audit passed](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/audit.json)
+for shared inputs, current URDF bounds, transform direction, gravity alignment,
+XYZ/yaw differences and timing arithmetic. The requested
+[viewer opened at localhost:8090](http://localhost:8090), with a browser connection
+in its [startup log](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/viewer.log).
+It shows both bases with identical neutral robot reference poses and **original
+unsmoothed hand meshes/wrist paths**, preserving reviewed gaps. No retargeted hand
+motion is shown. **No viewer tests, screenshots or visual review were performed.**
+
+## Reviewed-region restart
+
+On 2026-10-30 the user authorized source frames **0–268 inclusive** and removal
+of **right-hand frame 29**, approximating later improved HaWoR input. This changes
+the input benchmark; old and new scores must not be interpreted as a solver-only
+comparison. Original source arrays and the old benchmark remain preserved.
+The [reviewed report](../../../outputs/ik-benchmark-reviewed/REPORT.md) records
+fresh solves of the six leading distinct production configurations; the duplicated
+cached runtime comparison is counted once. Further experiments follow those runs.
+[21 focused checks passed](../../../outputs/ik-benchmark-reviewed/validation/selection-tests.log)
+for source preservation, exact boundaries, hand identity, production fitting and
+scoring, legacy behavior and selection mismatch rejection.
+
+The six reruns completed on 269 frames / 461 observed hand samples:
+
+| Configuration | Reviewed score /100 | Solve seconds |
+| --- | ---: | ---: |
+| robust-position-limits | 74.670 | 63.06 |
+| temporal-lower | 74.310 | 122.06 |
+| config2-gripper | 73.878 | 171.67 |
+| config2-missing-hold | 73.692 | 170.77 |
+| temporal-low | 73.364 | 183.61 |
+| orientation4-low | 70.507 | 138.14 |
+
+[Full results](../../../outputs/ik-benchmark-reviewed/validation/top-six-results.json).
+[Independent audits of all six runs passed](../../../outputs/ik-benchmark-reviewed/validation/top-six-audit.json): source arrays preserved, identical reviewed targets/masks/timestamps, all 24 physical joints and derivatives, FK, collisions and score arithmetic verified.
+The best of these six is 74.670; source editing alone did not resolve the
+tracking/motion tradeoff.
+
+Subsequent tuning adds optional production vector Cauchy fitting for hand pose
+blocks. [12 derivative/loss checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-tests.log),
+[16 settings checks](../../../outputs/ik-benchmark-reviewed/validation/cauchy-settings-tests.log)
+and [4 CPU/CUDA comparisons](../../../outputs/ik-benchmark-reviewed/validation/cauchy-cuda-tests.log)
+passed. This retains the scoring targets, isolates camera/motion/opening terms,
+and defaults to the previous objective.
+
+The subsequent production comparisons completed:
+
+| Configuration | Reviewed score /100 |
+| --- | ---: |
+| tolerance-limits | 73.569 |
+| tolerance-limits-base | 72.803 |
+| cauchy-orientation-base | **87.992** |
+| cauchy-pose-base | 69.178 |
+| cauchy-orientation-continued | **88.558** |
+
+The [87.992 result](../../../outputs/ik-benchmark-reviewed/cauchy-orientation-base/score.json)
+passes 456/461 positions, 260/461 orientations, all 269 joint-feasibility checks,
+and 260/269 collision checks. Its
+[independent audit passed](../../../outputs/ik-benchmark-reviewed/validation/audit-cauchy-orientation-base.json).
+It retains position Huber fitting and adds Cauchy orientation fitting with a
+refined base; scoring still uses the same smoothed targets and 1 cm / 4° thresholds.
+It exhausted 2000 trajectory evaluations, so further convergence is unverified.
+
+Separate warm diagnostic refinements scored 64.903, 86.490 and 83.391; these are
+not production exports or accepted winners. Their
+[local evidence](../../../outputs/ik-benchmark-reviewed/validation/warm-refinement/)
+is preserved. Production saved-trajectory initialization subsequently passed
+[eight focused checks](../../../outputs/ik-benchmark-reviewed/validation/warm-start-tests.log)
+covering export/scoring, source mismatch, bounds, skipped-base timing and existing
+workflows. Continuing the 87.992 result with the same objective improved it to
+**88.558**: 456/461 positions, 279/461 orientations, 269/269 joint-feasible frames
+and 255/269 collision-free frames. Its
+[independent audit passed](../../../outputs/ik-benchmark-reviewed/validation/audit-cauchy-orientation-continued.json).
+Another 2000 evaluations reduced objective cost from 10474.53 to 8906.75 but
+again reached the iteration cap. The 255.33 seconds are incremental and exclude
+the original solve. >90 is still unachieved; remaining orientation errors and
+collisions need further tuning.
+
+## Requested gripper roll experiments
+
+**Accepted by the user on 2026-10-30:** left +180° about local forward +X,
+original right orientation. This is the correct target convention for future
+Config 2 work. The user then stopped all IK experiments and requested the final
+commit. Original-target tuning ended at 88.558; >90 was not achieved.
+
+The user corrected the requested side to **left +180° / original right** after
+reviewing the right-flip run below. The
+[left config](../../../configs/gripper_wrist_roll_left_flip.json) regenerates from
+the original mapping. Its
+[numerical check passed](../../../outputs/ik-benchmark-left-roll-flip/validation/mapping-check.json):
+original right orientation restored, only left local Y/Z axes reversed, unchanged
+positions/openings/eligibility, and the same relationship after smoothing.
+The corrected `robust-position-limits` comparison scored **85.127**, up from
+74.670 with the original targets: 459/461 position passes, 295/461 orientation
+passes, 227/269 joint-feasible frames and 249/269 collision-free frames. Both
+stages converged by `ftol` after 600/506 evaluations; total solve time was 60.77 s.
+It overlapped the original-target Cauchy continuation, so these times are not
+an isolated speed comparison. The
+[separate report](../../../outputs/ik-benchmark-left-roll-flip/REPORT.md) and
+[passing independent audit](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-robust-position-limits.json)
+preserve the result. The corrected detached-target viewer opened at
+localhost:8086 with a browser connection recorded in its
+[startup log](../../../outputs/ik-benchmark-left-roll-flip/validation/viewer.log).
+No viewer tests or visual review were performed, as requested.
+
+### Earlier right flip
+
+The user requested a 180° right-target rotation about local forward +X.
+The [separate mapping config](../../../configs/gripper_wrist_roll_right_flip.json)
+postmultiplies only the right palm orientation; palm positions, opening, source
+data and eligibility are preserved. The
+[mapping check](../../../outputs/ik-benchmark-right-roll-flip/validation/mapping-check.json)
+also verifies that smoothing preserves this exact rotation relationship.
+
+With unchanged `robust-position-limits` solver settings, the score changes from
+**74.670 to 45.214**, with 353/461 position passes, 138/461 orientation passes,
+52/269 joint-feasible frames and 148/269 collision-free frames. Both stages hit
+their 700/1000 evaluation caps; solve time was 98.27 seconds. This establishes a
+worse result for this solve, not a conclusion about the desired servo orientation.
+The changed-target comparison has its own
+[report](../../../outputs/ik-benchmark-right-roll-flip/REPORT.md) and
+[passing independent audit](../../../outputs/ik-benchmark-right-roll-flip/validation/audit-robust-position-limits.json).
+The original mapping and benchmark remain available.
+
+Opened the detached-target viewer at localhost:8085; its
+[startup log](../../../outputs/ik-benchmark-right-roll-flip/validation/viewer.log)
+records a browser connection. Per user instruction, no viewer tests, screenshots
+or visual review were performed. The user will assess the target orientation.
+
+## Earlier original-region experiments
+
+The earlier Cauchy polish failed its pre-solve directional Jacobian check;
+no polish trajectory or score was produced. The user ended viewer work, and its
+server was stopped. Earlier viewer evidence below remains historical.
+
+### Configuration tuning before the reviewed restart
+
+The user subsequently authorized [experiments toward >90](../plans/milestone-3-ik-tuning.md)
+on the original unchanged region before the reviewed restart above. The first completed run,
+[temporal-low](../../../outputs/ik-benchmark/temporal-low/score.json), scores
+**72.620759**: 463/470 position passes, 337/470 orientation passes, 85/296
+joint-feasible frames, and 271/296 collision-free frames. Relative to the original
+missing-hand configuration, only temporal weights changed from 1/0.5 to 0.1/0.05.
+Orientation median improves from 12.66° to 2.30°, but acceleration failures offset
+most of the gain. Its 396.96 seconds of solving partly overlapped focused checks;
+do not interpret it as an isolated solver-speed comparison.
+
+The original selected initialization has 112.8 rad/s² acceleration RMS and a
+2.54-radian maximum frame step, motivating optional temporal regularization
+during base fitting. New motion-limit penalties passed
+[60 IK tests](../../../outputs/ik-benchmark/validation/tuning/motion-tests.log),
+including CPU/CUDA agreement, and a further
+[hinge boundary check](../../../outputs/ik-benchmark/validation/tuning/hinge-boundary.log).
+SDF support passed [three focused checks](../../../outputs/ik-benchmark/validation/tuning/sdf-tests.log)
+and uses a separately built
+[one-million-sample palm workspace](../../../outputs/ik-benchmark/palm-workspace/workspace_report.json).
+Optional base-stage continuity passed [five checks](../../../outputs/ik-benchmark/validation/tuning/base-continuity-tests-retry.log).
+One initial new-mode assertion assumed the second stage must further reduce
+acceleration despite stronger first-stage smoothing; its failure and correction
+are preserved in event `20261030-ik-tuning-006`. Legacy acceptance is unchanged.
+
+Subsequent completed scores: `temporal-lower` (weights 0.01/0.005) **74.680132**;
+`orientation4-limits` **69.571952**; `continuous-base-limits` **69.071305**.
+The remaining initial sweeps finished: original SDF palm placement **66.176682**,
+orientation4-low **72.890670**, orientation8-limits **64.667194**, and
+balanced-limits **65.425173**. Explicit limit penalties have not improved the best
+score. A 1 cm radial Huber position loss with limit penalties scored **72.437464**;
+the motivation was that five of 470 observations account for >99.999% of the
+best run's squared position error. Targets and scoring remain unchanged.
+The objective passed [eight focused checks](../../../outputs/ik-benchmark/validation/tuning/huber-final-tests.log).
+
+An [independent audit](../../../outputs/ik-benchmark/validation/tuning/audit-robust-position-limits-cached.json)
+passed for the original missing-hand configuration, the current best 74.680132
+run, and both robust-loss timing runs. It recomputed scalar FK, collisions,
+24 physical joint values/derivatives, score arithmetic and common source inputs.
+No >90 result or final tuning acceptance is established yet. The
+[automatic report](../../../outputs/ik-benchmark/REPORT.md) owns the full scoreboard.
+
+Fixed-base refinement diagnostics then held the best run's base and started from
+its saved joints. Three existing-objective variants scored **74.263**, **67.305**,
+and **64.950**, all exhausting 1000 evaluations. The first improved joint passing
+frames from 60 to 253 but lost tracking. These are exploratory saved-joint scores,
+not production exports or new accepted winners; settings, joints and actual
+mesh-collision scores are in the local
+[refinement directory](../../../outputs/ik-benchmark/validation/tuning/refinement/).
+
+Testing now includes radial fitting tolerances and joint/base co-optimization
+in stage two. [Thirteen derivative/workflow checks](../../../outputs/ik-benchmark/validation/tuning/refinement/refinement-tests.log)
+and [thirteen reference/settings checks](../../../outputs/ik-benchmark/validation/tuning/refinement/reference-tests.log)
+passed. Four new tolerance-mode CPU/CUDA cases initially exceeded the existing
+1% cost-agreement threshold at 150 evaluations; all passed with 1000 evaluations
+in the [six-case retry](../../../outputs/ik-benchmark/validation/tuning/refinement/refinement-cuda-tests-retry.log).
+Legacy comparisons passed without their budgets or tolerances changing. Current
+6 mm / 2° fitting tolerances leave the benchmark at 10 mm / 4°. The fixed-base
+probe reached **77.197743** (386/470 position, 219/470 orientation, 264/296 joint,
+269/296 collision passes), but exhausted 2000 evaluations. The moving-base probe
+finished at **73.799957**, also unconverged. The 77.198 result is not yet a
+production export/audited winner. Exploratory vector Cauchy pose-loss probes
+scored **85.454284** (fixed base) and **86.815339** (moving base), both with all
+296 frames joint-feasible. The latter passed 458/470 positions, 277/470
+orientations and 269/296 collision checks. Both exhausted 2000 evaluations.
+The motivation was five observations contributing 52% of the best run's chordal
+orientation loss. Their analytic directional checks passed; no production Cauchy
+loss feature or acceptance result is claimed. The subsequent orientation-weight
+polish failed its pre-solve derivative check, as recorded above; no polish result
+is claimed. [Diagnostic evidence](../../../outputs/ik-benchmark/validation/tuning/refinement/cauchy-base.json).
+
+The requested [detection-gap check](../../../outputs/ik-benchmark/validation/tuning/first-region-detection-gaps.json)
+found one pair separated by more than ten absent frames inside [0,296): right
+hand **275 → 295**, with frames 276–294 missing (19 frames), 0.667 seconds between
+detections, **0.991933 m wrist displacement** and **0.988565 m palm-target
+displacement** in the gravity-aligned world frame. Raw and filtered palm positions
+agree for this pair. Direct-detection and benchmark observation masks are equal
+in this interval. Left has no qualifying internal gap; frames 274–295 are a
+22-frame trailing absence with no subsequent in-interval detection. Leading
+absence before the first detection is likewise not an inter-detection gap.
+These are measured discontinuities, not proof of a detector error; inputs and
+scoring masks remain unchanged.
+
+The requested hand-only review was verified at localhost:8080 (now stopped):
+original MANO meshes, source RGB, detection paths without bridges across missing
+frames, and jump buttons for 275/285/295. Optional faint endpoint hands make the
+displacement visible. The original camera-framing issue was corrected; inspected
+[screenshot](../../../outputs/ik-benchmark/validation/tuning/hand-review/review-fixed.png)
+and [review record](../../../outputs/ik-benchmark/validation/tuning/hand-review/review.json)
+confirm the rendered scene. This local diagnostic uses existing reconstruction
+helpers; it does not alter the saved hand or robot trajectory. The screenshot
+used software WebGL and captured the user's selected frame 29 without scrubbing
+their view. Relaunch with workspace Python and `PYTHONPATH=src` using the ignored
+[review script](../../../outputs/ik-benchmark/validation/tuning/hand-review/view.py),
+optionally adding `--open-browser`.
+
+## Runtime diagnosis — 2026-10-30
+
+Both optimization stages use the RTX 4090 for sparse normal-matrix assembly and
+cuDSS factorization. Kinematics, objective/Jacobian evaluation and trust-region
+control run on the CPU. GPU use alone therefore cannot prevent a CPU slowdown.
+
+The user's root `turbostat` measurement confirms **800 MHz busy frequency** despite
+maximum HWP performance requests. `IA32_PACKAGE_THERM_STATUS = 0x8840000c` has
+external PROCHOT status/log bits 2/3 set, while CPU high-temperature bits 0/1 are
+clear. Intel defines this as another platform agent asserting the throttle signal
+([SDM volume 3B, §17.9](https://cdrdv2-public.intel.com/874250/253669-090-sdm-vol-3b.pdf#page=48)).
+CPU temperature was 36–37°C and package power ~13 W, below the configured
+180/253 W limits. This establishes external platform throttling; the exact
+component or firmware fault is **unverified**. No system settings were changed.
+[Selected hardware counters](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware-status.json)
+and [earlier measurements](../../../outputs/ik-benchmark/validation/tuning/runtime-hardware.txt)
+are preserved. A post-recovery measurement is still needed to quantify its full
+contribution to the historical slowdown.
+
+Controlled [constraint ablation](../../../outputs/ik-benchmark/validation/tuning/runtime-ablation-before.json)
+on identical saved inputs measured 41.9 ms per objective/Jacobian evaluation
+with original weights, 42.1 ms with reduced weights, and 44.2 ms with added limit
+penalties; linear solving stayed ~125 ms in every case. Repeating on the much
+less smooth initialization, with more active penalty rows, gave
+[41.8 versus 44.5 ms](../../../outputs/ik-benchmark/validation/tuning/runtime-ablation-active-before.json),
+with linear solving again ~125 ms. Thus the added constraints cost roughly 5–7%
+in objective evaluation on these inputs, not the observed several-fold slowdown.
+Constraints can still change convergence and iteration counts. The historical
+base-stage comparison itself grew from 15.9 to 48.8 seconds with unchanged
+base-stage settings and 700 evaluations in each run; those runs were not isolated.
+
+The isolated profile also exposed avoidable repeated symbolic GPU planning:
+40.4 seconds across 893 plans. The solver now reuses a plan when the sparse
+structure is unchanged, updates GPU values/RHS in place, and performs fresh
+numeric factorization and backward-error checks every iteration. Structural
+changes rebuild the plan. [Nine targeted checks](../../../outputs/ik-benchmark/validation/tuning/cache-tests.log)
+passed, including invalidation, updated operands, bounds and CPU/CUDA agreement.
+
+| Identical robust-loss configuration | Before | With plan reuse |
+| --- | ---: | ---: |
+| Both optimization stages | 113.08 s | 69.61 s |
+| Linear-solve path | 58.81 s | 12.92 s |
+| Symbolic plans | 893 | 3 |
+| Whole profiled benchmark, video skipped | 136.04 s | 92.73 s |
+| Score /100 | 72.437464 | 72.437464 |
+
+This paired run reduced solve time **38.4%** while the CPU remained throttled.
+Both runs used cProfile, one attempt, and the same settings/inputs. Numerical
+trajectories are not bit-identical: stage-two evaluations changed from 314 to 341,
+maximum palm position difference was 6.31 µm and rotation difference 0.026°;
+all four score components and joint/collision passing masks were unchanged.
+The base stage reached its 700-evaluation cap in both runs; stage two converged.
+[Paired comparison](../../../outputs/ik-benchmark/validation/tuning/runtime-paired-comparison.json),
+[before profile](../../../outputs/ik-benchmark/validation/tuning/robust-position-limits-profile.txt),
+and [after profile](../../../outputs/ik-benchmark/validation/tuning/robust-position-limits-cached-profile.txt)
+preserve the evidence. A fixed-input linear-solve microbenchmark improved from
+~125 to 10.5–10.7 ms; this is not a whole-solver speedup claim.
+
+Most original experiments exhaust 700/500 evaluations across three attempts;
+one also spent 89 seconds exporting video. `--skip-video` avoids that export
+without changing scoring or saved interactive trajectories. To investigate the
+remaining platform fault, Dell documents a
+[power drain](https://www.dell.com/support/kbdoc/en-us/000139016/how-to-perform-hard-reset)
+and the Aurora R16's
+[F12 preboot diagnostics](https://www.dell.com/support/manuals/en-us/alienware-aurora-r16-desktop/alienware-aurora-r16-owners-manual/running-the-supportassist-pre-boot-system-performance-check?guid=guid-0b893eed-efbc-4831-a9c4-7298a7a9f619&lang=en-us).
+These are proposed troubleshooting steps, not a verified repair; external
+throttling protection has not been disabled.
+
+## Comparison and results
+
+[Automatic report](../../../outputs/ik-benchmark/REPORT.md) preserves every run's
+configuration, solver attempts/timing, original and filtered targets, trajectory,
+video, per-frame scores, physical joint values and collision pairs. All current
+comparisons use the same iPhone source, 0.3-second/order-2 Config 2 palm targets
+and **first manipulation region [0,296)**: 296 evaluated frames and 470 observed
+hand samples. The other 990 source frames are disclosed exclusions. These are
+rescored saved trajectories; no new IK run was needed. Future benchmark runs
+solve only this first retained region after configured adjacent-region merging.
+No predictions are missing within it. Source arrays and timestamps remain unchanged.
+
+Each column is 25 times its passing fraction. Position ≤1 cm and orientation ≤4°
+use observed hand samples; joint limits and collision avoidance use all evaluated
+frames. All 24 physical revolute joints enter feasibility, including neck and
+finger mimics. Acceleration uses the explicitly assumed
+[10 rad/s² benchmark cap](../decisions/ik-benchmark-limits.md), not an Alex rating.
+
+| Configuration | Total /100 | Position /25 | Orientation /25 | Joint limits /25 | Collision-free /25 | Solve seconds |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Smoothed wrist reference | 41.554 | 0.000 | 0.000 | 17.905 | 23.649 | 89.718 |
+| Config 2 palm/opening | 69.877 | 24.362 | 3.032 | 20.524 | 21.959 | 96.706 |
+| Config 2 + missing-hand penalty | 70.806 | 24.362 | 3.032 | 21.453 | 21.959 | 96.968 |
+
+Solve time sums both solver stages and every retry in this region, excluding
+setup/export and between-solve overhead. The original whole-trajectory timings
+remain in each saved trajectory report.
+
+The reference fits its historical shifted wrist and neutral-MANO orientation;
+its zero tracking scores reflect the changed **common Config 2 palm objective**,
+not a claim that its original wrist objective never succeeded. Gripper runs fit
+actual palm FK and continuous opening. Both use temporal weights 1/0.5, opening
+weight 20, base prior 0.3 and adjacent-region merging. The last run adds missing-hand
+velocity weight 5 to the corresponding arm/opening in stage two, excluding neck.
+
+| Configuration | Position median / P95 (mm) | Orientation median / P95 (degrees) | Joint velocity RMS / absolute P95 (rad/s) | Joint acceleration RMS / absolute P95 (rad/s²) |
+| --- | ---: | ---: | ---: | ---: |
+| Reference | 51.432 / 55.235 | 113.206 / 167.670 | 0.670 / 1.261 | 3.491 / 6.054 |
+| Config 2 | 1.510 / 5.680 | 12.792 / 43.439 | 0.634 / 1.323 | 3.276 / 5.796 |
+| Config 2 + penalty | 1.488 / 5.685 | 12.662 / 44.695 | 0.536 / 1.067 | 3.355 / 5.657 |
+
+The extra penalty reduces velocity RMS at missing-hand destinations from
+1.018403 to 0.533669 rad/s (47.60%) and absolute P95 from 2.200208 to 1.214622 rad/s.
+This diagnostic pools each missing hand's seven arm joints and one opening
+variable over 960 scalar interval samples, without neck or repeated mimics.
+Both gripper configurations have 36 collision frames and 57 passing orientation
+samples; joint-feasible frames improve from 243 to 254. Weight 5 improves gap
+holding and the total score in this first region.
+Neck is excluded from the added residual; its optimized motion is not guaranteed
+unchanged. No extra tuning was performed beyond the approved comparison.
+
+Final opening error has median 0.01124 and P95 0.14140 on the unitless [0,1] action.
+The report also links raw-target errors, individual-joint diagnostics and exact
+passing counts. All final positions satisfy URDF bounds, but 2 frames violate
+speed bounds and 42 violate the benchmark acceleration cap (42 fail their
+combined joint test). These and the 36 colliding frames remain visible.
+
+## Verification and review
+
+- [Current tests](../../../outputs/ik-benchmark/validation/first-region/tests-retry.log):
+  **91 passed**, including CPU/CUDA and production workflow coverage. New cases
+  verify selection after merging, preservation of source arrays, unsolved later
+  frames, scoring old full runs and new limited runs, all-attempt timing and
+  region-scoped motion/collision denominators. The first test session was
+  interrupted before completion; its log is preserved alongside the retry.
+- [First-region audit](../../../outputs/ik-benchmark/validation/first-region/audit.json)
+  ([script](../../../outputs/ik-benchmark/validation/first-region/audit.py),
+  [log](../../../outputs/ik-benchmark/validation/first-region/audit.log)):
+  all three scores, tracking/opening/per-joint diagnostics, limits and timing
+  independently recomputed. First-region per-frame evidence equals the archived
+  full-run evidence; all 24 source arrays remain unchanged. Later frames have no
+  benchmark predictions or passing flags. Common targets and idempotent report
+  regeneration verified.
+- [Browser review](../../../outputs/ik-benchmark/validation/first-region/viewer-browser.json):
+  five frames passed (119, 295, 296, 432, 600), with no page errors. Inspected
+  screenshots at [119](../../../outputs/ik-benchmark/validation/first-region/viewer-119.png)
+  and [600](../../../outputs/ik-benchmark/validation/first-region/viewer-600.png)
+  confirm first-region scores and the explicit exclusion label on later saved
+  poses. Rendering used software WebGL; trajectories were not regenerated.
+
+Use the README's viewer command with
+`outputs/ik-benchmark/config2-missing-hold/trajectory` to reopen the saved run.
+The historical viewer used localhost:8080; it is no longer running.
+
+## Historical full-video acceptance
+
+The 2026-10-29 [full-video report](../../../outputs/ik-benchmark/history/full-regions-20261029/REPORT.md),
+scores and frame metrics remain archived. They cover [0,296), [432,893),
+[947,1286) and are superseded for current comparisons. Original full-video
+trajectories, configurations, videos and logs remain in place. Previous checks:
+
+- [Historical tests](../../../outputs/ik-benchmark/validation/final-tests.log): **134
+  passed**, covering score denominators/boundaries, physical time, real known
+  collision/clear poses, unclipped invalid joint evaluation, palm FK/opening/mimics,
+  missing-hand/neck isolation, smoothing/source preservation, production exports,
+  CPU/CUDA agreement and legacy behavior. Third-party deprecation warnings remain.
+- [Independent audit script](../../../outputs/ik-benchmark/validation/audit.py),
+  [log](../../../outputs/ik-benchmark/validation/audit.log) and
+  [results](../../../outputs/ik-benchmark/validation/audit.json): all three scores
+  and requested diagnostics recomputed from saved data; all 24 source arrays
+  unchanged; common target/mask/timestamp arrays equal; all 24 robot joints
+  reconstructed directly from XML mimic rules; source-time differences and
+  endpoint handling checked. Gripper solver FK agrees with the scorer's ordinary
+  robot FK. Report regeneration preserves every run and is idempotent.
+- Initial checks exposed a missing-observation NaN regression, a mis-transcribed
+  collision fixture and relative-path report formatting. All were corrected;
+  their failed logs and follow-up events remain preserved in the
+  [action log](../logs/2026-10.jsonl).
+- [Browser checks](../../../outputs/ik-benchmark/validation/viewer-browser.json)
+  passed at 14 frames spanning observations, missing hands, collision cases,
+  selected-region boundaries and excluded gaps, with no page errors. Inspected
+  screenshots at [119](../../../outputs/ik-benchmark/validation/viewer-119.png),
+  [252](../../../outputs/ik-benchmark/validation/viewer-252.png),
+  [296](../../../outputs/ik-benchmark/validation/viewer-296.png),
+  [600](../../../outputs/ik-benchmark/validation/viewer-600.png),
+  [959](../../../outputs/ik-benchmark/validation/viewer-959.png) and
+  [1285](../../../outputs/ik-benchmark/validation/viewer-1285.png) confirm visible
+  articulation/target axes, missing-observation labels, collision flags and hidden
+  robot poses in excluded gaps. Browser rendering used software WebGL.
+
+The benchmark checks sampled self-collision geometry with documented structural
+and pinned-asset exclusions. It does not establish inter-frame clearance, scene
+contact, torque feasibility, physical scale accuracy or safe hardware execution.
+Historical raw-target demonstration gates remain separate. Further tuning or
+simulation work requires a new user-directed scope; the next action is review
+of these preserved results. Focused repository cleanup remains due before the
+next milestone.

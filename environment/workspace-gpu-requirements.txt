@@ -1,0 +1,4 @@
+# Optional CUDA sparse IK backend; install after workspace-requirements.txt.
+# SciPy TRF bound handling is reused; CuPy/cuDSS replace its LSMR bottleneck.
+cupy-cuda12x==13.6.0
+nvmath-python[cu12]==0.6.0

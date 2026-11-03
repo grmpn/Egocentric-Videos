@@ -1,0 +1,6 @@
+# Python 3.12, Linux x86_64. Install in .venv-vlm, never in HaWoR/LeRobot.
+# vLLM 0.19.1's default wheel uses CUDA 12.9 and Torch 2.10.0.
+# Install with uv pip install --torch-backend=cu129 -r this-file.
+# Qwen3.6 support: https://huggingface.co/QuantTrio/Qwen3.6-27B-AWQ
+vllm==0.19.1
+transformers==5.5.4

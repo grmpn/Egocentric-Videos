@@ -1,0 +1,30 @@
+"""Review saved fixed-base episodes and verified IK with camera and timeline controls."""
+
+import argparse
+from pathlib import Path
+
+from egocentric_pipeline.retargeting_visualization import view_retargeting
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("retargeting_directory", type=Path)
+    parser.add_argument("--asset-root", type=Path)
+    parser.add_argument("--open-browser", action="store_true")
+    parser.add_argument("--mano-models", nargs=2, type=Path, metavar=("LEFT", "RIGHT"),
+                        help="Licensed MANO assets; defaults to paths in the source alignment report")
+    parser.add_argument("--no-mano", action="store_true", help="View robot/paths without loading MANO assets")
+    parser.add_argument("--target-grippers", action="store_true",
+                        help="Show detached grippers at the smoothed IK targets instead of MANO hands")
+    args = parser.parse_args()
+    viewer = view_retargeting(args.retargeting_directory, asset_root=args.asset_root, open_browser=args.open_browser,
+                             mano_models=args.mano_models, show_mano=not (args.no_mano or args.target_grippers),
+                             show_target_grippers=args.target_grippers)
+    try:
+        viewer.wait_until_close()
+    finally:
+        viewer.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,19 +1,21 @@
-# HaWoR environment
+# Workflow environments
 
 [hawor.yml](hawor.yml) is the reviewed dependency declaration for the local
-Milestone 1 runtime. The project status linked below records recreation,
+Milestone 1 runtime. The acceptance evidence linked below records recreation,
 dependency, compiled-kernel, inference, and rendering evidence; installation
 instructions alone do not establish that those checks passed.
 
-The [active plan](../knowledge/agent/plans/milestone-1-hawor-baseline.md) defines
-the setup and acceptance requirements; the [project status](../knowledge/agent/PROJECT_STATUS.md)
-records the current evidence. Do not update an existing working environment
+The [completed plan](../knowledge/wiki/plans/milestone-1-hawor-baseline.md) preserves
+the original setup and acceptance requirements; the
+[acceptance record](../knowledge/wiki/experiments/milestone-1-baseline.md) links the
+historical evidence, and [project status](../knowledge/wiki/status.md) identifies
+current work. Do not update an existing working environment
 merely to repeat the installation instructions below.
 
 ## System prerequisites
 
 Use Linux or WSL2 with an exposed NVIDIA GPU, at least 40 GB free disk space,
-FFmpeg/ffprobe, Git, a C/C++ build toolchain, CMake, and OpenGL/EGL runtime
+FFmpeg/ffprobe **6 or newer**, Git, a C/C++ build toolchain, CMake, and OpenGL/EGL runtime
 libraries. The inspected compiler combination is CUDA toolkit 11.7.64 with
 GCC/G++ 11.5.0 on Ubuntu 24.04. The host driver must support Torch's CUDA 11.7
 runtime. WSL2 uses the Windows host driver; its Linux installation needs the
@@ -65,13 +67,31 @@ git -C external/HaWoR rev-parse HEAD
 The expected HaWoR revision is
 `66c7d4108d58a716deccd192cb7645170cdc7bd7`. Its source remains unchanged.
 
+To suppress untracked build/asset noise from the nested repositories, apply these
+**local** settings after initialization (they do not modify upstream source):
+
+```bash
+git config --local submodule.external/HaWoR.ignore untracked
+git -C external/HaWoR config --local submodule.thirdparty/DROID-SLAM/thirdparty/eigen.ignore untracked
+git -C external/HaWoR config --local submodule.thirdparty/DROID-SLAM/thirdparty/lietorch.ignore untracked
+git -C external/HaWoR/thirdparty/DROID-SLAM/thirdparty/lietorch config --local submodule.eigen.ignore untracked
+```
+
+Tracked edits and changed submodule revisions remain visible. To inspect all
+untracked files explicitly, run `git status --short --ignore-submodules=none`
+inside HaWoR and each child, or use `git submodule foreach --recursive
+'git status --short --ignore-submodules=none'` from the project root. Repeat
+the local settings in a fresh clone. The laptop's exact prior command was not
+found in tracked history; the user confirmed the issue was dirty-status noise.
+
 For a new machine, bootstrap the Conda environment and the build prerequisites
 listed in `hawor.yml`. Torch must already be importable when PyTorch3D and
 torch-scatter build; one initial `conda env create -f hawor.yml` does not provide
 that ordering. These commands repeat only the pins needed for the bootstrap:
 
 ```bash
-conda create -n hawor python=3.10.21 pip=26.2.1 wheel=0.47.0
+conda create --override-channels -c conda-forge -n hawor \
+    python=3.10.21 pip=26.2.1 wheel=0.47.0 'ffmpeg>=6'
 conda activate hawor
 python -m pip install \
     setuptools==80.10.2 ninja==1.13.2 Cython==3.3.0 numpy==1.26.4 \
@@ -83,17 +103,30 @@ export PATH="$CUDA_HOME/bin:$PATH"
 export CC=/usr/bin/gcc-11
 export CXX=/usr/bin/g++-11
 export CUDAHOSTCXX=/usr/bin/g++-11
-export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib64:$CONDA_PREFIX/lib:$CONDA_PREFIX/lib/python3.10/site-packages/torch/lib:${LD_LIBRARY_PATH:-}"
 if [ -d /usr/lib/wsl/lib ]; then
     export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
 fi
 ```
+
+On the RTX 4090, set `TORCH_CUDA_ARCH_LIST="8.6+PTX"` for source builds:
+CUDA 11.7 cannot compile native Ada (`8.9`) instructions. The existing
+DROID/LieTorch build already includes `sm_86`; verify execution on the actual
+GPU after compilation. Keep CUDA 11.7 selected only for HaWoR, alongside any
+newer toolkit used by the annotation server.
 
 Confirm GPU access before downloading/building the remaining stack:
 
 The WSL library path is needed for cuDNN to load `libcuda.so`; a simple CUDA
 allocation can pass while convolution aborts without it. The setup checker
 exercises both operations.
+
+Keep `$CONDA_PREFIX/lib` in this HaWoR-only library path. On Ubuntu 22.04 the
+system `libstdc++` lacks the ABI required by Conda's ICU/SQLite libraries;
+otherwise an import of SQLite after Torch can fail during inference even when
+the basic CUDA checks pass. The video-to-dataset command applies this path only
+to its HaWoR subprocess, preserving the separate modern LeRobot runtime. It
+resolves Conda's Python-directory aliases before locating Torch libraries.
 
 ```bash
 python -c 'import torch; print(torch.__version__, torch.version.cuda); print(torch.cuda.get_device_name(0)); print((torch.ones(8, device="cuda") * 2).cpu())'
@@ -137,13 +170,35 @@ set.
 
 ## Assets and rendering
 
-Use the exact weight and MANO locations in the
-[plan's setup requirements](../knowledge/agent/plans/milestone-1-hawor-baseline.md#38-required-model-files-and-exact-locations).
-Weights, MANO, and source videos remain untracked. The setup checker records
-their presence and weight hashes. Model download links are in the
+The [runtime asset contract](../src/egocentric_pipeline/hawor_runner.py) and
+setup checker require these paths relative to `external/HaWoR/`:
+
+```text
+weights/external/droid.pth
+weights/external/detector.pt
+weights/hawor/checkpoints/hawor.ckpt
+weights/hawor/checkpoints/infiller.pt
+weights/hawor/model_config.yaml
+thirdparty/Metric3D/weights/metric_depth_vit_large_800k.pth
+_DATA/data/mano/MANO_RIGHT.pkl
+_DATA/data_left/mano_left/MANO_LEFT.pkl
+```
+
+The model config belongs directly under `weights/hawor/`; the historical plan's
+`checkpoints/model_config.yaml` path was a documentation error. Weights, MANO,
+and source videos remain untracked. The checker records presence and SHA-256
+hashes. Model download links are in the
 [pinned upstream installation guide](https://github.com/ThunderVVV/HaWoR/blob/66c7d4108d58a716deccd192cb7645170cdc7bd7/README.md#installation);
 obtain MANO separately through its licensed download. Assets are external inputs,
 not Conda packages.
+
+The desktop obtains the six public files from the
+[maintainer's HaWoR model repository](https://huggingface.co/ThunderVVV/HaWoR/tree/da6335f47f9806308992d5ae1002a4cc5f7252c2)
+at revision `da6335f47f9806308992d5ae1002a4cc5f7252c2`. Its `external/` files
+map to the DROID, detector, and Metric3D destinations above; its `hawor/` files
+map beneath `weights/hawor/`. This avoids requiring Google Drive for the
+maintainer's mirrored DROID/Metric3D weights. Obtain the two MANO files through
+[MANO's download process](https://mano.is.tue.mpg.de/) or your existing licensed copy.
 
 The installed stock viewer uses ModernGL's default X11 backend even in its
 headless mode. Setting `PYOPENGL_PLATFORM=egl` alone does not change that viewer
@@ -197,7 +252,7 @@ Run the [setup checker](../scripts/check_hawor_setup.py) before the bundled
 example, choosing a fresh evidence path for each check:
 
 ```bash
-PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/setup-check/setup_check.json
+PYTHONPATH=src python scripts/check_hawor_setup.py --output outputs/hawor/milestone-1/setup-check/setup_check.json
 ```
 
 The checker refuses to replace an existing evidence file. Retain its JSON
@@ -206,3 +261,207 @@ snapshot records what was installed; `hawor.yml`
 continues to own dependency choices and recreation instructions. Final runtime
 acceptance requires successful recreation, dependency consistency, CUDA
 execution, compiled kernels, real inference, and inspected rendering.
+
+## Native desktop and annotation environments
+
+The 2026-09-24 desktop uses Ubuntu 22.04, RTX 4090 (24 GiB), driver 580.159.03,
+and 62 GiB RAM. Its local Conda installation is `.conda/`, with HaWoR at
+`.conda/envs/hawor/`; LeRobot uses `.venv-lerobot/`, and vLLM uses `.venv-vlm/`.
+All are ignored by Git. To activate HaWoR in a terminal:
+
+```bash
+source .conda/etc/profile.d/conda.sh
+conda activate "$PWD/.conda/envs/hawor"
+```
+
+Apply the CUDA/compiler exports above in that terminal. Ubuntu 22.04's system
+FFmpeg 4.4 lacks required frame-PTS and CLI features; use the Conda FFmpeg in
+both HaWoR and LeRobot commands. This desktop installed FFmpeg 9.0.2 from
+conda-forge. For LeRobot, use its explicit interpreter and clear legacy library
+paths, for example:
+
+```bash
+export PATH="$PWD/.conda/envs/hawor/bin:$PATH"
+export HF_HOME="$PWD/data/models/huggingface"
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-lerobot/bin/python -m pytest tests
+```
+
+Keep this `HF_HOME` export for dataset creation and annotation too. The desktop's
+default `~/.cache/huggingface` directory is not writable by the current user;
+the repository-local cache works for both datasets and model weights.
+
+Install the annotation server separately:
+
+```bash
+uv venv --python 3.12 .venv-vlm
+uv pip install --python .venv-vlm/bin/python --torch-backend=cu129 \
+    -r environment/vlm-requirements.txt
+uv pip check --python .venv-vlm/bin/python
+```
+
+[vLLM 0.19.1](https://docs.vllm.ai/en/v0.19.1/getting_started/installation/gpu/)
+uses Torch 2.10.0/CUDA 12.9 here. Its dependency check, GPU matrix multiplication,
+and real image serving pass. The full-precision Qwen3.6-27B exceeds 24 GiB VRAM.
+The verified local serving checkpoint is
+[QuantTrio/Qwen3.6-27B-AWQ](https://huggingface.co/QuantTrio/Qwen3.6-27B-AWQ),
+revision `9b507bdc9afafb87b7898700cc2a591aa6639461`; this is a community 4-bit
+quantization, whose pilot annotation quality still needs video review.
+
+Download the **complete** snapshot, then start the server in its own terminal:
+
+```bash
+export HF_HOME="$PWD/data/models/huggingface"
+.venv-lerobot/bin/hf download QuantTrio/Qwen3.6-27B-AWQ \
+    --revision 9b507bdc9afafb87b7898700cc2a591aa6639461
+env -u LD_LIBRARY_PATH CUDA_HOME=/usr/local/cuda-12.9 HF_HUB_OFFLINE=1 \
+    .venv-vlm/bin/vllm serve --config environment/vlm-server.yaml
+```
+
+The [server configuration](vlm-server.yaml) binds only to `127.0.0.1:8000`,
+uses an 8192-token context, one request at a time, and up to three contact sheets
+(the annotator's default sixty-frame window). CPU offload is disabled: this
+vLLM version rejects it with Qwen's hybrid cache. GPU-only model loading uses
+19.78 GiB; run HaWoR and the server sequentially. Stop the server with Ctrl+C
+before HaWoR inference. Larger prompts or different image layouts require a
+separate capacity check.
+
+Desktop verification completed on 2026-09-24:
+
+- All three dependency checks, 34 HaWoR preflight checks, and CUDA execution in
+  PyTorch3D, torch-scatter, DROID and LieTorch pass. Both separately supplied MANO
+  files are present and readable; no further setup asset download is needed.
+- The bundled 121-frame video completes HaWoR inference, export, rendering and
+  validation in 68.920 seconds, with 13.476 GiB sampled peak device memory.
+  Five overlay frames and world/canonical trajectory previews were inspected.
+- LeRobot creation and reload pass. Actual `lerobot-annotate` generates plans
+  and subtasks through the local Qwen server; its validator reports zero errors
+  or warnings. Reload preserves all 121 frames and labels at 0 and 2 seconds.
+  The pickup/carry-to-sink labels match the inspected example frames.
+- The full project suite passed 88 tests across two runs; six focused dataset,
+  canonical and annotation checks passed again after the subprocess fixes.
+
+This verifies setup on the bundled example, not acceptance of the unrecorded
+iPhone pilot or metric trajectory accuracy. Dataset annotations retain their
+`pending` review status. The test server is stopped. The earlier standalone
+three-contact-sheet client smoke also passed in 6.20 seconds.
+
+Desktop setup evidence is local-only under
+`outputs/setup/desktop-20260924/`: `setup_check.json`, `compiled-kernels.json`,
+`bundled-reload.json`, `bundled-annotation.log`, and `overlay-review.jpg` record
+the checks above. `bundled-dataset/` contains the annotated example; failed
+attempts and their logs are preserved alongside it. This clone does not contain
+the laptop's datasets or generated runs.
+
+## Gravity alignment environment
+
+Stage 3 Part 1 uses a separate Python 3.12 environment. Existing HaWoR, LeRobot
+and VLM environments do not need package changes. GeoCalib supplies learned
+gravity estimation; the existing SMPL-X implementation supplies MANO geometry,
+and SciPy supplies rotations. Reuse HaWoR's licensed MANO assets in the paths above.
+
+```bash
+uv venv --python 3.12 .venv-gravity
+uv pip install --python .venv-gravity/bin/python \
+    pip==26.2.1 setuptools==80.10.2 wheel==0.47.0
+uv pip install --python .venv-gravity/bin/python --torch-backend=cu129 \
+    --no-build-isolation-package chumpy -r environment/gravity-requirements.txt
+uv pip check --python .venv-gravity/bin/python
+```
+
+Chumpy is the same revision used by HaWoR; its legacy asset loader needs `pip` at
+build time without declaring it. The package-specific build option above addresses
+that requirement. No dependency code is patched. Torch 2.10.0/CUDA 12.9 and
+torchvision 0.25.0 run GeoCalib on the RTX 4090; geometry reconstruction uses CPU.
+
+The [requirements](gravity-requirements.txt) pin GeoCalib to HuRo's revision
+`747054d743ca64bf4b0055c26ab709fa6d234996`. Download the official
+[v1.0 pinhole checkpoint](https://github.com/cvg/GeoCalib/releases/tag/v1.0) once:
+
+```bash
+mkdir -p data/models/geocalib
+curl --fail --location \
+    https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar \
+    --output data/models/geocalib/geocalib-pinhole-v1.0.tar
+sha256sum data/models/geocalib/geocalib-pinhole-v1.0.tar
+```
+
+Expected SHA-256:
+`86d6aeacd8bbd974c59ce39f61854e00d36911c732ad89be471476fd708722ac`.
+The workflow verifies this checkpoint and installed GeoCalib revision before
+inference; it never downloads weights automatically. Models and environments are
+ignored local files. The public single-image GeoCalib API is used with the saved
+focal prior, without modifying source images/intrinsics or adopting HuRo's SLAM.
+
+The [2026-10-14 acceptance](../knowledge/wiki/experiments/gravity-alignment-bundled.md)
+records package checks, GPU inference, geometry comparisons, tests and visual
+review. Exact installed versions and setup logs are local under
+`outputs/gravity/part-1-20261014/`. The legacy HaWoR comparison required
+`PYTHONNOUSERSITE=1`: a user-installed NumPy 2 otherwise shadowed its pinned NumPy
+1.26.4. No existing environment or user package was altered.
+
+## Robot workspace environment
+
+Use a separate Python 3.12 environment for scikit-robot FK, SciPy EDT, CPU PyTorch
+interpolation and the Viser browser viewer. The direct dependencies are pinned in
+[workspace-requirements.txt](workspace-requirements.txt). NumPy/SciPy reuse the
+existing project versions; the new scikit-robot dependency supplies URDF loading
+and batch FK, and its viewer uses Viser/trimesh. JAX, Open3D and a simulator are
+unnecessary for this positional-workspace workflow.
+
+```bash
+uv venv --python 3.12 .venv-workspace
+uv pip install --python .venv-workspace/bin/python \
+    pip==26.2.1 setuptools==80.10.2 wheel==0.47.0
+uv pip install --python .venv-workspace/bin/python \
+    --no-build-isolation-package chumpy -r environment/workspace-requirements.txt
+uv pip check --python .venv-workspace/bin/python
+git clone --no-checkout https://github.com/PatrizioAcquadro/purdue-alex-assets.git data/models/purdue-alex-assets
+git -C data/models/purdue-alex-assets checkout --detach 9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b
+```
+
+The [workspace configuration](../configs/robot_workspace.json) pins the asset
+revision, canonical SAKE URDF, base/tool frames and seven-joint chains. The build
+command verifies the revision and unchanged tracked assets. The downloaded
+repository retains its license/provenance files and meshes; it stays ignored.
+Existing HaWoR, annotation and gravity environments remain separate. Setup and
+installed-package evidence is local under `outputs/workspace/part-2-20261015/`.
+
+Part 3 reuses this environment for SciPy optimization, PyTorch distance queries,
+scikit-robot positional IK and interactive playback. Pillow 12.3.0, already
+installed through the viewer dependencies, is declared directly for video labels
+and review figures. Annotation uses the existing system `ffmpeg`/`ffprobe`; no
+OpenCV, simulator or model inference is required. Browser automation used for
+acceptance is local validation tooling, not a production dependency.
+
+### CUDA trajectory IK
+
+The joint/base solver defaults to `solver_backend: "cuda"`. Install the optional
+[GPU requirements](workspace-gpu-requirements.txt) into the workspace environment:
+
+```bash
+uv pip install --python .venv-workspace/bin/python -r environment/workspace-gpu-requirements.txt
+uv pip check --python .venv-workspace/bin/python
+```
+
+This adds CuPy 13.6.0 and NVIDIA nvmath-python 0.6.0 (cuDSS 0.5.0.16), with CUDA
+12 runtime libraries, without replacing CPU PyTorch. An NVIDIA driver and device
+access are required. On this machine set `CUDA_PATH=/usr/local/cuda-12.9`; use
+`env -u LD_LIBRARY_PATH OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1` when launching
+the workspace Python to avoid unrelated environments' libraries and excessive
+CPU threading. CuPy compiles and caches kernels on first use; cold timings include
+that overhead. GPU-restricted sandboxes require device access outside the sandbox.
+
+Use `--method joint --solver-backend cuda` with `scripts/retarget_trajectory.py`
+to override an older saved configuration, or `--solver-backend cpu` for the SciPy
+reference. Missing backend keys retain historical CPU behavior; there is no
+automatic CPU fallback. Objective weights and output formats are unchanged.
+The [solver contract](../knowledge/wiki/topics/stage-3-retargeting.md#gpu-sparse-solver)
+explains which operations run on CUDA and the numerical tradeoffs. CPU-only
+workspace sampling and visualization do not require the GPU packages.
+
+Original hand meshes in the Part 3 viewer reuse SMPL-X 0.1.28 and the same pinned
+Chumpy revision as gravity alignment. These evaluate saved MANO poses on CPU;
+they do not rerun HaWoR. Chumpy needs the build tools and package-specific build
+option above when its wheel is not cached. Licensed MANO files remain local:
+the viewer reads their paths from the source alignment report, or accepts
+`--mano-models LEFT RIGHT`. Use `--no-mano` for robot-only review without these assets.

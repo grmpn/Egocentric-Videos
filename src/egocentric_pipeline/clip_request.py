@@ -38,7 +38,7 @@ class LocalVideoSource:
             raise ValueError("source path must identify a local MP4")
         path = Path(self.path).expanduser().resolve()
         if path.suffix.lower() != ".mp4":
-            raise ValueError("Milestone 1 accepts only local .mp4 videos")
+            raise ValueError("The pipeline accepts only local .mp4 videos")
         object.__setattr__(self, "path", path)
         for name in ("dataset", "video_id"):
             object.__setattr__(self, name, _optional_text(getattr(self, name), name))

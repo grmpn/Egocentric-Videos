@@ -1,0 +1,84 @@
+{
+  "camera_smoothing_sigma_s": 0.05,
+  "camera_displacement_m": 0.3,
+  "camera_sustain_s": 0.3,
+  "minimum_episode_s": 1.0,
+  "minimum_feasible_fraction": 0.95,
+  "maximum_gap_s": 0.2,
+  "ik_tolerance_m": 0.005,
+  "orientation_tolerance_rad": 0.17453292519943295,
+  "joint_jump_report_rad": 0.5,
+  "neck_joints": [
+    "NECK_Z",
+    "NECK_Y"
+  ],
+  "camera_mount_frame": "HEAD_ZED_X_MINI_LINK",
+  "rotation_mount_from_optical": [
+    [
+      0,
+      0,
+      1
+    ],
+    [
+      -1,
+      0,
+      0
+    ],
+    [
+      0,
+      -1,
+      0
+    ]
+  ],
+  "neutral_joint_angles_rad": [
+    0,
+    0,
+    0,
+    -0.6,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -0.6,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "heading_min_norm": 0.01,
+  "base_translation_radius_m": 2.0,
+  "position_scale_m": 0.001,
+  "orientation_scale_rad": 0.08,
+  "hand_position_weight": 1.0,
+  "hand_orientation_weight": 1.0,
+  "wrist_offset_tool_m": [
+    0.05,
+    0.0,
+    0.0
+  ],
+  "base_frame_stride": 2,
+  "camera_rotation_scale_rad": 1.0,
+  "neutral_weight": 0.5,
+  "velocity_weight": 1.0,
+  "acceleration_weight": 0.5,
+  "base_max_evaluations": 700,
+  "trajectory_max_evaluations": 500,
+  "fit_attempts": 3,
+  "seed": 42,
+  "solver_tolerance": 1e-08,
+  "torch_threads": 1,
+  "solver_backend": "cuda",
+  "hand_position_window_s": 0.3,
+  "hand_orientation_window_s": 0.3,
+  "hand_filter_polyorder": 2,
+  "base_initialization_weight": 0.3,
+  "base_prior_translation_scale_m": 1.0,
+  "base_prior_yaw_scale_rad": 1.0,
+  "merge_adjacent_regions": true,
+  "hand_target_mode": "gripper_palm",
+  "gripper_opening_weight": 20.0,
+  "missing_hand_velocity_weight": 5.0
+}
