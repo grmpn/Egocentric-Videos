@@ -17,18 +17,24 @@ preserves each configuration, trajectory, timing and unsuccessful comparison.
 | Run | Score /100 | Position passes | Orientation passes | Joint-feasible frames | Collision-free frames |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | robust-position-limits (baseline) | 85.127 | 459/461 | 295/461 | 227/269 | 249/269 |
-| cauchy-orientation-base | **89.666** | 458/461 | 318/461 | 269/269 | 243/269 |
+| cauchy-orientation-base | 89.666 | 458/461 | 318/461 | 269/269 | 243/269 |
 | limits16 | 87.659 | 458/461 | 269/461 | 269/269 | 250/269 |
 | orientation8-limits16 | 89.178 | 456/461 | 299/461 | 269/269 | 250/269 |
 | slack5-orientation8 | 89.255 | 448/461 | 317/461 | 269/269 | 245/269 |
 | slack5-orientation16 | 83.391 | 316/461 | 334/461 | 269/269 | 249/269 |
+| cauchy-continued | **91.022** | 458/461 | 331/461 | 269/269 | 250/269 |
 
 The Cauchy run is a fresh solve using the previous original-target leader's
 settings. The four following runs independently refine the accepted-roll baseline;
 reported solve times exclude that seed. Stronger motion penalties remove the
 baseline's acceleration failures, but high ordinary orientation weight sacrifices
-position accuracy. The Cauchy run reaches its 2000-evaluation cap; continuation
-and fitting-threshold refinements are running. >90 is not yet achieved.
+position accuracy. Same-objective Cauchy continuation reached **91.021619**
+with another 2000 evaluations. Its **240.11 s** is incremental; cumulative solve
+time including the fresh seed is **531.42 s**. The
+[independent audit passed](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-cauchy-continued.json),
+meeting the >90 benchmark target. The user accepted current performance and
+redirected work to base optimization. The pending fitting-threshold run was
+intentionally interrupted; its generic failed status is not a solver defect.
 
 [All six independent audits passed](../../../outputs/ik-benchmark-left-roll-flip/validation/audit-slack5-orientation16.json)
 ([log](../../../outputs/ik-benchmark-left-roll-flip/validation/20261103/audit-first-comparisons.log)):
@@ -38,6 +44,46 @@ derivatives, ordinary FK, collisions and score arithmetic. Inspected
 show the remaining orientation spikes and close-hand finger collisions. No viewer
 review/tests were performed. The CPU still reports approximately 800 MHz; no
 system settings changed. These are kinematic scores, not physical simulation acceptance.
+
+## Base-only SDF versus full IK — 2026-11-03
+
+At the user's explicit direction, compared **base optimization only** on the same
+269 frames / 461 accepted-roll observations. No trajectory refinement ran.
+The [comparison report](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/REPORT.md)
+contains settings, inputs, current-constraint checks, reproduction driver and timing details.
+
+| Method | X (m) | Y (m) | Z (m) | Yaw | Base solve |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| SDF | 0.081587 | −0.035888 | −0.568018 | 177.1348° | 11.105 s |
+| Full IK | 0.169849 | 0.050389 | −0.409020 | 178.0428° | 62.759 s |
+
+SDF minus IK is **(−8.83, −8.63, −15.90) cm**, or **20.13 cm** total, and
+**−0.908° yaw**. Full IK took **5.65×** as long in these single runs.
+Both reached their configured budgets: 100 SDF iterations / 6464 evaluations,
+700 IK evaluations. These are budget-limited results, not converged optima.
+Both used the same camera bounds/prior reference and all frames. IK starts at
+the camera seed with neutral joints; SDF searches a seeded population in the box.
+Loading and historical 30.93 s workspace construction are excluded. Full IK used the current
+Cauchy orientation settings for the base stage; no motion regularization or
+saved base/joint seed was applied.
+
+[Constraint checks](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/constraint-checks.json)
+verify the current actual-palm SDF, pinned URDF arm bounds, accepted roll targets,
+reviewed mask and common camera-centred XYZ ±2 m / yaw ±π bounds and base prior.
+The positional SDF is unchanged by target roll. Its neutral-head mean camera loss
+and positional coverage differ from full IK's hand orientation fitting and
+bounded-neck summed camera loss. SDF does not certify orientation, collisions or
+motion feasibility. Z remains an aligned-frame placement parameter, not floor height.
+
+[Three focused constraint tests passed](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/constraint-tests.log).
+The [independent comparison audit passed](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/audit.json)
+for shared inputs, current URDF bounds, transform direction, gravity alignment,
+XYZ/yaw differences and timing arithmetic. The requested
+[viewer opened at localhost:8090](http://localhost:8090), with a browser connection
+in its [startup log](../../../outputs/ik-benchmark-left-roll-flip/validation/base-comparison-20261103/viewer.log).
+It shows both bases with identical neutral robot reference poses and **original
+unsmoothed hand meshes/wrist paths**, preserving reviewed gaps. No retargeted hand
+motion is shown. **No viewer tests, screenshots or visual review were performed.**
 
 ## Reviewed-region restart
 

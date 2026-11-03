@@ -14,6 +14,11 @@ benchmark score using the accepted left +180° / original right convention.
 The 2026-10-30 stop is superseded; the scope and acceptance below remain in force.
 Preserve comparisons in `outputs/ik-benchmark-left-roll-flip/`.
 
+**Current focus, user-directed 2026-11-03** (`20261103-ik-tuning-006`):
+stop score tuning and compare SDF versus full-IK **base optimization only**.
+Use the current constraints and accepted targets; report XYZ/yaw differences and
+base-solve times. Do not run or compare trajectory refinement in this experiment.
+
 ## Objective and deliverable
 
 Reach **strictly above 90/100** on the manually reviewed first-region iPhone IK benchmark
