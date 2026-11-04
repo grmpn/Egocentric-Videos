@@ -7,7 +7,7 @@ an arm/base, solve IK or apply the earlier target filters.
 
 ## Geometry and opening
 
-The [gripper model](../../../src/egocentric_pipeline/gripper_model.py) extracts each
+The [gripper model](../../../src/egocentric_pipeline/retargeting/gripper_model.py) extracts each
 palm-rooted subtree from the pinned canonical Purdue URDF. Each standalone URDF
 contains the palm, four finger links and nominal TCP, with the original mesh
 geometry, joint bounds and mimic relationships. Generated mesh references point
@@ -16,7 +16,7 @@ to the local pinned assets; source files are unchanged. The asset's
 `1.30 * (1 - action)` radians; scikit-robot propagates the two mimics. This is the
 existing nominal kinematic opening rule, not a physical contact simulation.
 
-[Landmark reconstruction and mapping](../../../src/egocentric_pipeline/gripper_mapping.py)
+[Landmark reconstruction and mapping](../../../src/egocentric_pipeline/retargeting/gripper_mapping.py)
 use the original aligned MANO root poses, articulation and shape. The physical
 wrist is joint 0, index MCP/PIP are joints 1/2, and thumb MCP is joint **14**, not the
 thumb CMC at joint 13. The thumb chain is 13/14/15 (CMC/MCP/IP). This interpretation
@@ -63,15 +63,15 @@ reference, 0.160804 m along palm +X. That nominal TCP need not equal the tip cen
 All positions use aligned metres; rotations are proper, without reflection.
 
 Near-zero fingertip/forward vectors and near-collinear constructions are invalid;
-thresholds live in [configuration](../../../configs/gripper_mapping.json). No gap
-is filled. The [shared forward segment](../../../src/egocentric_pipeline/gripper_mapping.py)
+thresholds live in [configuration](../../../configs/experiments/gripper_mapping.json). No gap
+is filled. The [shared forward segment](../../../src/egocentric_pipeline/retargeting/gripper_mapping.py)
 drives the mapper and displayed index-MCP→PIP construction line. A translucent
 triangle shows the three points defining the orientation plane.
 
 ## Comparison configurations
 
-The default remains `mcp_plane` until the user selects a method.
-[Config 1](../../../configs/gripper_thumb_ip_plane.json), `thumb_ip_plane`, uses
+The processing default is accepted Config 2 (`wrist_roll`) with left +180° / original-right roll. Other mappings remain explicit experiments.
+[Config 1](../../../configs/experiments/gripper_thumb_ip_plane.json), `thumb_ip_plane`, uses
 the index MCP/index PIP/thumb IP plane. Its +Y points **index MCP→thumb IP**;
 +X projects index MCP→index PIP perpendicular to +Y, toward PIP; +Z = +X × +Y.
 It retains the opening-dependent tip-midpoint placement and opening above.
@@ -79,7 +79,7 @@ This deliberately reverses the general jaw direction relative to the baseline's
 thumb→index direction. Tip-offset diagnostics retain finger 2→thumb / finger
 1→index labels; they do not minimize distance over swapped tip assignments.
 
-[Accepted Config 2](../../../configs/gripper_wrist_roll_left_flip.json), `wrist_roll`, puts the
+[Accepted Config 2](../../../configs/defaults/gripper_mapping.json), `wrist_roll`, puts the
 gripper **rear palm origin** at `hand_wrist - wrist_backward_offset_m * forward`.
 The current setting is **0.025 m backward**; absent settings default to zero for
 earlier saved mappings. The offset changes translation only, not the forward
@@ -95,7 +95,7 @@ not a constraint. Tip offsets therefore measure both orientation and attachment.
 **Accepted target convention, 2026-10-30:** rotate the left palm target 180°
 about local forward +X and retain the original right orientation. The user
 confirmed this as correct after the left-flip comparison. Use
-[`gripper_wrist_roll_left_flip.json`](../../../configs/gripper_wrist_roll_left_flip.json)
+[`gripper_mapping.json`](../../../configs/defaults/gripper_mapping.json)
 with `palm_roll_offset_rad: [pi, 0]` for subsequent Config 2 mappings.
 
 Config 2 accepts `palm_roll_offset_rad: [left, right]` (omitted means zeros for
@@ -103,8 +103,8 @@ compatibility with earlier saved mappings).
 It postmultiplies each palm orientation by a rotation about local forward +X;
 palm position, opening and eligibility stay unchanged. The saved roll includes
 the offset, while the zero-roll reference stays hand-derived. Other mapping modes
-reject nonzero offsets. The [unflipped config](../../../configs/gripper_wrist_roll.json)
-and [earlier right-flip comparison](../../../configs/gripper_wrist_roll_right_flip.json)
+reject nonzero offsets. The [unflipped config](../../../configs/experiments/gripper_wrist_roll.json)
+and [earlier right-flip comparison](../../../configs/experiments/gripper_wrist_roll_right_flip.json)
 are historical references; their saved mappings and scores remain preserved.
 
 Config 2's zero-roll reference is the same MANO model/shape/root pose evaluated
@@ -121,7 +121,7 @@ at ±π without changing the rotation matrix. Degenerate reference axes and
 near-antiparallel forward directions are invalid, using the axis thresholds.
 No frame interpolation, physical calibration or artificial 90° gain is applied.
 
-[Config 3](../../../configs/gripper_roll_blend.json), `roll_blend`, combines the
+[Config 3](../../../configs/experiments/gripper_roll_blend.json), `roll_blend`, combines the
 two plane orientations using the signed MCP roll from updated Config 2, with
 its fingertip-forward reference. Both endpoints use fingertip-midpoint placement
 and the same FK opening. As explicitly approved, the Config 1 endpoint is first
@@ -144,7 +144,7 @@ The viewer exposes both thresholds, signed roll, original weight, both construct
 planes and the final axes. Invalid threshold edits keep the last valid preview
 and disable saving; reset restores the loaded settings and snapshots retain tuning.
 
-[Config 4](../../../configs/gripper_thumb_point_blend.json), `thumb_point_blend`,
+[Config 4](../../../configs/experiments/gripper_thumb_point_blend.json), `thumb_point_blend`,
 uses the same roll measurement and smoothstep thresholds as Config 3, but blends
 a landmark before constructing axes. With MCP weight `w`, the thumb point is
 `q = (1-w)*thumb_IP + w*thumb_MCP`. Set `y = normalize(q-index_MCP)`, project
@@ -215,7 +215,7 @@ per-hand missing/degenerate/unreachable counts, reachable ranges, tip offsets an
 maximum tip-midpoint or wrist-anchor error and roll range. Licensed models and generated geometry remain local
 inputs/evidence, outside Git.
 
-The [viewer](../../../src/egocentric_pipeline/gripper_visualization.py) reconstructs
+The [viewer](../../../src/egocentric_pipeline/visualization/gripper_visualization.py) reconstructs
 the same raw MANO meshes and checks their landmarks against the saved result.
 Source RGB is decoded by original frame index. It initially selects the first
 frame with both mappings available, while retaining every frame and missing-data
@@ -242,11 +242,14 @@ It is explicitly a preview: mapped output saving is disabled in this mode. Turni
 it off restores the current hand-derived mapping. Missing hands/grippers stay
 hidden during mapped playback; manual inspection can show a gripper without a hand.
 
-See the [README commands](../../../README.md#direct-hand-to-gripper-review) and
+See the [README commands](integrated-pipeline.md#review-and-experiments) and
 [first-region acceptance evidence](../experiments/direct-gripper-iphone.md).
-Configs 2/3/4 now cover the full iPhone recording. Default selection, alternative
-position targets and reintegration with IK remain deferred. Physical scale/gravity, grasp/contact accuracy, collisions and
-dynamics are unverified.
+Configs 2/3/4 cover the full iPhone recording. The accepted processing default is
+left +180° / original-right Config 2, integrated with the frozen joint/base solver;
+see [accepted defaults](stage-3-retargeting.md#accepted-processing-defaults).
+Alternative position targets remain experimental. Physical scale/gravity,
+grasp/contact accuracy and dynamic execution remain unverified; independent
+evaluation reports the retained tracking and collision failures.
 
 ## Saved RGB overlays
 

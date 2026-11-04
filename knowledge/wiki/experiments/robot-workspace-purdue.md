@@ -8,8 +8,8 @@ recorded in [Part 3 acceptance](retargeting-bundled.md).
 
 ## Reproduction and artifacts
 
-Follow the [environment setup](../../../environment/README.md#robot-workspace-environment)
-and [build/view commands](../../../README.md#stage-3-part-2-robot-workspace).
+Follow the [environment setup](../../../environment/README.md#processing-environment)
+and [build/view commands](../topics/integrated-pipeline.md#review-and-experiments).
 The source is Purdue Alex + SAKE revision `9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b`,
 using `PEDESTAL_LINK`, both EZGripper TCP origins and seven joints per arm.
 The [contract](../topics/stage-3-retargeting.md#part-2-workspace-contract) owns frame,
@@ -78,7 +78,7 @@ held-out configurations per arm. Original outputs are preserved.
 
 After reviewing these results, the user selected **10 million samples per arm**
 as the preferred default on 2026-10-15. The
-[default configuration](../../../configs/robot_workspace.json) now matches the
+[default configuration](../../../configs/defaults/robot_workspace.json) now matches the
 validated 10m run; the 100k run remains historical comparison evidence.
 
 | Samples per arm | Both-arm build time | Left sampling/check/export | Right sampling/check/export | Peak process RSS |
@@ -122,7 +122,7 @@ Each new run retains both full sample archives and `workspace_grid.npz`. Open
 either directory with the existing viewer, for example:
 
 ```bash
-env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-workspace/bin/python scripts/view_robot_workspace.py \
+env -u LD_LIBRARY_PATH PYTHONPATH=src .venv-pipeline/bin/python scripts/view_robot_workspace.py \
     outputs/workspace/density-20261015/10m --open-browser
 ```
 

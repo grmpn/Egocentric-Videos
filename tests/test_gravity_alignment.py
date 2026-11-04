@@ -7,11 +7,11 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from egocentric_pipeline.gravity_alignment import (
+from egocentric_pipeline.geometry.gravity_alignment import (
     aggregate_up, gravity_basis, load_camera_trajectory, rotate_mano_parameters,
 )
-from egocentric_pipeline.gravity_estimation import read_video_frames, select_sharp_frames
-from egocentric_pipeline.gravity_pipeline import align_run, validate_settings
+from egocentric_pipeline.geometry.gravity_estimation import read_video_frames, select_sharp_frames
+from egocentric_pipeline.geometry.gravity_pipeline import align_run, validate_settings
 
 
 @pytest.mark.parametrize("up", [[0, 0, 1], [0, 0, -1], [1, 1e-10, 0], [-1, 0, 1e-10], [.3, -.8, .5]])
@@ -122,7 +122,7 @@ def test_sharp_frame_count_ties_and_video_alignment(tmp_path):
 def test_failed_estimator_keeps_diagnostics_and_never_accepts_export(tmp_path, monkeypatch):
     pytest.importorskip("geocalib")
     pytest.importorskip("smplx")
-    import egocentric_pipeline.gravity_pipeline as pipeline
+    import egocentric_pipeline.geometry.gravity_pipeline as pipeline
     source = tmp_path / "input"; source.mkdir()
     model_root = source / "hawor"
     for p in [model_root / "_DATA/data_left/mano_left/MANO_LEFT.pkl", model_root / "_DATA/data/mano/MANO_RIGHT.pkl"]:
@@ -139,7 +139,7 @@ def test_failed_estimator_keeps_diagnostics_and_never_accepts_export(tmp_path, m
         diagnostics["frames"] = [{"frame_index": 0, "accepted": False, "reason": "pitch_or_roll_filter"}]
         return []
     monkeypatch.setattr(pipeline, "predict_up", fail)
-    settings = json.loads(Path('configs/gravity_alignment.json').read_text())
+    settings = json.loads(Path('configs/defaults/gravity_alignment.json').read_text())
     output = tmp_path / "failed"
     with pytest.raises(ValueError, match="Insufficient"):
         align_run(manifest_path, output, tmp_path / "weights", model_root, settings)

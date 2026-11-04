@@ -9,8 +9,8 @@ The [camera-position/posture experiment](#camera-position-and-posture-weight-swe
 adds per-frame position alignment under revision 3. The latest
 [gripper-offset/hand-weight experiment](#gripper-offset-and-hand-weight-sweep)
 removes it and changes the wrist match point and base-frame sampling under revision 4.
-[README](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting) owns
-commands; the [contract](../topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
+[Current workflow](../topics/integrated-pipeline.md#review-and-experiments) owns
+viewer commands; the [contract](../topics/stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
 owns conventions. All linked run artifacts are ignored, local-only evidence.
 
 ## Inputs and numerical evidence
@@ -221,8 +221,8 @@ Per-trial configs and results are local, reproducible artifacts:
 | 0.5 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-0p5.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-0p5/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-0p5/annotated_video.mp4) |
 | 2.0 | [settings](../../../outputs/retargeting/camera-posture-20261020/configs/posture-2p0.json) | [report](../../../outputs/retargeting/camera-posture-20261020/posture-2p0/retargeting_report.json) | [video](../../../outputs/retargeting/camera-posture-20261020/posture-2p0/annotated_video.mp4) |
 
-Use a selected config with the existing [production command](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting)
-and a fresh output directory to reproduce a trial.
+Exact trial reproduction requires the recorded implementation revision and selected
+saved config; the current production command uses the later accepted gripper mapping.
 The [orchestration script](../../../outputs/retargeting/camera-posture-20261020/run-sweep.py)
 records the entire sweep from implementation commit `35e14ae`.
 

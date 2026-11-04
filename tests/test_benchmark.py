@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import pytest
 
-from egocentric_pipeline.benchmark import build_benchmark
+from egocentric_pipeline.evaluation.benchmark import build_benchmark
 from egocentric_pipeline.run_metadata import artifact_record, new_manifest, new_run_directory, read_json, utc_now, write_json
 
 
@@ -168,8 +168,8 @@ def test_malformed_evidence_still_produces_honest_report(tmp_path, fault):
         assert result["structural_violations"]
 
 
-def test_milestone_cli_reports_each_failed_attempt_without_other_clips(tmp_path):
-    command = [sys.executable, str(ROOT / "scripts/run_milestone1_baseline.py"),
+def test_tracking_cli_reports_each_failed_attempt_without_other_clips(tmp_path):
+    command = [sys.executable, str(ROOT / "pipeline/run_hawor_pipeline.py"),
                "--video", str(tmp_path / "missing.mp4"), "--output-root", str(tmp_path / "runs"),
                "--prepared-root", str(tmp_path / "prepared"), "--dataset", "ego4d"]
     environment = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
@@ -188,7 +188,7 @@ def test_milestone_cli_reports_each_failed_attempt_without_other_clips(tmp_path)
 
 
 def test_invalid_request_syntax_allocates_no_run(tmp_path):
-    process = subprocess.run([sys.executable, str(ROOT / "scripts/run_milestone1_baseline.py"),
+    process = subprocess.run([sys.executable, str(ROOT / "pipeline/run_hawor_pipeline.py"),
                               "--video", str(tmp_path / "unsupported.avi"), "--output-root", str(tmp_path / "runs")],
                              cwd=ROOT, env=dict(os.environ, PYTHONPATH=str(ROOT / "src")), capture_output=True, text=True)
     assert process.returncode == 2

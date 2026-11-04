@@ -100,7 +100,7 @@ robots, targets and residual counts. HuRo additionally smooths observed keypoint
 and reduces outlier alignment weights in stage 8, as described above.
 Our implementation and settings remain owned by the
 [retargeting topic](stage-3-retargeting.md#joint-base-and-pose-trajectory-contract)
-and [configuration](../../../configs/joint_retargeting.json).
+and [configuration](../../../configs/experiments/joint_retargeting.json).
 No HuRo optimization was executed and no fitting settings changed.
 
 ## Language annotation

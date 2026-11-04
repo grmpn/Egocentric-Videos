@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 
-from egocentric_pipeline.hawor_runner import HAWOR_REVISION, WEIGHTS, MANO
+from egocentric_pipeline.tracking.hawor_runner import HAWOR_REVISION, WEIGHTS, MANO
 from egocentric_pipeline.run_metadata import redact, sha256_file as sha256, utc_now, write_json
 
 

@@ -1,7 +1,6 @@
 # HaWoR pipeline
 
-Current behavior summarized from static source inspection on 2026-09-22 at
-implementation revision `908ea97bfd2b75f762b747aefc395eed383c1b18`. Historical
+Current stage contract, reorganized during the 2026-11-03 cleanup. Historical
 execution evidence and limitations belong to the
 [Milestone 1 acceptance record](../experiments/milestone-1-baseline.md).
 
@@ -20,12 +19,12 @@ insert missing timeline entries in this path. See the
 [source comparison with HuRo](huro-source-review.md) for code references and the
 distinction between detection, gap grouping, and infilling.
 
-Original inputs stay under `data/source/`; prepared RGB and source/frame mappings
-live under `data/prepared/`. Each attempt receives its own directory under
-`outputs/hawor/milestone-1/` for the baseline entry point, or
-`outputs/hawor/milestone-2/` for the reusable pipeline default, containing native evidence, exported trajectories, a run manifest,
-and review artifacts. The Milestone 1 entry point creates a report for that attempt,
-including reportable failures. Input files and previous runs must not be overwritten.
+Original inputs are preserved. The [integrated runner](integrated-pipeline.md)
+keeps preparation and HaWoR artifacts in its new run directory; standalone
+commands default to `data/prepared/` and `outputs/runs/`. Each attempt records
+native evidence, world trajectories, overlays, validation and a benchmark report,
+including failures. The old Milestone 1 launcher is retired; its results remain
+under `outputs/hawor/milestone-1/`.
 
 On 2026-09-23 existing output directories moved beneath `milestone-1/`. Their
 contents are preserved; historical manifests, logs, and reports can retain old
@@ -33,6 +32,18 @@ absolute paths. Resolve those by inserting `milestone-1/` after `outputs/hawor/`
 [local relocation evidence](../../../outputs/hawor/relocation-20260923.json) records
 the move. The archived recreation environment is evidence, not a relocatable
 runtime. Maintained review links point at the new locations.
+
+On 2026-11-03 Milestone 2 evidence moved from `outputs/hawor/milestone-2/`
+to `outputs/milestone-2/hawor/`. Dataset, annotation and complete-pipeline
+artifacts from the mixed desktop setup directory moved to
+`outputs/milestone-2/desktop-20260924/`; shared setup evidence remains in place.
+The [relocation inventory](../../../outputs/cleanup/relocations.json) records
+old/new paths and byte-preservation checks for all 535 moved files. Raw sources,
+historical logs, embedded metadata and datasets were not rewritten. Embedded
+historical paths should be translated using that record; `load_run` resolves
+run-local artifacts beside the supplied relocated manifest. The
+[reload checks](../../../outputs/cleanup/relocation-validation.json) cover completed
+runs, historical datasets and the existing bundled alignments.
 
 Use the [README](../../../README.md) for commands and the
 [environment guide](../../../environment/README.md) for setup. Those documents own
@@ -47,8 +58,8 @@ operating instructions; this page owns the conceptual boundaries and conventions
   recording offset must be retained separately and added when mapping back.
 - Exports are frame-major with hand order `[left, right]`. World translations use
   HaWoR's claimed metres in its clip-local SLAM frame; axes/origins cannot be assumed
-  comparable between clips. Canonicalization, alignment, smoothing, and robot-frame
-  conversion are outside the implemented baseline.
+  comparable between clips. Canonicalization, alignment, smoothing and robot-frame
+  conversion are separate downstream stages; this export keeps original estimates.
 - The exporter requires native float32 arrays and preserves their bytes apart
   from hand/frame axis reordering. The current implementation rejects a dtype
   mismatch rather than converting it.
@@ -60,10 +71,10 @@ operating instructions; this page owns the conceptual boundaries and conventions
   follows native majority track-to-hand assignment, with raw disagreements saved.
   Detector confidence does not establish geometric accuracy.
 
-The [request contract](../../../src/egocentric_pipeline/clip_request.py),
-[preparation and metadata](../../../src/egocentric_pipeline/video_preparation.py),
-[world export](../../../src/egocentric_pipeline/world_export.py), and
-[pipeline](../../../src/egocentric_pipeline/pipeline.py) are the executable definitions.
+The [request contract](../../../src/egocentric_pipeline/video/clip_request.py),
+[preparation and metadata](../../../src/egocentric_pipeline/video/video_preparation.py),
+[world export](../../../src/egocentric_pipeline/tracking/world_export.py), and
+[pipeline](../../../src/egocentric_pipeline/tracking/pipeline.py) are the executable definitions.
 Generated clip/trajectory metadata describes each actual artifact. Update this page
 when those shared boundaries change; avoid duplicating every schema field here.
 

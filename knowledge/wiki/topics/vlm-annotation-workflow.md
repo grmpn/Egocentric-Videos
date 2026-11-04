@@ -183,7 +183,7 @@ Model-generated confidence, if retained, is uncalibrated and cannot replace revi
 ## Source-time mapping and context padding
 
 Use source seconds measured from the first decoded source presentation timestamp,
-matching [video preparation](../../../src/egocentric_pipeline/video_preparation.py).
+matching [video preparation](../../../src/egocentric_pipeline/video/video_preparation.py).
 Keep the requested semantic interval, selected frames and clip-relative timeline
 distinct. The simple relation
 
@@ -246,7 +246,7 @@ future retargeting work under its own approved scope.
 
 ## Reuse and integration gaps
 
-The existing [annotation wrapper](../../../src/egocentric_pipeline/annotations.py)
+The existing [annotation wrapper](../../../src/egocentric_pipeline/datasets/annotations.py)
 already uses known task labels, emits plans/subtasks, and disables task discovery,
 rephrasing, memory, interjections and VQA. It validates and publishes annotations
 while preserving prior episodes. Keep those protections when evaluating this flow.

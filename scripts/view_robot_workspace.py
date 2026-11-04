@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.workspace_visualization import view_workspace
+from egocentric_pipeline.visualization.workspace_visualization import view_workspace
 
 
 def main():

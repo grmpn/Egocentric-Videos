@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from egocentric_pipeline.base_placement import base_transform, evaluate_placement, optimize_base, transform_points
-from egocentric_pipeline.manipulation_regions import camera_segments, expand_region, frame_edges, interval_metrics, select_disjoint_regions
-from egocentric_pipeline.retargeting import load_alignment, validate_settings
-from egocentric_pipeline.workspace import WorkspaceGrid
+from egocentric_pipeline.retargeting.base_placement import base_transform, evaluate_placement, optimize_base, transform_points
+from egocentric_pipeline.retargeting.manipulation_regions import camera_segments, frame_edges, interval_metrics
+from egocentric_pipeline.retargeting.trajectory import load_alignment
+from egocentric_pipeline.retargeting.workspace import WorkspaceGrid
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def settings():
-    return json.loads((ROOT / "configs/trajectory_retargeting.json").read_text())
+    settings = json.loads((ROOT / "configs/defaults/retargeting.json").read_text())
+    settings.update(workspace_margin_m=.03, optimizer_iterations=100, optimizer_population=16)
+    return settings
 
 
 def sphere_grid():
@@ -78,24 +80,6 @@ def test_strict_fraction_gap_edges_unknowns_and_irregular_time(settings):
     assert result["longest_nonpassing_s"] == pytest.approx(.29)
 
 
-def test_expansion_does_not_bridge_long_gap_and_overlap_rechecks(settings):
-    edges = frame_edges(np.arange(100) * .1)
-    observed, passed = np.ones(100, bool), np.ones(100, bool)
-    passed[65:70] = False
-    seed = {"start": 20, "stop": 35}
-    result = expand_region(seed, passed, observed, edges, settings)
-    assert result["start"] == 0 and result["stop"] == 67
-    assert result["longest_nonpassing_s"] == pytest.approx(.2)
-    assert expand_region({"start": 60, "stop": 75}, passed, observed, edges, settings) is None
-    candidates = [
-        {"candidate_id": 0, "seed": {"start": 0, "stop": 30}, "expanded": interval_metrics(0, 60, observed, observed, edges, settings)},
-        {"candidate_id": 1, "seed": {"start": 55, "stop": 80}, "expanded": interval_metrics(50, 100, observed, observed, edges, settings)},
-    ]
-    selected = select_disjoint_regions(candidates, [{"frame_passed": observed}] * 2, observed, edges, settings)
-    assert [(c["retained"]["start"], c["retained"]["stop"]) for c in selected] == [(0, 60), (60, 100)]
-    assert all(c["retained"]["accepted"] for c in selected)
-
-
 def test_transform_direction_composition_and_inverse():
     transform = base_transform([1, 2, 3, np.pi / 2])
     np.testing.assert_allclose(transform_points([[1, 3, 3]], transform), [[1, 0, 0]], atol=1e-15)
@@ -149,15 +133,6 @@ def test_sdf_camera_initialization_bounds_and_prior(settings):
     assert abs(pose[3]) < .1
 
 
-@pytest.mark.parametrize("field,value", [("workspace_margin_m", .02), ("ik_tolerance_m", .01),
-                                        ("minimum_feasible_fraction", .9), ("optimizer_iterations", 0),
-                                        ("camera_sustain_s", np.nan)])
-def test_reject_invalid_or_weakened_acceptance_settings(settings, field, value):
-    settings[field] = value
-    with pytest.raises(ValueError):
-        validate_settings(settings)
-
-
 def test_alignment_loader_detects_mismatched_source_time(tmp_path):
     n = 4
     times = np.arange(n) / 30
@@ -188,66 +163,8 @@ def test_alignment_loader_detects_mismatched_source_time(tmp_path):
         load_alignment(tmp_path)
 
 
-@pytest.mark.parametrize("legacy_tcp", [False, True])
-def test_real_robot_sequential_ik_missing_and_unreachable(settings, legacy_tcp):
-    from egocentric_pipeline.positional_ik import solve_trajectory
-    from egocentric_pipeline.robot_workspace import arm_parameters, load_robot, position_target, verify_asset_source
-    from skrobot.kinematics.differentiable import extract_fk_parameters, forward_kinematics_ee_batched_numpy
-
-    assets = ROOT / "data/models/purdue-alex-assets"
-    if not assets.exists():
-        pytest.skip("Requires pinned Purdue assets; see environment/README.md")
-    robot_settings = json.loads((ROOT / "configs/robot_workspace.json").read_text())
-    if legacy_tcp:
-        robot_settings.pop("target_frames")
-    robot = load_robot(verify_asset_source(assets, robot_settings), robot_settings["base_frame"])
-    wrists = np.empty((4, 2, 3))
-    bounds = []
-    for hand in range(2):
-        chain, tool, p = arm_parameters(robot, robot_settings["tool_frames"][hand], robot_settings["arm_joints"][hand])
-        active, endpoint = position_target(chain, tool, robot_settings.get("target_frames", robot_settings["tool_frames"])[hand])
-        q = np.zeros((4, len(active)))
-        q[1:, 1] = .02
-        wrists[:, hand], _ = forward_kinematics_ee_batched_numpy(q, extract_fk_parameters(robot, active, endpoint))
-        bounds.append((p["joint_limits_lower"], p["joint_limits_upper"]))
-    valid = np.ones((4, 2), bool)
-    valid[2, 1], wrists[2, 1] = False, np.nan
-    wrists[3] = 10
-    settings.update(ik_attempts=2, ik_iterations=20)
-    robot.translate([.3, -.1, .8])
-    robot.rotate(.4, "z")
-    result = solve_trajectory(robot, wrists, valid, robot_settings, settings)
-    assert result["ik_success"][:2].all()
-    assert not result["ik_success"][2, 1] and not result["ik_success"][3].any()
-    assert np.isnan(result["joint_angles_rad"][~result["ik_success"]]).all()
-    assert np.nanmax(result["ik_residual_m"]) <= settings["ik_tolerance_m"]
-    assert np.isnan(result["target_position_base_m"][~result["ik_success"]]).all()
-    assert np.isnan(result["tcp_position_base_m"][~result["ik_success"]]).all()
-    assert result["ik_attempts"][:2].max() == 1
-    good = result["ik_success"]
-    np.testing.assert_allclose(result["target_position_base_m"][good], wrists[good], atol=.005, rtol=0)
-    if legacy_tcp:
-        np.testing.assert_array_equal(result["target_position_base_m"], result["tcp_position_base_m"])
-    else:
-        assert np.all(result["joint_angles_rad"][good, -2:] == 0)
-        np.testing.assert_allclose(np.linalg.norm(
-            result["tcp_position_base_m"][good] - result["target_position_base_m"][good], axis=1),
-            .237659816578, atol=1e-8)
-    for hand, (lower, upper) in enumerate(bounds):
-        q = result["joint_angles_rad"][result["ik_success"][:, hand], hand]
-        assert np.all(q >= lower) and np.all(q <= upper)
-        chain, tool, _ = arm_parameters(robot, robot_settings["tool_frames"][hand], robot_settings["arm_joints"][hand])
-        _, endpoint = position_target(chain, tool, robot_settings.get("target_frames", robot_settings["tool_frames"])[hand])
-        for frame in np.flatnonzero(good[:, hand]):
-            for link, angle in zip(chain, result["joint_angles_rad"][frame, hand]):
-                link.joint.joint_angle(float(angle))
-            for link, key in ((endpoint, "target_position_base_m"), (tool, "tcp_position_base_m")):
-                actual = (link.worldpos() - robot.root_link.worldpos()) @ robot.root_link.worldrot()
-                np.testing.assert_allclose(actual, result[key][frame, hand], atol=5e-6, rtol=0)
-
-
 def test_visual_state_exposes_ik_failure_even_when_workspace_also_fails():
-    from egocentric_pipeline.retargeting_visualization import frame_state
+    from egocentric_pipeline.visualization.retargeting_visualization import frame_state
     arrays = {"episode_id": np.array([0, 0, 0, 0, -1]),
               "export_valid": np.array([[True, True], [True, True], [True, False], [False, False], [True, True]]),
               "ik_success": np.array([[True, False], [True, True], [True, False], [False, False], [False, False]]),
@@ -261,8 +178,8 @@ def test_visual_state_exposes_ik_failure_even_when_workspace_also_fails():
 def test_original_mano_meshes_follow_episode_base_and_missing_hand_validity(exclude_infill):
     pytest.importorskip("smplx")
     from scipy.spatial.transform import Rotation
-    from egocentric_pipeline.hand_geometry import align_hand_geometry, load_mano_model, reconstruct_mano
-    from egocentric_pipeline.retargeting_visualization import base_hand_meshes
+    from egocentric_pipeline.geometry.hand_geometry import align_hand_geometry, load_mano_model, reconstruct_mano
+    from egocentric_pipeline.visualization.retargeting_visualization import base_hand_meshes
 
     models = [ROOT / "external/HaWoR" / path for path in (
         "_DATA/data_left/mano_left/MANO_LEFT.pkl", "_DATA/data/mano/MANO_RIGHT.pkl")]

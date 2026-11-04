@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.robot_workspace import build_workspace
+from egocentric_pipeline.retargeting.robot_workspace import build_workspace
 from egocentric_pipeline.run_metadata import read_json
 
 
@@ -11,7 +11,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asset-root", type=Path, default=root / "data/models/purdue-alex-assets")
-    parser.add_argument("--config", type=Path, default=root / "configs/robot_workspace.json")
+    parser.add_argument("--config", type=Path, default=root / "configs/defaults/robot_workspace.json")
     parser.add_argument("--output-directory", type=Path, required=True, help="New directory; existing outputs are never overwritten")
     parser.add_argument("--samples-per-arm", type=int, help="Override the configured count, up to 10,000,000")
     args = parser.parse_args()

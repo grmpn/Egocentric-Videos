@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from egocentric_pipeline.retargeting_visualization import view_retargeting
+from egocentric_pipeline.visualization.retargeting_visualization import view_retargeting
 
 
 def main():

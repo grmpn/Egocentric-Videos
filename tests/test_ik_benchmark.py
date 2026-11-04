@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from egocentric_pipeline.ik_benchmark import joint_motion, score_components, update_report, validate_settings
-from egocentric_pipeline.robot_constraints import RobotConstraints
+from egocentric_pipeline.evaluation.ik_benchmark import joint_motion, score_components, update_report, validate_settings
+from egocentric_pipeline.evaluation.robot_constraints import RobotConstraints
 from egocentric_pipeline.run_metadata import write_json
 
 
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def settings():
-    return json.loads((ROOT / "configs/ik_benchmark.json").read_text())
+    return json.loads((ROOT / "configs/experiments/ik_benchmark.json").read_text())
 
 
 @pytest.mark.parametrize("key,value", [("position_tolerance_m", np.nan), ("orientation_tolerance_degrees", 181),
@@ -28,7 +28,7 @@ def test_invalid_benchmark_definition_rejected(settings, key, value):
 
 
 def test_reviewed_selection_preserves_source_and_hand_identity(settings):
-    from egocentric_pipeline.manipulation_regions import select_manipulation_data
+    from egocentric_pipeline.retargeting.manipulation_regions import select_manipulation_data
 
     observed = np.ones((10, 2), bool)
     regions = [dict(start=0, stop=10, duration_s=1., seed_indices=[0])]
@@ -84,7 +84,7 @@ def test_actual_robot_collisions_bounds_and_coupled_mimics(settings):
     assets = ROOT / "data/models/purdue-alex-assets"
     if not assets.exists():
         pytest.skip("Pinned robot assets are local inputs")
-    constraints = RobotConstraints(assets, json.loads((ROOT / "configs/robot_workspace.json").read_text()), settings)
+    constraints = RobotConstraints(assets, json.loads((ROOT / "configs/defaults/robot_workspace.json").read_text()), settings)
     assert constraints.collision_pairs() == []
     first = "right_ezgripper_knuckle_palm_l1_1"
     second = "right_ezgripper_knuckle_l1_l2_1"

@@ -11,6 +11,20 @@ Stage 3 means roadmap Milestone 3; its three parts are the user's decomposition,
 not HuRo's numbered stages. All three approved part plans are fulfilled within
 their documented positional scope; dynamic simulation and physical execution are unverified.
 
+## Accepted processing defaults
+
+The approved cleanup promotes [retargeting defaults](../../../configs/defaults/retargeting.json)
+byte-for-byte from the frozen held-out `slack5-orientation8` run: full joint
+base fitting followed by fixed-base trajectory refinement, CUDA, one attempt,
+and 700/1000 evaluation caps. The [mapping default](../../../configs/defaults/gripper_mapping.json)
+is accepted Config 2 with left +180° roll and original right roll. Gravity and
+robot settings also live in `configs/defaults/`; alternate mappings, SDF and
+benchmark selections live in `configs/experiments/`. Processing every retained
+region is the default; benchmark selections remain explicit experiment inputs.
+[Parity/reload evidence](../../../outputs/cleanup/relocation-validation.json) is
+local-only. The [integrated workflow](integrated-pipeline.md) exports full-video
+robot episodes under [dataset contract 2.0](lerobot-pipeline.md).
+
 ## Repository role and sequence
 
 The requested Stage 3 output is hand trajectories expressed in the robot base
@@ -67,15 +81,17 @@ workflow is not implemented; Stage 3 does not implicitly authorize it.
 ## Joint base and pose trajectory contract
 
 Implemented 2026-10-20 under the [approved extension](../plans/milestone-3-joint-base-optimization.md).
-[README commands](../../../README.md#joint-base-and-wrist-pose-trajectory-fitting)
-select this method or compare it with the existing workspace method. Numerical,
+[Processing commands](integrated-pipeline.md) select this method by default;
+SDF placement remains an explicit benchmark experiment. Numerical,
 visual and timing acceptance is recorded in the [joint/base evidence](../experiments/joint-base-bundled.md).
-The baseline contract below remains supported.
+The earlier sequential positional solver is retired; its saved outputs remain reviewable.
 
-Both methods can now process only the retained camera-motion seeds, without
+Joint and experimental SDF base fitting use retained camera-motion regions, without
 expansion. Joint fitting always uses these regions: one shared base XYZ/yaw and
-sampled configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. Fingers
-remain zero. Base roll/pitch stay gravity-aligned; free height is not floor
+sampled configurations of all 14 arm joints plus `NECK_Z`, `NECK_Y`. The original
+wrist-target mode kept finger joints at zero; accepted gripper-target processing
+uses the mapped opening in ordinary FK and collision checks. Base roll/pitch
+stay gravity-aligned; free height is not floor
 calibration. Camera position is used for segmentation, base initialization and
 diagnostic errors, with no translation loss. Initialization aligns the neutral robot camera-mount centre with the median
 human camera centre, subtracting the rotated base-to-camera offset. Following the
@@ -149,7 +165,7 @@ scaled residuals, defaulting to 1.0. `neutral_weight` is 0.5 for all 16 joint
 deviations. Squared-cost coefficients are the squares of these multipliers;
 reported posture RMS is the unweighted deviation in radians. Acceptance uses
 unweighted physical errors and is unchanged by these weights.
-The [configuration](../../../configs/joint_retargeting.json) owns weights,
+The [configuration](../../../configs/experiments/joint_retargeting.json) owns weights,
 tolerances and finite evaluation budgets. On 2026-10-21 the user selected the
 last hand-weight-1 experiment settings as defaults for the iPhone run; the
 existing configuration already matched every setting (`20261021-iphone-001`
@@ -214,9 +230,9 @@ The 2026-10-22 [approved GPU plan](../plans/milestone-3-gpu-ik.md) adds
 `solver_backend: "cuda"` to the default joint configuration. An explicit `cpu`
 selects historical SciPy TRF/LSMR; configurations without the key remain CPU.
 The CLI's `--solver-backend` overrides either setting. GPU setup is documented in
-[environment/README.md](../../../environment/README.md#cuda-trajectory-ik).
+[environment/README.md](../../../environment/README.md#processing-environment).
 
-[gpu_least_squares.py](../../../src/egocentric_pipeline/gpu_least_squares.py)
+[gpu_least_squares.py](../../../src/egocentric_pipeline/retargeting/gpu_least_squares.py)
 reuses SciPy 1.15.3's bound reflection, Coleman–Li scaling, two-dimensional trust
 region, Jacobian scaling and termination helpers. Its limited driver is adapted
 with the upstream BSD notice because SciPy's public optimizer does not accept a
@@ -301,7 +317,7 @@ for measured evidence; world smoothness alone does not establish overlay fidelit
 ## IK benchmark and gripper targets
 
 Implemented under the [approved benchmark plan](../plans/milestone-3-ik-benchmark.md).
-[README commands](../../../README.md#ik-benchmark-with-config-2-gripper-targets)
+[Benchmark commands](integrated-pipeline.md#review-and-experiments)
 run an experiment and open its viewer. The [iPhone comparison and acceptance](../experiments/ik-benchmark-iphone.md)
 verify this scope and preserve the remaining tracking, limit and collision failures.
 
@@ -416,17 +432,17 @@ existing full-length runs, including tracking, motion, limits, collisions,
 opening, per-joint diagnostics and invalid-mapping counts. The original iPhone
 benchmark used [0,296), with 990 excluded source frames. The user-reviewed
 restart uses [0,269), excluding only right-hand frame 29, configured in
-[`ik_benchmark_reviewed.json`](../../../configs/ik_benchmark_reviewed.json).
+[`ik_benchmark_reviewed.json`](../../../configs/experiments/ik_benchmark_reviewed.json).
 Benchmark `selection.frame_range` uses zero-based half-open source indices;
 `excluded_hand_frames` names individual source frames and left/right hands.
 The shared selection runs before smoothing, base fitting, trajectory fitting
 and scoring. Original arrays remain intact; `retarget_valid` records reviewed
 eligibility. The trajectory report records `benchmark_selection`; mismatched
 solve/scoring selections or masks are rejected. Use
-`--benchmark-config configs/ik_benchmark_reviewed.json --benchmark-directory outputs/ik-benchmark-reviewed`
+`--benchmark-config configs/experiments/ik_benchmark_reviewed.json --benchmark-directory outputs/ik-benchmark-reviewed`
 with the existing benchmark command. Old scores remain in their original directory.
 
-The [benchmark evaluator](../../../src/egocentric_pipeline/ik_benchmark.py) uses
+The [benchmark evaluator](../../../src/egocentric_pipeline/evaluation/ik_benchmark.py) uses
 ordinary full-robot FK, independently of saved solver errors. Each tracking score
 is 25 times the fraction of observed hand samples passing ≤0.01 m or ≤4°;
 joint feasibility and collision-free scores use all selected frames. Failed or
@@ -476,121 +492,27 @@ solved regions. The new view starts at the first frame with both targets when
 available and offers target visibility/opacity controls. Viewer review/tests
 were explicitly deferred to the user for this requested mode.
 
-## Part 3 placement and IK contract
+## Historical Part 3 placement and positional IK
 
-Implemented 2026-10-16; wrist endpoint amendment implemented 2026-10-20.
-[README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
-owns run/view commands. The [configuration](../../../configs/trajectory_retargeting.json)
-owns adjustable numerical thresholds and search effort. The workflow consumes
-completed Part 1 and Part 2 reports/arrays, verifies the prepared RGB/source
-timeline and pinned robot assets, and creates a new output directory.
+The 2026-10-16 sequential positional solver, interval expansion and comparison
+entry point were retired during the approved cleanup. Their code remains in Git;
+[Part 3 acceptance](../experiments/retargeting-bundled.md) and the
+[wrist amendment](../plans/milestone-3-wrist-alignment.md) preserve original scope,
+results and endpoint rationale. Saved schema 1/3 trajectories remain readable by
+the viewer. Their positional acceptance does not imply current pose, motion or
+collision acceptance. Current fixed-base output follows the joint/gripper contract
+above and [full-video dataset contract](lerobot-pipeline.md).
 
-Frame intervals are zero-based **[start, stop)**. Each frame owns time until the
-next timestamp; the final support interval uses median dt. Camera smoothing is
-Gaussian with default sigma 0.05 s and nearest edge handling; it affects only seed
-segmentation and requires uniform prepared timestamps. Threshold comparisons use
-XY displacement from each seed's first smoothed camera position. Once a crossing
-lasts 0.3 s, its first frame closes that seed, and the following frame starts the
-next. Seeds shorter than 1 s, including tails, remain recorded as discarded.
+The shared segmentation retains zero-based half-open `[start, stop)` intervals.
+Gaussian camera smoothing affects only the seed signal; original cameras remain
+unchanged. Sustained XY displacement splits seeds, and short seeds remain recorded
+as discarded. Current defaults merge adjacent retained seeds. Each retained region
+has one fixed base; independent placements do not define executable transitions.
 
-Placement uses physical aligned wrists and each hand's own sampled SDF.
-SciPy differential evolution searches XYZ/yaw with a reproducible seed, finite
-bounds derived from wrists/workspace extent, and a recorded evaluation budget.
-The integer nonpassing-frame count dominates bounded distance/depth tie breakers.
-Out-of-domain distances guide search only through a positive penalty and never
-pass the actual query test. A stopped iteration budget is a search outcome, not
-a global-optimality claim. Free base Z has no calibrated floor interpretation.
-
-A frame is observed if either hand has `retarget_valid`; every observed hand must
-meet `distance <= -0.03 m`. Missing hands stay unverified, with all-missing frames
-unknown and excluded from the percentage denominator. Unknown frames count toward
-the nonpassing gap limit. Observation coverage is reported separately; an empty
-denominator cannot pass. All frames are evaluated under each candidate transform.
-Expansion selects the longest qualifying contiguous interval containing the seed,
-with earlier-start tie breaking. Long nonpassing runs bound the endpoint search.
-Overlaps prioritize duration, then observed count, then earlier seed. The longest
-qualifying unassigned remainder intersecting a later seed is retained only after
-all criteria are checked again; rejected alternatives stay in the report.
-
-IK matches the workspace's recorded `target_frames` to physical human wrists.
-The default targets are `LEFT_WRIST_X_LINK` and `RIGHT_WRIST_X_LINK`: the distal
-wrist flexion joint origins. Their positions depend on the first five arm joints;
-`WRIST_X` and downstream `GRIPPER_Y` stay at zero. All seven angles are exported.
-The same targets define workspace sampling, SDF placement and IK residuals.
-Settings without `target_frames` retain the historical EZGripper TCP convention.
-Each arm starts at zero,
-then uses its previous successful solution, with bounded, seeded random restarts
-on failure. Other joints stay locked at zero. Every stored success passes finite
-URDF position bounds and ordinary-FK error at most 5 mm. Failed or missing joint
-samples remain NaN; no gap interpolation or retiming occurs. Adjacent successful
-joint changes above 0.5 rad are reported, without asserting dynamic feasibility.
-Successive episodes are independent placements; their base/joint changes are not
-an executable transition. SDF, IK and their simultaneous intersection each receive
-separate coverage/gap checks; demonstrated episodes pass all three.
-
-The preview replays these saved per-frame joint angles with live viewer IK
-disabled; it performs no new solve or trajectory optimization. A 2026-10-20
-[FK diagnosis](../../../outputs/retargeting/wrist-alignment-20261020/diagnosis.json)
-replayed all 240 successful bundled arm samples: TCP-to-human-wrist error remained
-at most **0.152 mm**, while the `LEFT/RIGHT_WRIST_X_LINK` joint origins were about
-**23.8 cm** from the human wrists. This measured the historical TCP convention,
-not a large positional solver residual. Unconstrained tool orientation can also
-make the robot gripper and original hand point differently. The
-[wrist-alignment amendment](../plans/milestone-3-wrist-alignment.md) changes both
-workspace and IK endpoints. Existing TCP outputs remain readable and unchanged;
-new wrist runs require regenerated wrist workspaces and placement/IK.
-The diagnostic artifact is local-only.
-
-`trajectory_retargeted.npz` preserves every Part 1 array, dtype and byte. For
-`T` frames and `C` fitted candidates, additions include:
-
-| Fields | Contract |
-| --- | --- |
-| `retarget_valid` | `[T,2]` boolean `export_valid & ~motion_infilled`; original validity and geometry remain intact. |
-| `camera_position_smoothed_m` | `[T,3]` aligned-frame seed signal; original cameras unchanged. |
-| `transform_base_from_aligned`, `transform_base_from_world`, `transform_aligned_from_base` | `[C,4,4]` float64 homogeneous transforms acting on column vectors. World transform composes Part 1 rotation; no rescaling. |
-| `candidate_distance_m`, `candidate_query_valid`, `candidate_hand_passed` | `[C,T,2]` signed metres / booleans, left then right. Distances NaN for missing/out-of-domain samples. |
-| `candidate_frame_passed` | `[C,T]` available-hand SDF result for every video frame. |
-| `episode_id` | `[T]` integer; `-1` means unassigned. Report maps episode to candidate and interval. |
-| `wrist_position_base_m` | `[T,2,3]` physical human wrist targets in episode-base metres. Missing/unassigned geometry is NaN. |
-| `target_position_base_m`, `tcp_position_base_m` | `[T,2,3]` successful FK of configured robot endpoint / actual gripper TCP, in episode-base metres. Failed/missing/unassigned samples are NaN. Only the first is compared with human wrists for IK residuals. |
-| `joint_angles_rad`, `ik_success`, `ik_residual_m`, `ik_attempts` | `[T,2,7]` joints in recorded chain order; `[T,2]` success, metre error and solve counts. Failed joints/residuals are NaN. |
-| `joint_step_rad`, `joint_jump` | `[T,2]` maximum absolute adjacent joint change / threshold flag, computed only within episodes with consecutive successes. |
-
-`retargeting_report.json` schema 3 records the observation policy, target frames, locked zero joints,
-source directories, model/settings/packages,
-transform conventions, all seeds/candidates/episodes, timing and video verification.
-A completed run can have `demo_accepted: false`; CLI exit code 2 preserves its
-diagnostics. Existing outputs are refused. The annotated video preserves prepared
-frame count/FPS and labels missing data, SDF/IK failures and large joint changes.
-The viewer animates only verified arm samples, hides missing/failed arms, and
-shows the fixed base, full wrist/camera paths and current seed/episode boundaries.
-Neither the display nor the workspace heuristic detects semantic manipulation.
-Schema 1 TCP runs remain readable: they have no separate target-position array,
-so the viewer uses their original TCP array as the target and labels it accordingly.
-New wrist runs missing target positions are rejected.
-
-The MANO comparison reconstructs the **original world-frame** translation,
-orientation, articulation and shape with the same SMPL-X evaluator and left-hand
-shape correction as Part 1. Each episode's `transform_base_from_world` moves all
-778 vertices into its base frame. The viewer attaches them beneath the base scene
-node, whose `transform_aligned_from_base` places both robot and meshes in the
-shared aligned scene. No extra wrist offset, rotation matching, scaling or
-gripper deformation is applied. Reconstructed physical wrists must agree with
-saved base-frame targets within **10 µm** (float32 geometry consistency, not an
-accuracy claim). Meshes are reconstructed in memory; saved trajectories stay intact.
-
-Blue/orange means left/right. The **MANO meshes** toggle and **MANO opacity**
-slider control the overlay. White markers show verified robot wrist positions;
-cyan markers show actual gripper TCPs. Legacy runs show white TCP targets.
-A valid original mesh survives IK failure; missing
-hands and frames without a retained base are hidden. Original hand orientations
-can differ from robot tools because IK constrains only position. Asset paths
-default to the alignment report; `--mano-models LEFT RIGHT` relocates licensed
-inputs and `--no-mano` supports review without them. The
-[environment instructions](../../../environment/README.md#robot-workspace-environment)
-own dependencies; [acceptance evidence](../experiments/retargeting-bundled.md#original-mano-mesh-comparison)
-owns geometry and visual checks.
+The viewer reconstructs original MANO hands with unchanged parameters and places
+them through the saved world-to-base transform. It supports old positional outputs
+for evidence review, with failures, missing hands and base changes visible. It
+performs no new solve. Use the [current viewer commands](integrated-pipeline.md#review-and-experiments).
 
 ## Part 2 workspace contract
 
@@ -656,9 +578,9 @@ The implementation reuses these library capabilities:
   points and voxel cells. Point display
   reduction preserves full saved workspace data; all occupied voxels are available.
 
-The [README](../../../README.md#stage-3-part-2-robot-workspace) owns build commands;
-[environment setup](../../../environment/README.md#robot-workspace-environment)
-owns installation. The [viewer](../../../src/egocentric_pipeline/workspace_visualization.py)
+The [workflow reference](integrated-pipeline.md#review-and-experiments) owns build commands;
+[environment setup](../../../environment/README.md#processing-environment)
+owns installation. The [viewer](../../../src/egocentric_pipeline/visualization/workspace_visualization.py)
 loads completed exports and the same verified robot revision, holds the robot
 at its zero reference pose, and offers separate left/right point and voxel layers.
 Point display can be reduced; voxel display uses all occupied cells with LOD off.
@@ -672,7 +594,7 @@ screenshots and remaining sampling/physical limitations. New run directories con
 | `workspace_report.json` | Completion/failure, pinned asset and actual package versions, settings, limits/locked joints, FK checks, reload/query evidence, prefix coverage, timing and process peak RSS. |
 
 Use `np.load(..., allow_pickle=False)` for samples and
-`WorkspaceGrid.load` from [workspace.py](../../../src/egocentric_pipeline/workspace.py)
+`WorkspaceGrid.load` from [workspace.py](../../../src/egocentric_pipeline/retargeting/workspace.py)
 for the grid. `indices(points)` returns `[N,3]` integer indices and validity,
 with `-1` for invalid rows. `contains(points)` returns `[N,2]` occupancy plus
 validity; an out-of-grid false value must not be interpreted as tested infeasibility.
@@ -773,10 +695,10 @@ canonical representations stay intact; the new frame is shared by both hands.
 
 ## Implemented Part 1 export
 
-[README](../../../README.md#stage-3-part-1-gravity-alignment) owns the command;
-[environment setup](../../../environment/README.md#gravity-alignment-environment)
+[workflow reference](integrated-pipeline.md#stages-and-outputs) owns the command;
+[environment setup](../../../environment/README.md#processing-environment)
 owns dependencies/model installation. The workflow reads a verified completed run
-through the shared [world loader](../../../src/egocentric_pipeline/world_export.py),
+through the shared [world loader](../../../src/egocentric_pipeline/tracking/world_export.py),
 then estimates, transforms, saves/reloads, checks and plots into a new directory.
 It does not update LeRobot features or annotations.
 

@@ -1,57 +1,70 @@
-# Video to LeRobot and annotation
+# Full-video robot LeRobot episodes and annotation
 
-Implemented for the [approved Milestone 2 plan](../plans/milestone-2-lerobot-pilot.md).
-Commands live in the [README](../../../README.md#milestone-2-dataset-workflow).
-Tests use the official LeRobot writer/reader and annotation command at revision
-`9a6bb61043bac8c14353fcb6ea513b7473c118e3`. Synthetic annotation responses test
-integration, not inference quality. Real capture acceptance remains separate.
+The [integrated workflow](integrated-pipeline.md) uses the official LeRobot writer,
+reader and annotator pinned to `9a6bb61043bac8c14353fcb6ea513b7473c118e3`.
+`pipeline/export_dataset.py` creates or appends one **complete input video per
+episode** from a completed HaWoR run and independently evaluated robot regions.
+Trimming, incompatible appends, overlapping region solves and duplicate sources
+are rejected. Historical hand-only contract 1.0 datasets remain preserved evidence;
+the supported robot workflow uses project contract **2.0** and LeRobot **v3.1**.
 
 ## Dataset contract
 
-`video_to_dataset.py` accepts an MP4 and local dataset directory, invokes unchanged
-HaWoR through a separate Python interpreter, benchmarks the attempt, and appends
-only completed exports. `--run-manifest` reuses a verified completed run, including
-relocated Milestone 1 evidence. It verifies source/frame mappings, artifact hashes,
-geometry dtypes, handedness, confidence and validity before writing.
-
-The dataset is LeRobot v3.1, with the official optional language features declared
-from creation. The pinned upstream creator still defaults to `codebase_version:
-v3.0`; this integration explicitly sets `v3.1` on its metadata object when creating
-the dataset with those language features. The installed dependency is unchanged.
-The official reader and resumed writer support these outputs. This discrepancy
-between the upstream storage floor and language documentation is intentional and
-covered by integration tests; it is not evidence that arbitrary v3 datasets are
-compatible with this project's trajectory contract.
+The pinned upstream creator reports storage floor `v3.0`, although it implements
+the v3.1 language features. Creation explicitly sets v3.1 on its metadata object
+and declares those language features; the installed dependency is unchanged.
+The official reader, resumed writer and annotator exercise this output in
+[production integration tests](../../../tests/test_lerobot_export.py).
 
 | Data | Representation |
 | --- | --- |
-| RGB | `observation.images.ego`, 30 FPS, original prepared dimensions, H.264 CRF 18 |
-| World pose | `observation.hands.root_translation_world_m` (6 floats), `root_orientation_world_axis_angle` (6) |
-| Finger articulation / shape | `observation.hands.hand_pose_axis_angle` (90), `mano_betas` (20) |
+| RGB | `observation.images.ego`, 30 FPS, prepared dimensions, H.264 CRF 18 |
+| World pose | `observation.hands.root_translation_world_m` (6), `root_orientation_world_axis_angle` (6) |
+| Articulation / shape | `observation.hands.hand_pose_axis_angle` (90), `mano_betas` (20) |
 | Canonical pose | `observation.hands.root_translation_canonical_m` (6), `root_orientation_canonical_axis_angle` (6) |
-| Validity/provenance | `observation.hands.{direct_detection,motion_infilled,hawor_valid,export_valid}` (2 bools each) |
-| Confidence | `observation.hands.detector_confidence` (2 float32, NaN without detection) |
-| Timing | LeRobot frame/episode/global indices and timestamp; exact float64 `observation.{clip_timestamp_s,source_timestamp_s}` in Parquet |
+| Z-up geometry | `observation.hands.root_translation_aligned_m`, `root_orientation_aligned_axis_angle`, `wrist_position_world_m`, `wrist_position_aligned_m`, `mano_root_offset_m` (6 each) |
+| Camera | `observation.camera_position_{world,aligned}_m` (3), `camera_rotation_{world,aligned}_from_camera` (9, row-major) |
+| Hand provenance | `observation.hands.{direct_detection,motion_infilled,hawor_valid,export_valid}` (2 bools), `detector_confidence` (2 float32) |
+| Robot actions | `action` (18 float64): left arm 7 rad, right arm 7 rad, neck 2 rad, left/right normalized gripper opening (0 closed, 1 open) |
+| Action validity | `observation.robot.action_valid` (18 bools); invalid action components are NaN |
+| Solver diagnostics | `observation.robot.joint_solution_rad` (18 float64, including the two gripper leader joints in radians), `solved` (1 bool), `ik_success` (2 bools) |
+| Independent evaluation | `observation.robot.observed_hand` (2 bools), `joint_feasible`, `collision_free` (1 bool each), position error in metres and orientation error in radians (2 each) |
+| Region | `observation.robot.region_id` (1 int32), −1 outside retained regions |
+| Timing | LeRobot indices/timestamp plus exact float64 `observation.{clip_timestamp_s,source_timestamp_s}` |
 
-Hand fields flatten all left components followed by all right components; native
-float32 world, articulation and shape values are preserved. Translation is the
-MANO root parameter, not an independently derived wrist joint. Units and clip-local
-world limitations follow [HaWoR's contract](hawor-pipeline.md). There are no robot
-actions, fabricated grippers, or cross-clip world alignment.
+Hand fields flatten left before right; original float32 world/articulation/shape
+values and NaNs remain exact. MANO root translation differs from the derived wrist.
+Unknown confidence stays NaN. The official reader casts scalar floats to Torch
+float32; exact source timestamps remain in Parquet and preparation metadata.
+Upstream normalization statistics may contain NaNs and are not validity-aware.
 
-The official reader casts Python scalar timestamps to Torch float32. Exact
-timestamps remain in the float64 Parquet columns and preparation metadata; use
-those for original-frame alignment. Unknown confidence and invalid geometry remain
-NaN, never invented zero confidence. Upstream normalization statistics can therefore
-contain NaNs; do not treat them as a validity-aware training normalizer.
+Robot actions require observed (non-infilled) hands, finite solved predictions,
+independent smoothed-target tracking within the saved evaluation tolerances,
+joint position/velocity/acceleration limits, and discrete self-collision checks.
+Each arm and its gripper share validity; neck commands require at least one valid
+hand. Failed predictions remain diagnostic fields. These masks do not certify
+scene collisions, dynamics, continuous collision clearance or hardware safety.
+The existing [acceleration proxy](../decisions/ik-benchmark-limits.md) remains explicit.
 
-`meta/egocentric.json` owns the contract version, dependency revision, dataset
-revision counter, and source-interval identities. Per-episode JSON under
-`meta/egocentric/` retains complete preparation/world metadata, camera assumptions,
-source attribution, run/trajectory hashes and canonical anchors. Repeating the
-same source hash and selected timestamps is an error, even under a new run name.
-Each append also generates a canonical preview in that directory. It highlights
-infill and missing data; it does not certify reconstruction quality.
+## Regions and provenance
+
+`meta/egocentric.json` owns contract/dependency revisions and source identities.
+`meta/egocentric/episode_NNNNNN.json` preserves complete preparation/world metadata,
+source attribution, hashes, canonical anchors, and robot settings. Its `robot`
+record contains the action/joint names, gravity rotation, source solve paths and
+benchmark selections. Every retained region records:
+
+- Half-open `[start, stop)` episode frame/time and original source frame/time intervals.
+- Fixed `transform_base_from_aligned`, mapping Z-up points into that region's robot base; compose it with the stored gravity rotation for world-to-base conversion.
+- Evaluated or unsolved outcome, original pose-acceptance report, and solved/feasible/collision-free/valid-component counts.
+
+Frames retain full-video indices. Gaps and unsolved frames have NaN actions and
+false validity; no interpolation or derivative spans a gap or base change. World,
+canonical and aligned hand geometry continue through those frames with their
+original missing/infill masks. A repeated source hash and source timestamps is an
+error even under another run name. [Robot export](../../../src/egocentric_pipeline/datasets/robot_episode.py)
+checks source arrays, evaluation synchronization, joint predictions and transform
+direction before any dataset mutation.
 
 ## Canonical transform
 
@@ -78,7 +91,7 @@ temporary disk space approximately equal to a second dataset, appropriate for th
 small pilot. External writers must not edit the same root concurrently, and readers
 should reopen after an update. The workflow does not promise power-loss durability.
 
-Append requires matching schema, dependency revision, 30 FPS and image geometry;
+Append requires contract 2.0, the same pinned robot/joint order and action units, matching features, dependency revision, 30 FPS and image geometry;
 incompatible inputs need another dataset directory. The official writer resumes
 into a new data shard, retaining previous Parquet files. Every new numeric field is
 checked over the entire episode after writing; the official reader also decodes
@@ -90,7 +103,7 @@ memory, task rephrasings and task re-derivation; plans and subtasks remain enabl
 Thinking is disabled for the intended Qwen backend. It selects only unannotated
 episodes and refuses an explicit selection containing existing annotations.
 
-The wrapper accepts these arguments (checked against its CLI on 2026-09-25):
+The wrapper accepts these arguments:
 
 | Argument | Meaning |
 | --- | --- |
@@ -113,7 +126,7 @@ the dataset's `data/*/*.parquet` under `language_persistent`, and the model,
 selected episodes, command and pending review status go into
 `meta/egocentric/annotation_vNNNN.json`. Console logs must be redirected to the
 chosen validation output directory. The wrapper neither starts the server nor
-uploads the dataset. See the [launch command](../../../README.md#milestone-2-dataset-workflow)
+uploads the dataset. See the [workflow and recovery command](integrated-pipeline.md#reuse-and-failure-recovery)
 and [server setup](../../../environment/README.md#native-desktop-and-annotation-environments).
 
 The pinned upstream writer replaces language columns and can clear unselected
@@ -132,38 +145,17 @@ null camera/tool-call fields can also have different physical types. The officia
 reader supports these files. Direct Arrow concatenation requires type promotion
 when combining annotated and unannotated shards.
 
-## Local inference feasibility
+## Runtime and evidence
 
-Historical laptop evidence: on 2026-09-23 the WSL machine exposed an RTX 3070 Laptop GPU with **8192 MiB**
-VRAM (5977 MiB free at preflight) and about 15 GiB system RAM. The documented default
-[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) has 27 billion language-model
-parameters: roughly 54 GB at 16 bits or 13.5 GB at 4 bits for those weights alone,
-before vision/runtime/cache overhead. Thus the default model does not fit this GPU;
-this is a capacity bound, not an attempted OOM benchmark. Smaller quantized models
-and CPU offloading have not been validated here.
+Dataset I/O uses `.venv-lerobot`; the VLM uses `.venv-vlm`. The shell runner starts
+the pinned local server only after GPU trajectory processing, or accepts an
+existing endpoint. The [environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
+owns installation and model-capacity constraints. Direct Python callers must
+clear HaWoR's legacy `LD_LIBRARY_PATH` and use a writable Hugging Face cache.
 
-The current annotator supports an OpenAI-compatible server; its previous in-process
-`transformers`/`vllm` backends are explicitly rejected. vLLM is not installed by the
-annotation extra. The 2026-09-24 native desktop setup uses a separate server
-environment, with an RTX 4090 and community 4-bit Qwen3.6-27B checkpoint. Its
-GPU runtime, package checks, and real three-image request through LeRobot's client
-pass. The bundled 121-frame video also passes HaWoR, LeRobot creation, actual
-plan/subtask annotation and reload. Its labels agree with representative video
-frames; the unrecorded iPhone pilot and its full review remain separate gates.
-[The environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
-owns versions, installation commands, model provenance, and current setup evidence.
-The 2026-09-23 statement that no weights had been downloaded applies only to the
-laptop session. No cloud job or dataset upload has been started.
-
-The first real Eidon packaging attempt exposed a library-loader conflict:
-inheriting HaWoR's `LD_LIBRARY_PATH` made modern CPU Torch crash during import
-with SIGSEGV. A controlled import reproduces the crash with legacy paths and
-succeeds without them. Both dataset CLIs now re-execute with a clean library path;
-the video command configures the pinned CUDA 11.7/HaWoR paths only for its inference
-child. Programmatic callers must likewise use the isolated dataset runtime. The
-[historical reproduction](../../../outputs/hawor/milestone-2/setup/library-isolation.json)
-is local to the laptop and absent from this desktop clone.
-On the native desktop, the child also needs Conda's `lib` directory for its newer
-C++ runtime. Torch-library discovery resolves Python-directory symlinks so Conda
-aliases do not count as separate installations. The environment guide owns these
-desktop settings and the required writable Hugging Face cache.
+Historical Milestone 2 results remain under `outputs/milestone-2/` and in the
+[Eidon acceptance record](../experiments/milestone-2-eidon-validation.md). They do
+not establish current robot-schema or iPhone pilot acceptance. Current cleanup
+validation is recorded in [project status](../status.md) and `outputs/cleanup/`.
+Synthetic HTTP responses test annotation integration, not model quality; real
+annotation labels still require video review.

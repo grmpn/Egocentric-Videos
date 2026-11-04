@@ -13,11 +13,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from egocentric_pipeline.clip_request import (
+from egocentric_pipeline.video.clip_request import (
     ClipRequest, LocalVideoSource, add_request_arguments, request_from_arguments,
 )
 from egocentric_pipeline.run_metadata import sha256_file
-from egocentric_pipeline.video_preparation import (
+from egocentric_pipeline.video.video_preparation import (
     PreparationQualityPolicy, load_prepared_clip, prepare_clip,
 )
 
@@ -230,6 +230,22 @@ def test_loader_checks_original_and_offline_mapping(tmp_path: Path) -> None:
         load_prepared_clip(prepared.metadata_path)
 
 
+def test_saved_preparation_survives_package_reorganization(tmp_path):
+    source = make_video(tmp_path / "source.mp4", count=3, rate=30)
+    prepared = prepare_clip(ClipRequest.from_video(source), tmp_path / "prepared")
+    original_rgb = prepared.video_path.read_bytes()
+    data = prepared.metadata.to_dict()
+    data["preparation"]["implementation"] = "egocentric_pipeline.video_preparation"
+    prepared.metadata_path.write_text(json.dumps(data))
+    restored = load_prepared_clip(prepared.metadata_path)
+    assert restored.metadata.to_dict() == data
+    assert restored.video_path.read_bytes() == original_rgb
+    data["preparation"]["implementation"] = "unknown.processor"
+    prepared.metadata_path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="unsupported preparation implementation"):
+        load_prepared_clip(prepared.metadata_path)
+
+
 @pytest.mark.parametrize("group,key,value", [
     ("source", "kind", "frame_directory"),
     ("hawor_camera", "calibration_loaded", True),
@@ -253,7 +269,7 @@ def test_loader_rejects_inconsistent_metadata_when_source_is_offline(
 def test_standalone_cli_direct_video_without_sidecar(tmp_path: Path) -> None:
     source = make_video(tmp_path / "source.mp4", count=4, rate=30)
     repository = Path(__file__).resolve().parents[1]
-    result = subprocess.run([sys.executable, "scripts/prepare_clip.py", "--video", str(source),
+    result = subprocess.run([sys.executable, "pipeline/prepare_clip.py", "--video", str(source),
                              "--prepared-root", str(tmp_path / "prepared"), "--clip-id", "cli"],
                             cwd=repository, env={**os.environ, "PYTHONPATH": str(repository / "src")},
                             capture_output=True, text=True)

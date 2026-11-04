@@ -110,7 +110,7 @@ def capture_environment(repository_root):
                 for distribution in importlib.metadata.distributions()
                 if distribution.metadata.get("Name")}
     status, file_hashes, dirty, state_error = [], {}, None, None
-    project_roots = ("src", "scripts", "tests", "environment", "configs", ".github/workflows")
+    project_roots = ("src", "pipeline", "scripts", "tests", "environment", "configs", ".github/workflows")
     try:
         result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository_root,
                                 capture_output=True, text=True, check=False)
@@ -131,7 +131,7 @@ def capture_environment(repository_root):
             for name in sorted(set(os.fsdecode(item) for item in result.stdout.split(b"\0") if item)):
                 path = repository_root / name
                 if (_SECRET_KEY.search(name) or path.is_symlink() or not path.is_file()
-                        or path.suffix.lower() not in (".py", ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg", ".txt", ".md")
+                        or path.suffix.lower() not in (".py", ".sh", ".yml", ".yaml", ".json", ".toml", ".ini", ".cfg", ".txt", ".md")
                         or not any(path.resolve().is_relative_to(repository_root / root) for root in project_roots)):
                     continue
                 file_hashes[name] = sha256_file(path)

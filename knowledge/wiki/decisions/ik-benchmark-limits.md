@@ -9,7 +9,7 @@ found; see event `20261029-ik-benchmark-001`.
 
 The local canonical Purdue Alex/EZGripper URDF is pinned to
 `9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b` by
-[robot settings](../../../configs/robot_workspace.json). Static XML inspection
+[robot settings](../../../configs/defaults/robot_workspace.json). Static XML inspection
 found 24 revolute joints, including four mimic followers, with finite position
 and velocity bounds. These are model limits, not new hardware measurements.
 

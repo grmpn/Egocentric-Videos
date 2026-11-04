@@ -17,8 +17,8 @@ Purdue Alex + SAKE revision `9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b`.
 No HaWoR/GeoCalib inference or workspace sampling was repeated. All configured
 baseline thresholds passed without demo-only gap/duration adjustments.
 
-[README](../../../README.md#stage-3-part-3-fixed-base-placement-and-positional-ik)
-owns reproduction commands; the [contract](../topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+[README](../topics/integrated-pipeline.md#review-and-experiments)
+owns reproduction commands; the [contract](../topics/stage-3-retargeting.md#historical-part-3-placement-and-positional-ik)
 owns conventions. Implementation checkpoint: `df1365b`. Reports include actual
 commands, settings and package versions. The initial baseline took **5.06 s**;
 this is a single observation, not a performance benchmark. Final outputs include
@@ -115,7 +115,7 @@ The user requested this viewer extension on 2026-10-16 (approved revision 2).
 It reuses the accepted run without redoing inference, placement or IK. Original
 MANO pose/shape parameters are evaluated with the shared Part 1 geometry code,
 then transformed into each episode's base frame and displayed with the robot.
-The [contract](../topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+The [contract](../topics/stage-3-retargeting.md#historical-part-3-placement-and-positional-ik)
 owns transform, validity and asset conventions.
 
 [26 retargeting/workspace tests](../../../outputs/retargeting/mano-viewer-20261016/tests.log)
@@ -148,7 +148,7 @@ Verified **2026-10-20** against the
 The [diagnosis](../../../outputs/retargeting/wrist-alignment-20261020/diagnosis.json)
 confirmed the old run placed TCPs at human wrists within 0.152 mm, leaving robot
 `WRIST_X` origins about 23.8 cm away. The current
-[contract](../topics/stage-3-retargeting.md#part-3-placement-and-ik-contract)
+[contract](../topics/stage-3-retargeting.md#historical-part-3-placement-and-positional-ik)
 uses those wrist joint origins consistently for workspace, placement and IK,
 retains full arm configurations with the last two rotations at zero, and
 exports actual TCP positions separately. Original inputs and TCP runs remain intact.

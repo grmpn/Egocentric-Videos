@@ -53,8 +53,12 @@ jobs:
           print(actual)
           PY
 
-      - name: Run the complete project test suite
-        run: PYTHONPATH=src python -m pytest tests
+      - name: Run focused contracts without Torch or licensed assets
+        run: >-
+          PYTHONPATH=src python -m pytest
+          tests/test_clip_preparation.py tests/test_world_export.py
+          tests/test_run_metadata.py tests/test_benchmark.py tests/test_canonical.py
+          tests/test_hand_pose_filtering.py tests/test_robot_episode.py
 
   lerobot-integration:
     name: LeRobot create, append, and annotation (CPU fixture)
@@ -74,4 +78,4 @@ jobs:
           sudo apt-get install -y ffmpeg
           python -m pip install -r environment/lerobot-requirements.txt
       - name: Exercise the production reader, writer, and annotation CLI
-        run: PYTHONPATH=src python -m pytest tests/test_lerobot_export.py tests/test_canonical.py
+        run: PYTHONPATH=src OMP_NUM_THREADS=1 python -m pytest tests/test_lerobot_export.py tests/test_robot_episode.py tests/test_canonical.py

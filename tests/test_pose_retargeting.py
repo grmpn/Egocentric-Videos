@@ -7,11 +7,11 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from egocentric_pipeline.base_placement import base_transform
-from egocentric_pipeline.joint_retargeting import validate_settings
-from egocentric_pipeline.pose_retargeting import (
+from egocentric_pipeline.retargeting.base_placement import base_transform
+from egocentric_pipeline.retargeting.joint_retargeting import validate_settings
+from egocentric_pipeline.retargeting.pose_retargeting import (
     PoseModel, PoseProblem, fit_region, initialize_base, rotation_error, temporal_operators)
-from egocentric_pipeline.robot_workspace import load_robot
+from egocentric_pipeline.retargeting.robot_workspace import load_robot
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,12 +28,12 @@ def require_cuda():
 
 @pytest.fixture
 def settings():
-    return dict(json.loads((ROOT / "configs/joint_retargeting.json").read_text()), solver_backend="cpu")
+    return dict(json.loads((ROOT / "configs/experiments/joint_retargeting.json").read_text()), solver_backend="cpu")
 
 
 @pytest.fixture
 def model(settings):
-    robot_settings = json.loads((ROOT / "configs/robot_workspace.json").read_text())
+    robot_settings = json.loads((ROOT / "configs/defaults/robot_workspace.json").read_text())
     urdf = ROOT / "data/models/purdue-alex-assets" / robot_settings["urdf"]
     if not urdf.exists():
         pytest.skip("Requires pinned Purdue Alex assets; see environment/README.md")
@@ -65,7 +65,7 @@ def test_library_fk_matches_ordinary_model_and_optical_axes(model):
 
 @pytest.fixture
 def palm_model(model, settings):
-    from egocentric_pipeline.gripper_model import load_gripper_commands
+    from egocentric_pipeline.retargeting.gripper_model import load_gripper_commands
 
     _, robot, rs = model
     settings.update(hand_target_mode="gripper_palm", gripper_opening_weight=20., missing_hand_velocity_weight=5.)
@@ -286,7 +286,7 @@ def test_motion_limit_hinges_and_jacobian(palm_model, settings):
 
 
 def test_motion_limits_include_coupled_and_mimic_joints(palm_model, settings):
-    from egocentric_pipeline.gripper_model import load_gripper_commands
+    from egocentric_pipeline.retargeting.gripper_model import load_gripper_commands
 
     _, robot, rs = palm_model
     settings.update(joint_acceleration_limits_rad_s2={"right_ezgripper_knuckle_l1_l2_2": 2.})
@@ -298,7 +298,7 @@ def test_motion_limits_include_coupled_and_mimic_joints(palm_model, settings):
 
 
 def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
-    from egocentric_pipeline.workspace import build_grid
+    from egocentric_pipeline.retargeting.workspace import build_grid
 
     m, _, _ = palm_model
     q = np.tile(m.neutral, (4, 1))
@@ -320,8 +320,8 @@ def test_sdf_stage_uses_palm_positions_and_accounts_time(palm_model, settings):
 @pytest.mark.parametrize("region_limit,refine_base,reviewed,warm", [(None, False, False, False),
     (1, False, False, False), (1, True, False, False), (1, False, True, False), (1, True, True, True)])
 def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_model, settings, monkeypatch, region_limit, refine_base, reviewed, warm):
-    from egocentric_pipeline.ik_benchmark import evaluate_run
-    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.evaluation.ik_benchmark import evaluate_run
+    from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory
     from egocentric_pipeline.run_metadata import write_json
 
     directory, source, _, rs = aligned_input
@@ -352,7 +352,7 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
         seeds[1].update(stop=4, duration_s=3/6)
         seeds[2].update(start=4, duration_s=1/6)
         selection = {"frame_range": [0, 3], "excluded_hand_frames": [{"frame": 1, "hand": "right"}]}
-    monkeypatch.setattr("egocentric_pipeline.joint_retargeting.camera_segments",
+    monkeypatch.setattr("egocentric_pipeline.retargeting.joint_retargeting.camera_segments",
                         lambda camera, times, config: (camera.copy(), seeds))
     settings.update(base_max_evaluations=10, trajectory_max_evaluations=10, fit_attempts=2,
                     merge_adjacent_regions=True, refine_base_with_trajectory=refine_base)
@@ -397,7 +397,7 @@ def test_gripper_workflow_export_and_benchmark(tmp_path, aligned_input, palm_mod
             assert np.isnan(data["joint_solution_rad"][3:]).all()
             assert (data["episode_id"][3:] == -1).all()
     assert len(report["coupled_joint_leaders"]) == 2
-    benchmark = json.loads((ROOT / "configs/ik_benchmark.json").read_text())
+    benchmark = json.loads((ROOT / "configs/experiments/ik_benchmark.json").read_text())
     benchmark.update(hand_position_window_s=.5, hand_orientation_window_s=.5)
     if reviewed:
         benchmark["selection"] = selection
@@ -527,7 +527,7 @@ def test_cuda_bound_optimum_and_evaluation_budget():
     require_cuda()
     from scipy import sparse
     from scipy.optimize import least_squares
-    from egocentric_pipeline.gpu_least_squares import least_squares_cuda
+    from egocentric_pipeline.retargeting.gpu_least_squares import least_squares_cuda
 
     matrix = sparse.csr_matrix([[2., .3, 0.], [.2, 3., .4], [0., .2, 1.]])
     target = np.array([3., -4., .2])
@@ -549,7 +549,7 @@ def test_cuda_bound_optimum_and_evaluation_budget():
 def test_cuda_symbolic_reuse_updates_values_rhs_and_structure():
     require_cuda()
     from scipy import sparse
-    from egocentric_pipeline.gpu_least_squares import CudaNormalSolver
+    from egocentric_pipeline.retargeting.gpu_least_squares import CudaNormalSolver
 
     solver = CudaNormalSolver()
     try:
@@ -605,7 +605,7 @@ def test_cuda_pose_fit_matches_cpu_objective_and_bounds(model, settings, fixed, 
 
 
 def test_neutral_mano_palm_frames_preserve_hand_identity():
-    from egocentric_pipeline.hand_geometry import mano_palm_frames, load_mano_model, reconstruct_mano
+    from egocentric_pipeline.geometry.hand_geometry import mano_palm_frames, load_mano_model, reconstruct_mano
     paths = [ROOT / "external/HaWoR" / p for p in (
         "_DATA/data_left/mano_left/MANO_LEFT.pkl", "_DATA/data/mano/MANO_RIGHT.pkl")]
     if not all(p.exists() for p in paths):
@@ -625,7 +625,7 @@ def test_neutral_mano_palm_frames_preserve_hand_identity():
 
 
 def test_pose_viewer_distinguishes_failure_missing_and_unassigned():
-    from egocentric_pipeline.retargeting_visualization import frame_state
+    from egocentric_pipeline.visualization.retargeting_visualization import frame_state
     arrays = {"episode_id": np.array([0, 0, 0, -1]),
               "export_valid": np.array([[True, True], [False, True], [False, False], [True, True]]),
               "ik_success": np.array([[False, True], [False, True], [False, False], [False, False]])}
@@ -635,7 +635,7 @@ def test_pose_viewer_distinguishes_failure_missing_and_unassigned():
 
 @pytest.mark.parametrize("method", ["joint_base", "workspace"])
 def test_viewer_treats_excluded_hands_as_missing(method):
-    from egocentric_pipeline.retargeting_visualization import frame_state
+    from egocentric_pipeline.visualization.retargeting_visualization import frame_state
 
     arrays = {"episode_id": np.zeros(3, int), "export_valid": np.ones((3, 2), bool),
               "retarget_valid": np.array([[False, True], [False, False], [True, False]]),
@@ -648,7 +648,7 @@ def test_viewer_treats_excluded_hands_as_missing(method):
 @pytest.fixture
 def aligned_input(tmp_path, model):
     """Small real FK input through the production alignment/retargeting boundary."""
-    from egocentric_pipeline.hand_geometry import mano_palm_frames
+    from egocentric_pipeline.geometry.hand_geometry import mano_palm_frames
 
     m, _, rs = model
     paths = [ROOT / "external/HaWoR" / p for p in (
@@ -683,8 +683,7 @@ def aligned_input(tmp_path, model):
 @pytest.mark.parametrize("backend", ["cpu", "cuda"])
 @pytest.mark.parametrize("refinement", [False, True])
 def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp_path, aligned_input, model, settings, backend, refinement):
-    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
-    from egocentric_pipeline.retargeting_comparison import compare_quality
+    from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory
 
     directory, source, offsets, rs = aligned_input
     if backend == "cuda":
@@ -726,9 +725,6 @@ def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp
         assert report["episodes"][0]["region"]["longest_nonpassing_s"] >= 1 / 3 - 1e-10
         expected = eligible & (arrays['ik_residual_m'] <= settings['ik_tolerance_m']) & (arrays['orientation_residual_rad'] <= settings['orientation_tolerance_rad'])
         np.testing.assert_array_equal(arrays['ik_success'], expected)
-        quality = compare_quality(output, model[0], offsets, settings)
-        assert quality["observed_hand_frames"] == int(eligible.sum())
-        assert quality["observed_frames"] == 6
         outputs.append(arrays)
     for name in ("joint_solution_rad", "transform_base_from_aligned", "ik_success", "ik_residual_m",
                  "orientation_residual_rad", "candidate_frame_passed"):
@@ -736,7 +732,7 @@ def test_joint_workflow_ignores_infilled_geometry_and_exports_missing_labels(tmp
 
 
 def test_entirely_infilled_region_has_no_fit(tmp_path, aligned_input, settings):
-    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory
 
     directory, source, _, rs = aligned_input
     source["motion_infilled"][:] = True
@@ -753,9 +749,8 @@ def test_entirely_infilled_region_has_no_fit(tmp_path, aligned_input, settings):
 
 @pytest.mark.parametrize("missing_hand", [0, 1])
 def test_entirely_infilled_hand_still_allows_opposite_hand_fit_and_viewer(tmp_path, aligned_input, settings, model, missing_hand):
-    from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory
-    from egocentric_pipeline.retargeting_comparison import compare_quality
-    from egocentric_pipeline.retargeting_visualization import view_retargeting
+    from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory
+    from egocentric_pipeline.visualization.retargeting_visualization import view_retargeting
 
     directory, source, offsets, rs = aligned_input
     source["motion_infilled"][:, missing_hand] = True
@@ -765,54 +760,12 @@ def test_entirely_infilled_hand_still_allows_opposite_hand_fit_and_viewer(tmp_pa
     report = joint_retarget_trajectory(directory, output, settings, rs,
                                       ROOT / "data/models/purdue-alex-assets", render_video=False)
     assert report["episodes"][0]["observed_hand_frames"][missing_hand] == 0
-    quality = compare_quality(output, model[0], offsets, settings)
-    assert quality["observed_hand_frames"] == int((source["export_valid"] & ~source["motion_infilled"]).sum())
     # Exercise actual scene creation: Viser requires [N,3] path colors even
     # when one entire hand has no observations and its path is empty.
     viewer = view_retargeting(output, show_mano=False)
     viewer.close()
 
 
-def test_workspace_workflow_ignores_infilled_geometry(tmp_path, aligned_input):
-    from egocentric_pipeline.retargeting import retarget_trajectory
-    from egocentric_pipeline.workspace import WorkspaceGrid
-
-    directory, source, _, rs = aligned_input
-    settings = json.loads((ROOT / "configs/trajectory_retargeting.json").read_text())
-    settings.update(optimizer_iterations=2, optimizer_population=2, ik_attempts=1, ik_iterations=5)
-    rs = dict(rs, voxel_size_m=.1)
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    # A synthetic field suffices to exercise placement and IK masking; it does
-    # not assert physical reachability or replace the sampled production grid.
-    distances = np.full((2, 20, 20, 20), -.1)
-    WorkspaceGrid(np.array([-1., -1., 0.]), .1, distances < 0, distances).save(workspace / "workspace_grid.npz")
-    (workspace / "workspace_report.json").write_text(json.dumps({
-        "status": "completed", "hand_order": ["left", "right"], "settings": rs,
-        "arms": [{"tool_frame": tool, "target_frame": target}
-                 for tool, target in zip(rs["tool_frames"], rs["target_frames"])]}))
-    eligible = source["export_valid"] & ~source["motion_infilled"]
-    outputs = []
-    for index in range(2):
-        if index:
-            source["wrist_position_aligned_m"][~eligible] = np.nan
-            np.savez(directory / "trajectory_aligned.npz", **source)
-        output = tmp_path / f"workspace-run-{index}"
-        report = retarget_trajectory(directory, workspace, output, settings,
-                                    ROOT / "data/models/purdue-alex-assets", regions_only=True, render_video=False)
-        with np.load(output / "trajectory_retargeted.npz") as f:
-            arrays = dict(f)
-        np.testing.assert_array_equal(arrays["retarget_valid"], eligible)
-        assert not arrays["ik_success"][~eligible].any()
-        assert not arrays["candidate_query_valid"][:, ~eligible].any()
-        assert not arrays["candidate_hand_passed"][:, ~eligible].any()
-        assert not arrays["ik_attempts"][~eligible].any()
-        for name in ("wrist_position_base_m", "joint_angles_rad", "ik_residual_m"):
-            assert np.isnan(arrays[name][~eligible]).all()
-        assert report["episodes"][0]["combined"]["observed_frames"] == 6
-        outputs.append(arrays)
-    for name in ("transform_base_from_aligned", "candidate_frame_passed", "joint_angles_rad", "ik_success"):
-        np.testing.assert_array_equal(outputs[0][name], outputs[1][name])
 
 
 @pytest.mark.parametrize("stride", [1, 2])

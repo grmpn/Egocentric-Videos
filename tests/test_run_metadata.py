@@ -13,12 +13,14 @@ import threading
 import numpy as np
 import pytest
 
-from egocentric_pipeline.clip_request import ClipRequest
-from egocentric_pipeline import hawor_runner, pipeline, run_metadata, visualization
+from egocentric_pipeline.video.clip_request import ClipRequest
+from egocentric_pipeline.tracking import hawor_runner, pipeline
+from egocentric_pipeline import run_metadata
+from egocentric_pipeline.visualization import visualization
 from egocentric_pipeline.run_metadata import (
     ResourceMonitor, capture_environment, new_manifest, new_run_directory, read_json, redact, sha256_file, write_json,
 )
-from egocentric_pipeline.video_preparation import PreparedClip, prepare_clip
+from egocentric_pipeline.video.video_preparation import PreparedClip, prepare_clip
 from test_world_export import native_fixture
 
 
@@ -201,16 +203,21 @@ def test_environment_provenance_tracks_dirty_source_and_environment_changes(tmp_
     specification.write_text("name: changed-synthetic-test-environment\n")
     added = source.parent / "untracked.py"
     added.write_text("ADDED = True\n")
+    runner = tmp_path / "pipeline/run.sh"
+    runner.parent.mkdir()
+    runner.write_text("#!/bin/sh\nexit 0\n")
     excluded = source.parent / "api_token.py"
     excluded.write_text("SYNTHETIC_ONLY = True\n")
     dirty = capture_environment(tmp_path)
     assert dirty["repository_commit"] == clean["repository_commit"]
     assert dirty["repository_dirty"] is True
     assert set(dirty["repository_status"]) == {
-        " M environment/hawor.yml", " M src/egocentric_pipeline/example.py", "?? src/egocentric_pipeline/untracked.py"}
+        " M environment/hawor.yml", " M src/egocentric_pipeline/example.py", "?? src/egocentric_pipeline/untracked.py",
+        "?? pipeline/run.sh"}
     assert dirty["project_file_sha256"] == {"src/egocentric_pipeline/example.py": sha256_file(source),
                                              "environment/hawor.yml": sha256_file(specification),
-                                             "src/egocentric_pipeline/untracked.py": sha256_file(added)}
+                                             "src/egocentric_pipeline/untracked.py": sha256_file(added),
+                                             "pipeline/run.sh": sha256_file(runner)}
     assert dirty["project_file_sha256"]["src/egocentric_pipeline/example.py"] != clean["project_file_sha256"]["src/egocentric_pipeline/example.py"]
     assert dirty["environment_specification"] == {"path": str(specification), "sha256": sha256_file(specification)}
     assert dirty["environment_specification"]["sha256"] != clean["environment_specification"]["sha256"]

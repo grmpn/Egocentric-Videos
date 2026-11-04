@@ -6,9 +6,9 @@ from pathlib import Path
 import re
 import traceback
 
-from egocentric_pipeline.gripper_mapping import load_mapping
-from egocentric_pipeline.ik_benchmark import evaluate_run, update_report, validate_settings as validate_benchmark_settings
-from egocentric_pipeline.joint_retargeting import joint_retarget_trajectory, validate_settings
+from egocentric_pipeline.retargeting.gripper_mapping import load_mapping
+from egocentric_pipeline.evaluation.ik_benchmark import evaluate_run, update_report, validate_settings as validate_benchmark_settings
+from egocentric_pipeline.retargeting.joint_retargeting import joint_retarget_trajectory, validate_settings
 from egocentric_pipeline.run_metadata import read_json, utc_now, write_json
 
 
@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--mapping-directory", type=Path, required=True)
     parser.add_argument("--benchmark-directory", type=Path, default=root / "outputs/ik-benchmark")
-    parser.add_argument("--benchmark-config", type=Path, default=root / "configs/ik_benchmark.json")
+    parser.add_argument("--benchmark-config", type=Path, default=root / "configs/experiments/ik_benchmark.json")
     parser.add_argument("--run-id", required=True, help="Unique directory name; existing experiments are preserved")
     parser.add_argument("--name", required=True)
     parser.add_argument("--description", required=True)
