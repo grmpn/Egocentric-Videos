@@ -13,6 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [LeRobot export refresh](plans/lerobot-export-refresh.md) — approved: independent human reconstruction and region-based robot training datasets, updated shell workflow and mask-aware training contract.
 - [Codebase cleanup and integrated pipeline](plans/codebase-cleanup-and-pipeline.md) — revision 2 fulfilled: preserved evidence, retired deprecated workflows, reorganized capabilities, consolidated runtime and verified full-video annotated robot LeRobot episodes.
 - [Milestone 3: IK configuration experiments](plans/milestone-3-ik-tuning.md) — approved held-out evaluation of frozen slack5-orientation8 after first-region tuning.
 - [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — revision 2 fulfilled: first-region solving/scoring, three rescored comparisons, preserved full-video evidence.

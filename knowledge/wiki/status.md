@@ -1,11 +1,11 @@
 # Project status
 
 - Current milestone: **3 — Retarget hands and trajectories in simulation**.
-- Stage: **Validating** — cleanup/integration is complete; broader simulation acceptance remains open.
-- Active plan: [Codebase cleanup and integrated pipeline, revision 2](plans/codebase-cleanup-and-pipeline.md), approved and fulfilled 2026-11-03. Prior [held-out evaluation scope](plans/milestone-3-ik-tuning.md) is also fulfilled.
+- Stage: **Implementing** — approved export refresh; broader simulation acceptance remains open.
+- Active plan: [LeRobot export refresh, revision 1](plans/lerobot-export-refresh.md), approved 2026-11-12. Previous [cleanup/integration plan](plans/codebase-cleanup-and-pipeline.md) and [held-out evaluation scope](plans/milestone-3-ik-tuning.md) remain fulfilled.
 - Milestone deliverable: repeatable simulation demonstration, exported robot trajectories and limit-check evidence; not yet accepted.
 - Completed outcome: one full-video MP4-to-annotated-robot-LeRobot workflow, preserved Milestone 2 evidence, frozen defaults, organized capabilities/commands and consolidated processing runtime. [Cleanup acceptance and review artifacts](topics/integrated-pipeline.md#cleanup-verification--2026-11-03).
-- Current work: cleanup implementation and validation finished. No next milestone or solver experiment started.
-- Blockers or decisions: remaining simulation demonstration scope needs agreement. Tracking/collision failures and the [10 rad/s² acceleration proxy](decisions/ik-benchmark-limits.md) remain limitations; generated labels remain pending human semantic review.
-- Next action: agree the remaining Milestone 3 simulation demonstration and acceptance evidence using the integrated workflow.
-- Last verification: **2026-11-03** — 284 processing checks, official create/append/annotation tests, inspected 1,286-frame iPhone export, and [completed 121-frame shell run](../../outputs/cleanup/small-video-complete-console.log) with [annotation preservation/server shutdown](../../outputs/cleanup/small-annotation-review.json). Old gravity/workspace environments retired after replacement checks.
+- Current work: inspected the supplied specification, current exporter, shell workflow, provenance, geometry and evaluation contracts; approved revision 1; implementing the export, training and shell contracts.
+- Blockers or decisions: Tracking/collision failures, unmeasured scale/floor and the [10 rad/s² acceleration proxy](decisions/ik-benchmark-limits.md) remain limitations.
+- Next action: implement both datasets and update `pipeline/run.sh`; retain the broader simulation acceptance question separately.
+- Last verification: **2026-11-12** — source/dependency inspection and planning only; see the November log event `20261112-export-refresh-001`. Last runtime acceptance remains the [2026-11-03 cleanup checks](topics/integrated-pipeline.md#cleanup-verification--2026-11-03).
