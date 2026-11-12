@@ -4,6 +4,7 @@ import importlib.metadata
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from egocentric_pipeline.retargeting.gripper_mapping import load_mapping_for_alignment
 from egocentric_pipeline.retargeting.hand_pose_filtering import smooth_hand_targets, validate_filter_settings
@@ -137,6 +138,8 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description, 
     opening_error = position_error.copy()
     predicted_position = np.full((n, 2, 3), np.nan)
     predicted_rotation = np.full((n, 2, 3, 3), np.nan)
+    # Nominal URDF TCPs, in the robot base frame, from these exact joint solutions.
+    tcp_pose_base = np.full((n, 2, 7), np.nan)
     collision_free = np.zeros(n, bool)
     collisions = {}
     for frame in np.flatnonzero(evaluated):
@@ -152,6 +155,9 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description, 
         cid = report["episodes"][eid]["candidate_id"]
         transform = arrays["transform_aligned_from_base"][cid]
         for h, side in enumerate(("left", "right")):
+            tcp = constraints.links[report["robot_settings"]["tool_frames"][h]].worldcoords().T()
+            tcp_pose_base[frame, h, :3] = tcp[:3, 3]
+            tcp_pose_base[frame, h, 3:] = Rotation.from_matrix(tcp[:3, :3]).as_quat()
             palm = constraints.links[f"{side}_ezgripper_palm_link"].worldcoords().T()
             predicted = transform @ palm
             predicted_position[frame, h], predicted_rotation[frame, h] = predicted[:3, 3], predicted[:3, :3]
@@ -164,6 +170,7 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description, 
                 opening_error[frame, h] = leader  # converted once below using the asset helper
     from egocentric_pipeline.retargeting.gripper_model import load_gripper_commands
     closed = load_gripper_commands(report["asset_root"]).EZGRIPPER_CLOSED_ANGLE_RAD
+    gripper_opening = 1 - full_q[:, [constraints.names.index(f"{side}_ezgripper_knuckle_palm_l1_1") for side in ("left", "right")]] / closed
     opening_error = np.abs(1 - opening_error / closed - mapping["gripper_action"])
     frame_speed, frame_acceleration = np.full_like(full_q, np.nan), np.full_like(full_q, np.nan)
     velocities, accelerations = [], []
@@ -218,6 +225,7 @@ def evaluate_run(run_directory, mapping_directory, settings, name, description, 
         joint_feasible=feasible, collision_free=collision_free, opening_action_error=opening_error,
         target_position_aligned_m=positions, target_rotation_aligned=rotations,
         predicted_position_aligned_m=predicted_position, predicted_rotation_aligned=predicted_rotation,
+        tcp_pose_base=tcp_pose_base, gripper_opening=gripper_opening,
         raw_target_transform_aligned_from_palm=raw, target_opening_action=mapping["gripper_action"],
         timestamp_s=arrays["timestamp_s"], source_timestamp_s=arrays["source_timestamp_s"])
     if compare and not contract_path.exists():

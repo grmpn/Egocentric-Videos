@@ -1,161 +1,180 @@
-# Full-video robot LeRobot episodes and annotation
+# Human reconstruction and robot demonstration datasets
 
-The [integrated workflow](integrated-pipeline.md) uses the official LeRobot writer,
-reader and annotator pinned to `9a6bb61043bac8c14353fcb6ea513b7473c118e3`.
-`pipeline/export_dataset.py` creates or appends one **complete input video per
-episode** from a completed HaWoR run and independently evaluated robot regions.
-Trimming, incompatible appends, overlapping region solves and duplicate sources
-are rejected. Historical hand-only contract 1.0 datasets remain preserved evidence;
-the supported robot workflow uses project contract **2.0** and LeRobot **v3.1**.
+Implemented under the [export-refresh plan](../plans/lerobot-export-refresh.md).
+Project contract **3.0** uses LeRobot **v3.1**, pinned to
+`9a6bb61043bac8c14353fcb6ea513b7473c118e3`. The upstream creator still reports
+storage floor v3.0; the exporter sets its metadata object's version to v3.1.
+Historical contracts 1.0/2.0 remain evidence; append requires a new compatible root.
+The [integrated workflow](integrated-pipeline.md) owns orchestration and recovery.
 
-## Dataset contract
+## Human contract
 
-The pinned upstream creator reports storage floor `v3.0`, although it implements
-the v3.1 language features. Creation explicitly sets v3.1 on its metadata object
-and declares those language features; the installed dependency is unchanged.
-The official reader, resumed writer and annotator exercise this output in
-[production integration tests](../../../tests/test_lerobot_export.py).
+One complete prepared video per episode, including invalid/infilled frames.
+Every hand axis is `[left, right]`; arrays remain multidimensional in Parquet.
+Standard LeRobot indices and synchronized 30 FPS `observation.images.ego` accompany:
 
-| Data | Representation |
+| Feature under `observation.hands.` | Shape | Type |
+| --- | --- | --- |
+| `root_pose_aligned` | 2 × 7 | float32, xyz metres then normalized xyzw quaternion |
+| `pose_axis_angle` | 2 × 45 | float32, native MANO articulation radians |
+| `betas` | 2 × 10 | float32, original shape coefficients |
+| `wrist_position_aligned_m` | 2 × 3 | float32, physical wrist |
+| `source_status` | 2 | uint8: unavailable 0, motion-infilled 1, directly estimated 2 |
+
+Invalidity takes precedence over infill, which takes precedence over an unused
+raw detector record. HaWoR `motion_infilled` means valid without a retained direct
+estimation chunk; `direct_detection` may coexist with it. `export_valid` includes
+native validity, finite parameters and successful upstream processing. The compact
+status preserves usability; detector confidence is left in processing artifacts.
+
+The single `observation.camera.pose_aligned` is float32 `[4,4]`, column-vector
+T_aligned_from_camera. It is retained because current segmentation and base/head
+fitting use camera positions and orientations. No duplicated native camera pose
+is stored. All geometry shares gravity-aligned Z-up, original SLAM origin and
+arbitrary yaw. Scale is claimed metres, not measured. Base-height initialization
+uses camera position minus neutral robot camera height; no measured floor exists.
+
+The dataset README documents separate licensed left/right MANO model hashes,
+SMPL-X 0.1.28 MANOLayer's matrix interface, native joint ordering and HaWoR's left
+shapedirs correction. Root translation is MANO transl, not physical wrist:
+`wrist = transl + J(beta)[0]`. A compact per-episode rotation in the README permits
+inverting alignment, including this offset. No PCA or extra mean is applied.
+[Geometry tests](../../../tests/test_human_episode.py) reconstruct joints and all
+778 vertices for both hands, including infill, with a 2 µm numerical tolerance;
+this tolerance describes coordinate conversion, not perception accuracy.
+
+`export_dataset.py restore-human` reconstructs the existing alignment boundary
+and RGB from only the human dataset and matching licensed MANO assets. Prepared
+human frame indices become the new processing source timeline. Original HaWoR
+files and absolute paths are unnecessary; no robot is encoded in this boundary.
+
+## Robot contract and acceptance
+
+One contiguous accepted fixed-base manipulation region per episode. Frame indices
+start at zero and timestamps are `frame_index / 30`. RGB comes from the linked
+human dataset over the identical half-open interval. Standard indexing accompanies:
+
+| Feature | Shape/type |
 | --- | --- |
-| RGB | `observation.images.ego`, 30 FPS, prepared dimensions, H.264 CRF 18 |
-| World pose | `observation.hands.root_translation_world_m` (6), `root_orientation_world_axis_angle` (6) |
-| Articulation / shape | `observation.hands.hand_pose_axis_angle` (90), `mano_betas` (20) |
-| Canonical pose | `observation.hands.root_translation_canonical_m` (6), `root_orientation_canonical_axis_angle` (6) |
-| Z-up geometry | `observation.hands.root_translation_aligned_m`, `root_orientation_aligned_axis_angle`, `wrist_position_world_m`, `wrist_position_aligned_m`, `mano_root_offset_m` (6 each) |
-| Camera | `observation.camera_position_{world,aligned}_m` (3), `camera_rotation_{world,aligned}_from_camera` (9, row-major) |
-| Hand provenance | `observation.hands.{direct_detection,motion_infilled,hawor_valid,export_valid}` (2 bools), `detector_confidence` (2 float32) |
-| Robot actions | `action` (18 float64): left arm 7 rad, right arm 7 rad, neck 2 rad, left/right normalized gripper opening (0 closed, 1 open) |
-| Action validity | `observation.robot.action_valid` (18 bools); invalid action components are NaN |
-| Solver diagnostics | `observation.robot.joint_solution_rad` (18 float64, including the two gripper leader joints in radians), `solved` (1 bool), `ik_success` (2 bools) |
-| Independent evaluation | `observation.robot.observed_hand` (2 bools), `joint_feasible`, `collision_free` (1 bool each), position error in metres and orientation error in radians (2 each) |
-| Region | `observation.robot.region_id` (1 int32), −1 outside retained regions |
-| Timing | LeRobot indices/timestamp plus exact float64 `observation.{clip_timestamp_s,source_timestamp_s}` |
+| `action` | float32 `[18]`: left arm 7 rad, right arm 7 rad, neck 2 rad, left/right opening |
+| `action.ee` | float32 `[2,8]`: absolute xyz/xyzw/opening, left then right |
+| `quality.hand_status` | uint8 `[2]`, same encoding as human data |
+| `quality.action_valid` | bool `[18]` |
+| `source_episode_index`, `source_frame_index` | scalar int64, prepared human timeline |
+| `language_persistent` | standard plan/subtask atoms |
 
-Hand fields flatten left before right; original float32 world/articulation/shape
-values and NaNs remain exact. MANO root translation differs from the derived wrist.
-Unknown confidence stays NaN. The official reader casts scalar floats to Torch
-float32; exact source timestamps remain in Parquet and preparation metadata.
-Upstream normalization statistics may contain NaNs and are not validity-aware.
+The 18-component action already has one command per gripper; only the old
+separate diagnostic vector duplicated gripper angles. The evaluator computes
+nominal URDF TCP FK from actual saved joints in `PEDESTAL_LINK`; TCPs are
+`LEFT_EZGRIPPER_TCP_LINK` / `RIGHT_EZGRIPPER_TCP_LINK`. Openings come from evaluated
+leader angles and must agree with saved gripper actions. Human targets never
+substitute for achieved TCP poses.
 
-Robot actions require observed (non-infilled) hands, finite solved predictions,
-independent smoothed-target tracking within the saved evaluation tolerances,
-joint position/velocity/acceleration limits, and discrete self-collision checks.
-Each arm and its gripper share validity; neck commands require at least one valid
-hand. Failed predictions remain diagnostic fields. These masks do not certify
-scene collisions, dynamics, continuous collision clearance or hardware safety.
-The existing [acceleration proxy](../decisions/ik-benchmark-limits.md) remains explicit.
+Validity includes IK acceptance, observed usable hands, finite solutions, tracking
+tolerances, per-joint position/velocity/acceleration limits and self-collision.
+Finger leader/mimic violations map to their gripper component. Violations in locked
+joints or whole-configuration collisions invalidate all actions. Derivatives use
+ordered prepared timestamps within each region, never across boundaries. The
+existing [10 rad/s² acceleration proxy](../decisions/ik-benchmark-limits.md) remains.
+EE pose validity requires all seven arm masks; opening uses its gripper mask;
+neck controls do not affect arm FK in the robot base frame.
 
-## Regions and provenance
+Export requires the existing geometric region acceptance and, independently,
+`action_valid.all(axis=1).mean() >= min_episode_valid_ratio`, default **0.85**.
+No frame is removed to raise the ratio. Run-directory `region_export.json` records
+all regions, ratios and rejection reasons, including when none qualifies. A
+completed solve is not automatically an accepted demonstration.
 
-`meta/egocentric.json` owns contract/dependency revisions and source identities.
-`meta/egocentric/episode_NNNNNN.json` preserves complete preparation/world metadata,
-source attribution, hashes, canonical anchors, and robot settings. Its `robot`
-record contains the action/joint names, gravity rotation, source solve paths and
-benchmark selections. Every retained region records:
+Finite invalid predictions are retained with false masks. Unavailable joints use
+zero and unavailable TCPs use zero translation/identity quaternion; unavailable
+openings use zero. These placeholders never participate in training/statistics.
 
-- Half-open `[start, stop)` episode frame/time and original source frame/time intervals.
-- Fixed `transform_base_from_aligned`, mapping Z-up points into that region's robot base; compose it with the stored gravity rotation for world-to-base conversion.
-- Evaluated or unsolved outcome, original pose-acceptance report, and solved/feasible/collision-free/valid-component counts.
+## Statistics and training
 
-Frames retain full-video indices. Gaps and unsolved frames have NaN actions and
-false validity; no interpolation or derivative spans a gap or base change. World,
-canonical and aligned hand geometry continue through those frames with their
-original missing/infill masks. A repeated source hash and source timestamps is an
-error even under another run name. [Robot export](../../../src/egocentric_pipeline/datasets/robot_episode.py)
-checks source arrays, evaluation synchronization, joint predictions and transform
-direction before any dataset mutation.
+The pinned writer supports Array2D storage but its numeric statistics reduce
+multidimensional axes incorrectly and do not accept validity masks. A scoped
+single-process adapter delegates RGB statistics unchanged and reduces numeric
+time axes using finite valid components. It restores the upstream function even
+on failure; no dependency source is modified.
 
-## Canonical transform
+Standard scalar `count` cannot describe unequal valid counts per component.
+Episode statistics retain row count for compatibility; global numeric statistics
+are recomputed exactly from all rows after append instead of averaging masked
+means. Empty components receive mean/min/max/quantiles zero and std one. Normal
+loading remains supported. Unmodified generic statistics recomputation/merging
+is not mask-aware and is outside this workflow.
 
-Each hand independently anchors to its first export-valid MANO root pose,
-`(R0, t0)`. For every valid pose:
+Use [ActionTrainingDataset](../../../src/egocentric_pipeline/datasets/training.py)
+with `target='joint'` or `target='ee'`. It selects the matching statistics,
+requests identical temporal offsets for targets/masks, masks episode padding,
+flattens EE targets only at the policy boundary, and sanitizes invalid values
+before normalization. A policy must use `masked_mse(prediction, batch['action'],
+batch['action_valid'])` or an equivalent masked elementwise loss. The adapter
+alone does not change a stock policy's loss. No actual policy training is claimed.
 
-`p_canonical = R0.T @ (p_world - t0)`; `R_canonical = R0.T @ R_world`.
+## Metadata, append and annotation
 
-The inverse is `p_world = R0 @ p_canonical + t0` and
-`R_world = R0 @ R_canonical`. Anchors remain fixed through the episode, preserving
-motion. Axis-angle values are radians. The world values remain primary; local
-MANO articulation and shape are unchanged. Hands are not mirrored. Missing hands
-have no anchor, invalid canonical poses are NaN, and an infilled first valid pose
-can be the anchor. Stored masks expose that limitation. Inversion tests compare
-rotation matrices because axis-angle encodings are not unique.
+Final roots contain README, data, videos and standard meta files only. No custom
+metadata directory, DATA_CARD, PNG staging, opaque episode records or extra
+episode columns are added. The README owns conventions and the small source
+identity/calibration records required for reconstruction and linkage. Per-episode
+human revisions cover numeric rows and the associated video shard; append preserves
+old shards. Repacking/regenerating a human dataset requires new dependent exports.
+Robot cards pin the human dataset identity and used episode revisions without paths.
 
-## Mutation and annotation preservation
+Dataset changes use the existing sibling-copy transaction and advisory lock.
+Schema, image geometry, embodiment, model identity and source consistency are
+checked; repeated human sources and overlapping robot source regions are refused.
+Numeric rows are checked after writing and boundary RGB is decoded with the
+standard reader before publication. Keep external writers out of concurrent
+updates; readers should reopen afterward. Failed updates preserve the original.
 
-Creation/append and annotation operate on a full sibling copy. A sibling advisory
-lock serializes project writers. On Linux/WSL, `renameat2(RENAME_EXCHANGE)` publishes
-an existing dataset atomically after validation; failed operations leave the prior
-directory untouched. Existing episodes and annotations are preserved. This costs
-temporary disk space approximately equal to a second dataset, appropriate for the
-small pilot. External writers must not edit the same root concurrently, and readers
-should reopen after an update. The workflow does not promise power-loss durability.
+`annotate_dataset.py --record RUN/annotations.json` annotates newly segmented robot
+episodes through the pinned official CLI. Plans/subtasks use episode-local times.
+`language_events` remains declared because that CLI writes both language columns;
+interjections/VQA/memory are disabled. Prior labels in shared shards are restored
+and all non-language data is checked. Execution records/intermediates stay in the
+run; `.annotate_staging` is removed from the published dataset. Nonempty plan and
+subtask coverage must start at frame zero. Generated semantics require review.
 
-Append requires contract 2.0, the same pinned robot/joint order and action units, matching features, dependency revision, 30 FPS and image geometry;
-incompatible inputs need another dataset directory. The official writer resumes
-into a new data shard, retaining previous Parquet files. Every new numeric field is
-checked over the entire episode after writing; the official reader also decodes
-the boundary frames before publication.
+## Verification
 
-`annotate_dataset.py` invokes the actual `lerobot-annotate` module against an
-already-running OpenAI-compatible VLM server. It disables interjections, VQA,
-memory, task rephrasings and task re-derivation; plans and subtasks remain enabled.
-Thinking is disabled for the intended Qwen backend. It selects only unannotated
-episodes and refuses an explicit selection containing existing annotations.
+Current verification artifacts are local-only under `outputs/lerobot-export-refresh/`.
+See [status](../status.md) and the November action log for completed checks and
+remaining work. Historical [cleanup evidence](integrated-pipeline.md#cleanup-verification--2026-11-03)
+verifies the previous full-video contract, not this replacement schema.
 
-The wrapper accepts these arguments:
+### Export refresh acceptance — 2026-11-12
 
-| Argument | Meaning |
-| --- | --- |
-| `--dataset-root PATH` | Required existing project LeRobot dataset; successful annotation updates this directory atomically. |
-| `--model ID` | Required model name exposed by the running VLM server. |
-| `--api-base URL` | OpenAI-compatible endpoint; default `http://localhost:8000/v1`. |
-| `--episodes 0 1` | Optional episode indices; omitted means every unannotated episode. |
+- [Processing regression](../../../outputs/lerobot-export-refresh/processing-final.log):
+  114 passed, including licensed MANO reconstruction, temporal limits, masks and
+  existing ingestion/alignment contracts.
+- [Official LeRobot integration](../../../outputs/lerobot-export-refresh/integration-final.log):
+  16 passed, one missing-MANO-runtime skip covered by the processing checks.
+  Tests exercise create/append/rollback, structured schemas, source revisions,
+  region thresholds, RGB/local time, training masks and the real annotation CLI
+  with a deterministic local HTTP fixture. [Opening regression](../../../outputs/lerobot-export-refresh/opening-final.log)
+  passed seven checks; [distinct joint ordering and invalid-target normalization](../../../outputs/lerobot-export-refresh/ordering-final.log)
+  is checked separately after strengthening the fixture.
+- [Updated shell run](../../../outputs/lerobot-export-refresh/shell-console.log)
+  completed from saved stages on the 121-frame bundled MP4, retaining its complete
+  [human dataset](../../../outputs/lerobot-export-refresh/real-human/README.md).
+  Both candidate regions failed existing geometric acceptance and were correctly
+  [rejected](../../../outputs/lerobot-export-refresh/shell-run/region_export.json);
+  no robot dataset or VLM server was created for this example. Accepted robot
+  episodes and annotations are exercised in `outputs/lerobot-export-refresh/test-runs-final/`.
+- [Real geometry audit](../../../outputs/lerobot-export-refresh/geometry-review.json):
+  maximum MANO vertex difference 2.03e-7 m; 83 TCP poses agree with independent FK
+  after float32 conversion within 1.49e-8 m and 6.98e-8 rotation-matrix error.
+  [RGB pairs](../../../outputs/lerobot-export-refresh/real-human-rgb-review.jpg)
+  and [wrist trajectories/provenance](../../../outputs/lerobot-export-refresh/real-human-wrists.png)
+  were inspected; no frame mismatch or coordinate change was observed.
+- [Standalone human reuse](../../../outputs/lerobot-export-refresh/standalone-review.json)
+  restored RGB/alignment, retained both region intervals and regenerated gripper
+  mapping using only the dataset and licensed models. Maximum landmark difference
+  was 1.20e-7 m, palm-transform difference 8.21e-7, opening difference 3.18e-7.
 
-The pinned annotator samples RGB at **2 frames/s**, packs timestamped frames into
-contact sheets, and uses up to 60 sampled frames per prompt. Longer episodes are
-split into windows. It first describes the visible activity, then segments it
-into subtasks, with a configured minimum duration of 1.5 s. At each subtask
-boundary it writes the current subtask and a plan of remaining steps, snapping
-boundaries to real dataset frame timestamps. These are upstream defaults, not
-additional wrapper arguments. The existing task label guides prompts; HaWoR
-trajectories are preserved but are not the VLM's input.
-
-There is no separate output-directory argument: language atoms are saved in
-the dataset's `data/*/*.parquet` under `language_persistent`, and the model,
-selected episodes, command and pending review status go into
-`meta/egocentric/annotation_vNNNN.json`. Console logs must be redirected to the
-chosen validation output directory. The wrapper neither starts the server nor
-uploads the dataset. See the [workflow and recovery command](integrated-pipeline.md#reuse-and-failure-recovery)
-and [server setup](../../../environment/README.md#native-desktop-and-annotation-environments).
-
-The pinned upstream writer replaces language columns and can clear unselected
-episodes sharing a shard. This wrapper restores those episodes' prior language
-values, checks all non-language data, requires nonempty plan/subtask coverage from
-frame zero at real timestamps, and reloads through LeRobot before publication.
-The real CLI regression covers two episodes sharing one file and checks preserved
-labels on every frame of the older episode.
-An upstream run that exits successfully with empty annotations fails this check.
-The annotation record remains `review_status: pending`: a human/video-grounded
-review is required before acceptance.
-
-The upstream annotator infers nested Arrow language types. Annotated timestamps
-can therefore be float64 while newly recorded language columns declare float32;
-null camera/tool-call fields can also have different physical types. The official
-reader supports these files. Direct Arrow concatenation requires type promotion
-when combining annotated and unannotated shards.
-
-## Runtime and evidence
-
-Dataset I/O uses `.venv-lerobot`; the VLM uses `.venv-vlm`. The shell runner starts
-the pinned local server only after GPU trajectory processing, or accepts an
-existing endpoint. The [environment guide](../../../environment/README.md#native-desktop-and-annotation-environments)
-owns installation and model-capacity constraints. Direct Python callers must
-clear HaWoR's legacy `LD_LIBRARY_PATH` and use a writable Hugging Face cache.
-
-Historical Milestone 2 results remain under `outputs/milestone-2/` and in the
-[Eidon acceptance record](../experiments/milestone-2-eidon-validation.md). They do
-not establish current robot-schema or iPhone pilot acceptance. Current cleanup
-validation is recorded in [project status](../status.md) and `outputs/cleanup/`.
-Synthetic HTTP responses test annotation integration, not model quality; real
-annotation labels still require video review.
+Evidence is local-only and ignored by Git. No new HaWoR inference, IK solve,
+real VLM inference, policy training, physical calibration or hardware operation
+was performed. The existing demo's geometric failures remain unresolved; this
+refresh fulfills the export plan, not broader simulation milestone acceptance.

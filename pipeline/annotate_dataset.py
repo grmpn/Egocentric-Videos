@@ -18,11 +18,12 @@ from egocentric_pipeline.datasets.annotations import annotate_dataset
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-root", type=Path, required=True)
+    parser.add_argument("--record", type=Path, required=True, help="New execution record in the processing run")
     parser.add_argument("--model", required=True, help="Model ID served by the selected VLM endpoint")
     parser.add_argument("--api-base", default="http://localhost:8000/v1")
     parser.add_argument("--episodes", type=int, nargs="+", help="Default: all episodes without existing language annotations")
     args = parser.parse_args()
-    result = annotate_dataset(args.dataset_root, model=args.model, api_base=args.api_base, episodes=args.episodes)
+    result = annotate_dataset(args.dataset_root, model=args.model, api_base=args.api_base, episodes=args.episodes, record_path=args.record)
     print(json.dumps(result, indent=2))
 
 

@@ -25,7 +25,7 @@ from egocentric_pipeline.video.video_preparation import (
 def make_video(path: Path, *, count: int = 12, rate: int = 60,
                width: int = 32, height: int = 24, filters: str | None = None,
                extra: list[str] | None = None) -> Path:
-    pixels = np.stack([np.full((height, width, 3), 20 + index * 10, np.uint8) for index in range(count)])
+    pixels = np.stack([np.full((height, width, 3), (20 + index * 10) % 256, np.uint8) for index in range(count)])
     command = ["ffmpeg", "-v", "error", "-n", "-f", "rawvideo", "-pixel_format", "rgb24",
                "-video_size", f"{width}x{height}", "-framerate", str(rate), "-i", "pipe:0"]
     if filters:

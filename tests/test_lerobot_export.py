@@ -1,7 +1,6 @@
-"""Real LeRobot writer/reader integration; skipped in the legacy Torch-free job."""
-
-import os
+"""Production writers, readers, annotation CLI and standalone human reuse."""
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import subprocess
@@ -10,241 +9,290 @@ import threading
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 
-pytest.importorskip("lerobot")
-import pyarrow as pa
-import pyarrow.parquet as pq
-from lerobot.datasets.io_utils import write_table_one_row_group_per_episode
+pytest.importorskip('lerobot')
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from egocentric_pipeline.video.clip_request import ClipRequest
-from egocentric_pipeline.datasets.lerobot_export import append_robot_episode, CAMERA
-from egocentric_pipeline.run_metadata import artifact_record, read_json, sha256_file, write_json
-from egocentric_pipeline.video.video_preparation import prepare_clip
-from egocentric_pipeline.tracking.world_export import export_world
+from egocentric_pipeline.datasets.lerobot_export import (
+    append_human_episode, append_robot_regions, read_card, read_episode, CAMERA)
+from egocentric_pipeline.datasets.human_episode import materialize_human_alignment
 from egocentric_pipeline.datasets.annotations import annotate_dataset
+from egocentric_pipeline.datasets.training import ActionTrainingDataset
+from egocentric_pipeline.datasets.statistics import numeric_stats
+from egocentric_pipeline.retargeting.trajectory import load_alignment
+from egocentric_pipeline.video.clip_request import ClipRequest
+from egocentric_pipeline.video.video_preparation import prepare_clip
+from egocentric_pipeline.run_metadata import read_json, write_json, sha256_file
 from test_clip_preparation import make_video, decode_video
-from test_world_export import native_fixture
-from test_robot_episode import make_robot_regions
 
 
 @pytest.fixture
-def runs(tmp_path, native_fixture):
-    native, _, _, _ = native_fixture
-    manifests = []
+def runs(tmp_path):
+    result = []
     for number in range(2):
-        run = tmp_path / f"run-{number}"
+        run = tmp_path / f'run-{number}'
         run.mkdir()
-        video = make_video(run / 'source.mp4', count=6, rate=30, filters=f'eq=brightness={number / 10}')
+        video = make_video(run / 'source.mp4', count=30, rate=30, filters=f'eq=brightness={number / 10}')
         prepared = prepare_clip(ClipRequest.from_video(video), run / 'prepared')
-        exported = export_world(native, prepared, run / 'export', upstream_stages_completed=True)
-        artifacts = {name: artifact_record(exported[name]) for name in ('trajectory_world', 'trajectory_metadata')}
-        artifacts.update(clip_metadata=artifact_record(prepared.metadata_path), prepared_video=artifact_record(prepared.video_path))
-        manifest = run / 'run_manifest.json'
-        write_json(manifest, {'status': 'completed', 'run_directory': str(run), 'run_id': run.name,
-                             'stages': [{'status': 'completed'}], 'artifacts': artifacts})
-        with np.load(exported['trajectory_world']) as stored:
-            world = dict(stored)
-        paths, _, _ = make_robot_regions(run / 'robot', world, run.name, prepared.metadata.to_dict())
-        manifests.append((manifest, paths))
-    return manifests
+        n = 30
+        valid = np.ones((n, 2), bool)
+        valid[15, 1] = False
+        infill = np.zeros((n, 2), bool)
+        infill[9, 0] = True
+        translation = np.full((n, 2, 3), .1, np.float32)
+        translation[~valid] = np.nan
+        orientation = np.tile(np.array([.1, .2, .3], np.float32), (n, 2, 1))
+        orientation[~valid] = np.nan
+        arrays = dict(frame_index=np.arange(n), timestamp_s=np.arange(n)/30, source_timestamp_s=np.arange(n)/30,
+            root_translation_world_m=translation.copy(), root_translation_aligned_m=translation.copy(),
+            root_orientation_world_axis_angle=orientation.copy(), root_orientation_aligned_axis_angle=orientation.copy(),
+            wrist_position_world_m=translation + .01, wrist_position_aligned_m=translation + .01,
+            mano_root_offset_m=np.full_like(translation, .01), hand_pose_axis_angle=np.zeros((n, 2, 45), np.float32),
+            mano_betas=np.zeros((n, 2, 10), np.float32), export_valid=valid, hawor_valid=valid.copy(),
+            motion_infilled=infill, direct_detection=np.ones_like(valid), detector_confidence=np.ones((n,2), np.float32),
+            rotation_aligned_from_world=np.eye(3), camera_position_world_m=np.zeros((n,3)),
+            camera_position_aligned_m=np.zeros((n,3)), camera_rotation_world_from_camera=np.tile(np.eye(3),(n,1,1)),
+            camera_rotation_aligned_from_camera=np.tile(np.eye(3),(n,1,1)))
+        alignment = run / 'alignment'
+        alignment.mkdir()
+        np.savez(alignment / 'trajectory_aligned.npz', **arrays)
+        models = []
+        for side in ('left', 'right'):
+            model = tmp_path / f'{side}.model'
+            model.write_text(side)
+            models.append(model)
+        report = dict(status='completed', hand_order=['left','right'], source_run_id=run.name,
+            inputs={'prepared_video': {'path': str(prepared.video_path)}, 'clip_metadata': {'path': str(prepared.metadata_path)},
+                    **{f'mano_{side}': {'path': str(path), 'sha256': sha256_file(path)}
+                       for side,path in zip(('left','right'),models)}})
+        write_json(alignment / 'alignment_report.json', report)
+        robot = read_json('configs/defaults/robot_workspace.json')
+        names = sum(robot['arm_joints'], []) + ['neck_0','neck_1','left_gripper','right_gripper']
+        trajectory = run / 'robot' / 'trajectory'
+        trajectory.mkdir(parents=True)
+        regions = [dict(start=i, stop=i+10) for i in (0,10,20)]
+        q = np.tile(.1 + .01 * np.arange(18), (n, 1))
+        observed = valid & ~infill
+        arrays.update(joint_solution_rad=q, gripper_action=np.full((n,2), .75), episode_id=np.repeat(np.arange(3),10),
+            ik_success=observed.copy(), retarget_valid=observed, transform_base_from_aligned=np.tile(np.eye(4),(3,1,1)),
+            transform_base_from_world=np.tile(np.eye(4),(3,1,1)))
+        report = dict(status='completed', schema_version=7, hand_order=['left','right'], source_run_id=run.name,
+            joint_names=names, robot_settings=robot, settings={'neck_joints': names[14:16]},
+            gripper_mapping_settings={'mapping_mode':'wrist_roll'}, regions=regions,
+            prepared_video=str(prepared.video_path),
+            episodes=[dict(candidate_id=i,region={**region,'accepted':True}) for i,region in enumerate(regions)])
+        score = dict(status='completed', definition=dict(source_run_id=run.name, frame_count=n,robot_settings=robot,
+            mapping_settings=report['gripper_mapping_settings'], settings={'position_tolerance_m':.01,'orientation_tolerance_degrees':4}),
+            limits=dict(joint_names=names,position_lower_rad=[-3.]*18,position_upper_rad=[3.]*18,
+                        velocity_limit_rad_s=[5.]*18,acceleration_limit_rad_s2=[10.]*18))
+        metrics = dict(timestamp_s=arrays['timestamp_s'],source_timestamp_s=arrays['source_timestamp_s'],observed=observed,
+            joint_positions_rad=q,frame_max_speed_rad_s=np.zeros_like(q),frame_acceleration_rad_s2=np.zeros_like(q),
+            gripper_opening=np.full((n,2), .75),tcp_pose_base=np.tile([.2,.3,.4,0,0,0,1.],(n,2,1)),position_error_m=np.zeros((n,2)),
+            orientation_error_rad=np.zeros((n,2)),joint_feasible=np.ones(n,bool),collision_free=np.ones(n,bool),evaluated=np.ones(n,bool))
+        metrics['collision_free'][15:20] = False
+        # A huge invalid prediction must never enter statistics.
+        arrays['joint_solution_rad'][9,0] = 1000
+        write_json(trajectory / 'retargeting_report.json',report)
+        write_json(trajectory.parent / 'score.json',score)
+        np.savez(trajectory / 'trajectory_retargeted.npz',**arrays)
+        np.savez(trajectory.parent / 'benchmark_frame_metrics.npz',**metrics)
+        result.append((alignment,trajectory,prepared.video_path,models))
+    return result
 
 
 def files(root):
     return {str(p.relative_to(root)): sha256_file(p) for p in root.rglob('*') if p.is_file()}
 
 
-def test_trimmed_input_cannot_create_a_robot_episode(tmp_path, native_fixture):
-    video = make_video(tmp_path / 'source.mp4', count=9, rate=30)
-    prepared = prepare_clip(ClipRequest.from_video(video, interval=(.1, .3)), tmp_path / 'prepared')
-    exported = export_world(native_fixture[0], prepared, tmp_path / 'export', upstream_stages_completed=True)
-    artifacts = {name: artifact_record(exported[name]) for name in ('trajectory_world', 'trajectory_metadata')}
-    artifacts.update(clip_metadata=artifact_record(prepared.metadata_path), prepared_video=artifact_record(prepared.video_path))
-    manifest = tmp_path / 'run_manifest.json'
-    write_json(manifest, {'status': 'completed', 'run_directory': str(tmp_path), 'run_id': 'trimmed',
-                         'stages': [{'status': 'completed'}], 'artifacts': artifacts})
-    root = tmp_path / 'dataset'
-    with pytest.raises(ValueError, match='full input video'):
-        append_robot_episode(manifest, [], root, task='Trimmed input')
-    assert not root.exists()
+def export_pair(tmp_path, run, *, threshold=.85, suffix=''):
+    human, robot = tmp_path / ('human'+suffix), tmp_path / ('robot'+suffix)
+    result = append_human_episode(run[0], human, task='Move block')
+    output = append_robot_regions(human,result['episode_index'],[run[1]],robot,task='Move block',
+        diagnostic_path=tmp_path / ('regions'+suffix+'.json'),min_episode_valid_ratio=threshold)
+    return human,robot,output
 
 
-def test_cli_create_reopen_append_and_native_values(tmp_path, runs):
-    root = tmp_path / 'dataset'
-    command = [sys.executable, 'pipeline/export_dataset.py', '--run-manifest', str(runs[0][0]),
-               *[argument for path in runs[0][1] for argument in ('--trajectory-directory', str(path))],
-               '--dataset-root', str(root), '--task', 'Move the block']
-    result = subprocess.run(command, env={**os.environ, 'PYTHONPATH': 'src'}, capture_output=True, text=True)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert read_json(root / 'meta/info.json')['codebase_version'] == 'v3.1'
-    reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
-    assert len(reader) == 6
-    del reader
-    old_shards = {p: p.read_bytes() for p in root.glob('data/*/*.parquet')}
-    append_robot_episode(runs[1][0], runs[1][1], root, task='Move the block again')
-    assert all(p.read_bytes() == content for p, content in old_shards.items())
-    reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
-    assert reader.num_episodes == 2 and len(reader) == 12
-    for episode in range(2):
-        artifacts = read_json(runs[episode][0])['artifacts']
-        world_path = artifacts['trajectory_world']['path']
-        original_rgb = decode_video(Path(artifacts['prepared_video']['path']))
-        metadata = read_json(root / f'meta/egocentric/episode_{episode:06d}.json')['robot']
-        assert [r['episode_frame_interval'] for r in metadata['regions']] == [[0, 2], [4, 6]]
-        with np.load(world_path) as world:
-            for i in range(6):
-                row = reader[episode * 6 + i]
-                assert int(row['episode_index']) == episode
-                assert int(row['frame_index']) == i
-                assert int(row['index']) == episode * 6 + i
-                assert abs(float(row['timestamp']) - i / 30) < 1e-7
-                assert row[CAMERA].shape == (3, 24, 32)
-                assert row['action'].shape == (18,)
-                if i in (2, 3):
-                    assert np.isnan(row['action'].numpy()).all()
-                    assert not row['observation.robot.action_valid'].any()
-                    assert int(row['observation.robot.region_id']) == -1
-                assert abs(float(row[CAMERA].mean()) * 255 - original_rgb[i].mean()) < 3
-                for key in ('root_translation_world_m', 'hand_pose_axis_angle', 'mano_betas',
-                            'export_valid', 'direct_detection', 'detector_confidence'):
-                    np.testing.assert_array_equal(row['observation.hands.' + key].numpy(), world[key][i].reshape(-1))
-    table = pq.read_table(sorted(root.glob('data/*/*.parquet'))[0])
-    assert table['observation.clip_timestamp_s'].to_pylist() == [i / 30 for i in range(6)]
+def test_structured_human_robot_regions_and_rgb(tmp_path,runs):
+    human,robot,result = export_pair(tmp_path,runs[0])
+    assert result['episode_indices']==[0,1] and result['rejected_regions']==1
+    diagnostics=read_json(tmp_path/'regions.json')
+    assert [r['valid_ratio'] for r in diagnostics['regions']]==[.9,.5,1.]
+    source_rgb=decode_video(runs[0][2])
+    h=LeRobotDataset('local/human',root=human,video_backend='pyav')
+    r=LeRobotDataset('local/robot',root=robot,video_backend='pyav')
+    assert len(h)==30 and h.num_episodes==1 and len(r)==20 and r.num_episodes==2
+    assert h[0]['observation.hands.root_pose_aligned'].shape==(2,7)
+    assert h[0]['observation.hands.pose_axis_angle'].shape==(2,45)
+    assert h[0]['observation.hands.betas'].shape==(2,10)
+    assert h[9]['observation.hands.source_status'].tolist()==[1,2]
+    assert h[15]['observation.hands.source_status'].tolist()==[2,0]
+    expected=Rotation.from_rotvec([.1,.2,.3]).as_matrix()
+    np.testing.assert_allclose(Rotation.from_quat(h[0]['observation.hands.root_pose_aligned'][0,3:]).as_matrix(),expected,atol=1e-7)
+    for i in range(20):
+        row=r[i]
+        source=i if i<10 else i+10
+        assert int(row['source_frame_index'])==source and int(row['source_episode_index'])==0
+        assert int(row['frame_index'])==i%10
+        assert float(row['timestamp'])==pytest.approx((i%10)/30)
+        assert row['action'].dtype.__str__()=='torch.float32'
+        assert row['action.ee'].shape==(2,8)
+        if i != 9:
+            np.testing.assert_allclose(row['action'][:16], .1 + .01 * np.arange(16), atol=1e-7)
+        np.testing.assert_allclose(row['action'][-2:], [.75, .75])
+        assert abs(float(row[CAMERA].mean())*255-source_rgb[source].mean())<3
+    assert not r[9]['quality.action_valid'][:7].any()
+    training = ActionTrainingDataset(robot, target='joint')[9]
+    assert not training['action_valid'][:7].any()
+    assert (training['action'][:7] == 0).all()
+    assert np.isfinite(training['action'].numpy()).all()
+    stats=read_json(robot/'meta/stats.json')
+    assert stats['action']['mean'][0]==pytest.approx(.1)
+    assert np.asarray(stats['action.ee']['mean']).shape==(2,8)
+    for root in (human,robot):
+        assert {p.name for p in root.iterdir()}=={'README.md','data','meta','videos'}
+        assert {p.name for p in (root/'meta').iterdir()}=={'info.json','stats.json','tasks.parquet','episodes'}
+    assert set(read_json(robot/'meta/info.json')['features'])=={
+        CAMERA,'action','action.ee','quality.action_valid','quality.hand_status','source_episode_index','source_frame_index',
+        'language_persistent','language_events','timestamp','frame_index','episode_index','index','task_index'}
 
 
-def test_repeated_incompatible_and_failed_appends_are_non_mutating(tmp_path, runs, monkeypatch):
-    root = tmp_path / 'dataset'
-    append_robot_episode(runs[0][0], runs[0][1], root, task='Move the block')
-    original = files(root)
-    with pytest.raises(ValueError, match='already exists'):
-        append_robot_episode(runs[0][0], runs[0][1], root, task='Repeated')
-    assert files(root) == original
-    provenance_path = root / 'meta/egocentric/episode_000000.json'
-    provenance = read_json(provenance_path)
-    provenance['robot']['contract']['robot_settings']['asset_revision'] = 'foreign-robot'
-    write_json(provenance_path, provenance, overwrite=True)
-    changed = files(root)
-    with pytest.raises(ValueError, match='robot embodiment'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Different robot')
-    assert files(root) == changed
-    del provenance['robot']['contract']['robot_settings']['asset_revision']
-    write_json(provenance_path, provenance, overwrite=True)
-    assert files(root) == original
-    def fail(*args, **kwargs):
-        raise RuntimeError('simulated encoding failure')
-    monkeypatch.setattr(LeRobotDataset, 'save_episode', fail)
-    with pytest.raises(RuntimeError, match='encoding failure'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Second')
-    assert files(root) == original
-    assert len(LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')) == 6
-    info = read_json(root / 'meta/info.json')
-    info['fps'] = 60
-    write_json(root / 'meta/info.json', info, overwrite=True)
-    changed = files(root)
-    with pytest.raises(ValueError, match='30 FPS'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Wrong rate')
-    assert files(root) == changed
-    info['fps'] = 30
-    info['features'][CAMERA]['shape'][0] *= 2
-    write_json(root / 'meta/info.json', info, overwrite=True)
-    changed = files(root)
-    with pytest.raises(ValueError, match='image geometry'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Wrong dimensions')
-    assert files(root) == changed
-    contract = read_json(root / 'meta/egocentric.json')
-    contract['hand_order'] = ['right', 'left']
-    write_json(root / 'meta/egocentric.json', contract, overwrite=True)
-    changed = files(root)
-    with pytest.raises(ValueError, match='hand order'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Swapped identity')
-    assert files(root) == changed
-    contract['schema_version'] = '1.0'
-    write_json(root / 'meta/egocentric.json', contract, overwrite=True)
-    changed = files(root)
-    with pytest.raises(ValueError, match='Incompatible egocentric dataset contract'):
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Historical hand-only schema')
-    assert files(root) == changed
+def test_threshold_geometric_rejection_and_training(tmp_path,runs):
+    human,robot,result=export_pair(tmp_path,runs[0],threshold=.91)
+    assert result['accepted_regions']==1
+    _,_,lower=export_pair(tmp_path,runs[0],threshold=.5,suffix='-lower')
+    assert lower['accepted_regions']==3
+    dataset=ActionTrainingDataset(robot,target='ee',offsets=[0.,1/30,2/30])
+    row=dataset[len(dataset)-1]
+    assert row['action'].shape==(3,16) and not row['action_valid'][1:].any()
+    assert np.isfinite(row['action'].numpy()).all()
+    path=runs[0][1]/'retargeting_report.json'
+    report=read_json(path)
+    for episode in report['episodes']: episode['region']['accepted']=False
+    write_json(path,report,overwrite=True)
+    output=append_robot_regions(human,0,[runs[0][1]],tmp_path/'rejected',task='Move',diagnostic_path=tmp_path/'reject.json',min_episode_valid_ratio=0)
+    assert output['accepted_regions']==0 and not (tmp_path/'rejected').exists()
+    assert all(r['rejection_reason']=='geometric_feasibility' for r in read_json(tmp_path/'reject.json')['regions'])
 
 
-def test_actual_annotation_cli_and_append_preserve_annotations(tmp_path, runs):
-    """A deterministic local HTTP fixture exercises the real CLI, not VLM quality."""
+def test_append_rollback_source_pin_and_standalone_human(tmp_path,runs,monkeypatch):
+    human,robot,_=export_pair(tmp_path,runs[0])
+    old_human=files(human)
+    with pytest.raises(ValueError,match='already exists'):
+        append_human_episode(runs[0][0],human,task='Repeat')
+    assert files(human)==old_human
+    old=files(robot)
+    with pytest.raises(ValueError,match='already exists'):
+        append_robot_regions(human,0,[runs[0][1]],robot,task='Repeat',diagnostic_path=tmp_path/'repeat.json')
+    assert files(robot)==old
+    old_shards={p:p.read_bytes() for p in human.glob('data/*/*.parquet')}
+    append_human_episode(runs[1][0],human,task='Second')
+    assert all(p.read_bytes()==content for p,content in old_shards.items())
+    from egocentric_pipeline.datasets.lerobot_export import episode_revision
+    assert episode_revision(human, 0) == read_card(human)['episodes'][0]['revision']
+    output=append_robot_regions(human,1,[runs[1][1]],robot,task='Second',diagnostic_path=tmp_path/'second.json')
+    assert output['episode_indices']==[2,3]
+    saved=files(robot)
+    def fail(*args,**kwargs): raise RuntimeError('encoding failure')
+    with monkeypatch.context() as context:
+        context.setattr(LeRobotDataset,'save_episode',fail)
+        with pytest.raises(RuntimeError,match='encoding failure'):
+            append_robot_regions(human,0,[runs[0][1]],tmp_path/'failed',task='Fail',diagnostic_path=tmp_path/'failed.json')
+    assert not (tmp_path/'failed').exists() and files(robot)==saved
+    # Remove access to original processing artifacts; standalone reuse still works.
+    runs[0][0].rename(runs[0][0].with_name('hidden-alignment'))
+    runs[0][2].rename(runs[0][2].with_name('hidden-video.mp4'))
+    restored=tmp_path/'restored'
+    materialize_human_alignment(human,0,restored,runs[0][3])
+    aligned,_,_=load_alignment(restored)
+    data=read_episode(human,0)
+    np.testing.assert_allclose(aligned['wrist_position_aligned_m'],data['observation.hands.wrist_position_aligned_m'],equal_nan=True)
+    assert (restored/'prepared.mp4').exists()
+    # Robot RGB comes from the human dataset, even when the old video is absent.
+    output = append_robot_regions(human, 0, [runs[0][1]], tmp_path/'independent-robot',
+        task='Move', diagnostic_path=tmp_path/'independent.json')
+    assert output['accepted_regions'] == 2
+
+
+def test_numeric_statistics_exclude_masks_and_preserve_axes():
+    data=np.array([[[1.,2.],[3.,np.nan]],[[5.,999.],[7.,8.]]])
+    valid=np.isfinite(data)
+    valid[1,0,1]=False
+    stats=numeric_stats(data,valid)
+    np.testing.assert_array_equal(stats['mean'],[[3.,2.],[5.,8.]])
+
+
+def test_actual_annotation_cli_preserves_shared_shard_and_features(tmp_path,runs):
     class Handler(BaseHTTPRequestHandler):
-        empty = False
-        def log_message(self, *args):
-            pass
-
+        def log_message(self,*args): pass
         def do_POST(self):
-            request = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            assert request['model'] == 'integration-test-fixture'
-            answer = {'description': 'A block is moved.',
-                      'subtasks': [{'start': 0.0, 'end': 0.167, 'text': 'Move the block'}]}
-            if self.empty:
-                answer = {'description': '', 'subtasks': []}
-            response = {'id': 'fixture', 'object': 'chat.completion', 'created': 0,
-                        'model': 'integration-test-fixture', 'choices': [
-                            {'index': 0, 'finish_reason': 'stop',
-                             'message': {'role': 'assistant', 'content': json.dumps(answer)}}]}
-            body = json.dumps(response).encode()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    root = tmp_path / 'dataset'
-    endpoint = f'http://127.0.0.1:{server.server_port}/v1'
+            self.rfile.read(int(self.headers['Content-Length']))
+            answer={'description':'A block is moved.','subtasks':[{'start':0.,'end':.3,'text':'Move block'}]}
+            response={'id':'fixture','object':'chat.completion','created':0,'model':'fixture',
+                      'choices':[{'index':0,'finish_reason':'stop','message':{'role':'assistant','content':json.dumps(answer)}}]}
+            body=json.dumps(response).encode()
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    human,robot,_=export_pair(tmp_path,runs[0])
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    endpoint=f'http://127.0.0.1:{server.server_port}/v1'
     try:
-        append_robot_episode(runs[0][0], runs[0][1], root, task='Move the block')
-        annotate_dataset(root, model='integration-test-fixture', api_base=endpoint)
-        old_shard = next(root.glob('data/*/*.parquet'))
-        original = old_shard.read_bytes()
-        reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
-        atoms = reader[0]['language_persistent']
-        assert {atom['style'] for atom in atoms} == {'plan', 'subtask'}
-        assert all(atom['timestamp'] == 0 for atom in atoms)
-        del reader
-        append_robot_episode(runs[1][0], runs[1][1], root, task='Move a second block')
-        assert old_shard.read_bytes() == original
-        # The upstream annotator replaces language columns for an entire file.
-        # Put both episodes in one valid shard to exercise preservation of an
-        # unselected episode sharing the selected episode's rewritten file.
-        shards = sorted(root.glob('data/*/*.parquet'))
-        assert len(shards) == 2
-        # Upstream infers annotated language timestamps as float64; the
-        # recording writer declares float32. Promote those nested field types.
-        shared = pa.concat_tables([pq.read_table(p) for p in shards], promote_options='permissive')
-        write_table_one_row_group_per_episode(shared, shards[0])
-        shards[1].unlink()
-        for path in root.glob('meta/episodes/*/*.parquet'):
-            table = pq.read_table(path)
-            column = table.schema.get_field_index('data/file_index')
-            table = table.set_column(column, table.schema.field(column),
-                                     pa.array([0] * len(table), type=table.column(column).type))
-            pq.write_table(table, path)
-        reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
+        before=[read_episode(robot,i) for i in range(2)]
+        annotate_dataset(robot,model='fixture',api_base=endpoint,episodes=[0],record_path=tmp_path/'annotation0.json')
+        reader=LeRobotDataset('local/robot',root=robot,video_backend='pyav')
         assert reader.meta.get_data_file_path(0) == reader.meta.get_data_file_path(1)
-        assert len(reader) == 12 and reader[0]['language_persistent'] == atoms
+        atoms=reader[0]['language_persistent']
+        assert {a['style'] for a in atoms}=={'plan','subtask'}
         del reader
-        annotate_dataset(root, model='integration-test-fixture', api_base=endpoint)
-        reader = LeRobotDataset('local/egocentric-pilot', root=root, video_backend='pyav')
-        for i in range(6):
-            assert reader[i]['language_persistent'] == atoms
-            assert {atom['style'] for atom in reader[6 + i]['language_persistent']} == {'plan', 'subtask'}
-        saved = files(root)
-        with pytest.raises(ValueError, match='already contain'):
-            annotate_dataset(root, model='integration-test-fixture', api_base=endpoint, episodes=[0])
-        assert files(root) == saved
-        failed_root = tmp_path / 'failed-annotation'
-        append_robot_episode(runs[0][0], runs[0][1], failed_root, task='Move the block')
-        saved = files(failed_root)
-        Handler.empty = True
-        with pytest.raises(ValueError, match='missing or inconsistent'):
-            annotate_dataset(failed_root, model='integration-test-fixture', api_base=endpoint)
-        assert files(failed_root) == saved
+        annotate_dataset(robot,model='fixture',api_base=endpoint,episodes=[1],record_path=tmp_path/'annotation1.json')
+        reader=LeRobotDataset('local/robot',root=robot,video_backend='pyav')
+        assert reader[0]['language_persistent']==atoms
+        assert reader[10]['language_persistent']
+        for i in range(2):
+            after=read_episode(robot,i)
+            for key in before[i]: np.testing.assert_array_equal(after[key],before[i][key])
+        assert not (robot/'.annotate_staging').exists()
+        saved=files(robot)
+        with pytest.raises(ValueError,match='already contain'):
+            annotate_dataset(robot,model='fixture',api_base=endpoint,episodes=[0],record_path=tmp_path/'repeat-annotation.json')
+        assert files(robot)==saved
+        append_human_episode(runs[1][0],human,task='second')
+        append_robot_regions(human,1,[runs[1][1]],robot,task='second',diagnostic_path=tmp_path/'append.json')
+        assert LeRobotDataset('local/robot',root=robot,video_backend='pyav')[0]['language_persistent']==atoms
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=3)
+        server.shutdown();server.server_close();thread.join(timeout=3)
+
+
+def test_cli_export_and_source_revision_guard(tmp_path, runs):
+    human, robot = tmp_path/'cli-human', tmp_path/'cli-robot'
+    environment = {**os.environ, 'PYTHONPATH': 'src'}
+    command = [sys.executable, 'pipeline/export_dataset.py', 'human', '--alignment-directory', str(runs[0][0]),
+               '--dataset-root', str(human), '--task', 'Move', '--result', str(tmp_path/'human-result.json')]
+    completed = subprocess.run(command, env=environment, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    command = [sys.executable, 'pipeline/export_dataset.py', 'robot', '--human-dataset-root', str(human),
+               '--source-episode-index', '0', '--trajectory-directory', str(runs[0][1]), '--dataset-root', str(robot),
+               '--task', 'Move', '--diagnostics', str(tmp_path/'cli-regions.json'), '--result', str(tmp_path/'robot-result.json')]
+    completed = subprocess.run(command, env=environment, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert read_json(tmp_path/'robot-result.json')['episode_indices'] == [0, 1]
+    card_path = human/'README.md'
+    card_path.write_text(card_path.read_text().replace('revision: ', 'revision: changed-'))
+    saved = files(robot)
+    with pytest.raises(ValueError, match='revision changed'):
+        append_robot_regions(human, 0, [runs[0][1]], robot, task='Move', diagnostic_path=tmp_path/'changed.json')
+    assert files(robot) == saved
+
+
+def test_out_of_range_openings_are_masked_finite_placeholders(tmp_path, runs):
+    trajectory = runs[0][1]
+    for path, key in ((trajectory/'trajectory_retargeted.npz', 'gripper_action'),
+                      (trajectory.parent/'benchmark_frame_metrics.npz', 'gripper_opening')):
+        with np.load(path) as saved:
+            arrays = dict(saved)
+        arrays[key][9, 0] = 1.2
+        np.savez(path, **arrays)
+    _, robot, _ = export_pair(tmp_path, runs[0])
+    row = LeRobotDataset('local/robot', root=robot, video_backend='pyav')[9]
+    assert not row['quality.action_valid'][16]
+    assert row['action'][16] == 0 and row['action.ee'][0, 7] == 0
