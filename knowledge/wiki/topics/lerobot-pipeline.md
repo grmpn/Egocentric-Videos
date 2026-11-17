@@ -189,3 +189,42 @@ Evidence is local-only and ignored by Git. No new HaWoR inference, IK solve,
 real VLM inference, policy training, physical calibration or hardware operation
 was performed. The existing demo's geometric failures remain unresolved; this
 refresh fulfills the export plan, not broader simulation milestone acceptance.
+
+### iPhone test export — 2026-11-17
+
+The [approved amendment](../plans/iphone-contract3-export.md) is fulfilled.
+Exported datasets are under `~/dev/alex-trajectory-playback/datasets/`:
+`iphone-human` contains one complete 1,286-frame episode; `iphone-robot` contains
+all three fixed-base regions (1,069 frames). `iphone-export-report` contains
+gate diagnostics, evaluation results, validation reports and review figures.
+Original perception, alignment, gripper mapping and frozen full-base IK solves
+were reused; no new perception, IK, VLM inference or policy training was run.
+
+| Region (source frames, half-open) | Constraint-valid frames | Gate | Export |
+| --- | --- | --- | --- |
+| 1: [0,269) | 245/269 (91.08%) | Pass | Included |
+| 2: [432,893) | 443/461 (96.10%) | Pass | Included |
+| 3: [947,1286) | 208/339 (61.36%) | Fail | Explicit test override |
+
+All 173 constraint-failing frames involve self-collision (24/18/131 by region);
+no joint position, velocity or acceleration violations were found. Tracking
+and hand provenance remain in the unchanged masks: only 4/27/6 frames per
+region have all 18 action components valid. The [failure breakdown](../../../outputs/iphone-contract3-20261117/failure-breakdown.json)
+shows raw-target position error above 5 mm as the largest overlapping cause
+of tracking rejection. Export eligibility does not replace those masks.
+
+[Human validation](../../../outputs/iphone-contract3-20261117/validation.json) and
+[robot validation](../../../outputs/iphone-contract3-20261117/robot-validation.json)
+verified all numeric rows, source links, local times, provenance, joint/FK action
+parity, official-reader RGB boundaries and complete video decoding.
+[RGB pairs](../../../outputs/iphone-contract3-20261117/robot-rgb-review.jpg) and
+[trajectory/collision plots](../../../outputs/iphone-contract3-20261117/robot-trajectory-review.png)
+were inspected. [Transfer verification](../../../outputs/iphone-contract3-20261117/transfer-verification.json)
+matched every copied file and loaded both destination datasets through official
+readers. Focused checks passed [14 processing tests](../../../outputs/iphone-contract3-20261117/processing-tests.log)
+and [6 export integration tests](../../../outputs/iphone-contract3-20261117/export-tests-retry.log).
+The initial export/test attempts failed on the sandbox's read-only default HF
+cache; retries used the project cache. Historical evidence was not modified.
+
+Language fields are unannotated. Physical scale/floor, hardware execution and
+broader simulation acceptance remain unverified. All run evidence is local-only.

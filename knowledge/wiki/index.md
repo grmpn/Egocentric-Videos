@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [iPhone contract 3.0 export](plans/iphone-contract3-export.md) — approved saved-stage export and collision/joint-limit-only region acceptance.
+- [iPhone contract 3.0 export](plans/iphone-contract3-export.md) — fulfilled all-region iPhone test export, collision/joint-limit-only acceptance and logged override.
 
 - [LeRobot export refresh](plans/lerobot-export-refresh.md) — revision 1 fulfilled: independent human reconstruction and region-based robot training datasets, updated shell workflow, mask-aware training and verified standalone reuse.
 - [Codebase cleanup and integrated pipeline](plans/codebase-cleanup-and-pipeline.md) — revision 2 fulfilled: preserved evidence, retired deprecated workflows, reorganized capabilities, consolidated runtime and verified full-video annotated robot LeRobot episodes.
