@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -10,8 +11,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from egocentric_pipeline.datasets.dataset_transaction import staged_dataset
-from egocentric_pipeline.datasets.lerobot_export import CONTRACT_VERSION, write_data_card
-from egocentric_pipeline.run_metadata import read_json, utc_now, write_json
+from egocentric_pipeline.datasets.lerobot_export import read_card
+from egocentric_pipeline.run_metadata import utc_now, write_json
 
 
 LANGUAGE = ("language_persistent", "language_events")
@@ -46,7 +47,7 @@ def validate_annotation_rows(table, selected):
                 raise ValueError(f"Episode {episode}: {style} must start at frame zero with unique boundaries")
 
 
-def annotate_dataset(root, *, model, api_base, episodes=None):
+def annotate_dataset(root, *, model, api_base, record_path, episodes=None):
     """Annotate unannotated episodes using an already running VLM endpoint.
 
     Existing nonempty annotations are never overwritten. Validation establishes
@@ -56,10 +57,11 @@ def annotate_dataset(root, *, model, api_base, episodes=None):
     from lerobot.datasets.io_utils import write_table_one_row_group_per_episode
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+    record_path = Path(record_path)
+    if record_path.resolve().is_relative_to(Path(root).resolve()) or record_path.exists():
+        raise ValueError("Choose a new annotation record outside the dataset")
     with staged_dataset(root) as stage:
-        contract = read_json(stage / "meta/egocentric.json")
-        if contract["schema_version"] != CONTRACT_VERSION:
-            raise ValueError("Annotation requires the current robot dataset contract; preserve historical hand-only datasets")
+        contract = read_card(stage, 'robot')
         before = {path.relative_to(stage): pq.read_table(path) for path in stage.glob("data/*/*.parquet")}
         existing = set()
         all_episodes = set()
@@ -107,12 +109,16 @@ def annotate_dataset(root, *, model, api_base, episodes=None):
             index = reader.meta.episodes[episode]["dataset_from_index"]
             if not reader[index]["language_persistent"]:
                 raise ValueError("LeRobot reload lost saved annotations")
-        contract["version"] += 1
         record = {"created_at": utc_now(), "model": model, "api_base": api_base,
                   "episodes": sorted(selected), "review_status": "pending",
                   "command": [arg if not arg.startswith("--root=") else "--root=<staged_dataset>" for arg in command]}
-        write_json(stage / f"meta/egocentric/annotation_v{contract['version']:04d}.json", record)
-        write_json(stage / "meta/egocentric.json", contract, overwrite=True)
-        write_data_card(stage, contract)
+        temporary = stage / '.annotate_staging'
+        if temporary.exists():
+            destination = record_path.parent / (record_path.stem + '-intermediates')
+            if destination.exists():
+                raise ValueError('Annotation intermediate destination already exists')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(temporary), destination)
         del reader
-    return {"episodes": sorted(selected), "dataset_version": contract["version"], "review_status": "pending"}
+    write_json(record_path, record)
+    return {"episodes": sorted(selected), "review_status": "pending", "record": str(record_path)}

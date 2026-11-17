@@ -13,6 +13,9 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
+- [iPhone contract 3.0 export](plans/iphone-contract3-export.md) — fulfilled all-region iPhone test export, collision/joint-limit-only acceptance and logged override.
+
+- [LeRobot export refresh](plans/lerobot-export-refresh.md) — revision 1 fulfilled: independent human reconstruction and region-based robot training datasets, updated shell workflow, mask-aware training and verified standalone reuse.
 - [Codebase cleanup and integrated pipeline](plans/codebase-cleanup-and-pipeline.md) — revision 2 fulfilled: preserved evidence, retired deprecated workflows, reorganized capabilities, consolidated runtime and verified full-video annotated robot LeRobot episodes.
 - [Milestone 3: IK configuration experiments](plans/milestone-3-ik-tuning.md) — approved held-out evaluation of frozen slack5-orientation8 after first-region tuning.
 - [Milestone 3: IK benchmark and gripper integration](plans/milestone-3-ik-benchmark.md) — revision 2 fulfilled: first-region solving/scoring, three rescored comparisons, preserved full-video evidence.
@@ -33,7 +36,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [Integrated pipeline](topics/integrated-pipeline.md) — full-video shell workflow, stage outputs, reuse, failure recovery, viewers and experiment boundaries.
+- [Integrated pipeline](topics/integrated-pipeline.md) — two-dataset shell workflow, stage outputs, reuse, failure recovery and preserved cleanup evidence.
 
 - [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — accepted-roll tuning, held-out SDF/full-IK comparisons, independent audits and preserved historical evidence.
 - [Direct hand-to-gripper mapping](topics/direct-gripper-mapping.md) — detached gripper, MANO landmark/pose/action contracts and interactive tuning without IK.
@@ -46,7 +49,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 - [Stage 3 Part 2 acceptance](experiments/robot-workspace-purdue.md) — Purdue FK runs through 10 million samples per arm, grid/query verification, sampling gaps and interactive review.
 - [Stage 3 Part 1 acceptance](experiments/gravity-alignment-bundled.md) — bundled GeoCalib run, reversible geometry, preserved data, tests and visual review; physical accuracy limits remain explicit.
 - [HaWoR pipeline](topics/hawor-pipeline.md) — current stage boundaries, coordinate/time conventions, and implementation references.
-- [LeRobot pipeline](topics/lerobot-pipeline.md) — full-video robot contract 2.0, region/gap validity, official v3.1 create/append and annotation preservation.
+- [LeRobot pipeline](topics/lerobot-pipeline.md) — human reconstruction and region-based robot contract 3.0, mask-aware training, standalone reuse and official v3.1 annotation.
 - [VLM annotation workflow reference](topics/vlm-annotation-workflow.md) — proposed task hierarchy and independent activity modes, source-time mapping, and later fixed-base filtering; not implemented or an approved plan.
 - [HuRo source review](topics/huro-source-review.md) — external detection-gap handling, infiller bypass, retargeting, and language annotation; static inspection only.
 - [Milestone 2 Eidon validation](experiments/milestone-2-eidon-validation.md) — all three attempts, real dataset append/reload, visual quality limits and remaining pilot acceptance.

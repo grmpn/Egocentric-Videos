@@ -21,7 +21,7 @@ CAMERA_FIELDS = (
 )
 
 
-def load_robot_episode(directories, world, clip, source_run_id):
+def load_robot_episode(directories, world, clip, source_run_id, evaluation_directories=None):
     """Combine disjoint solved regions on one unchanged full-video timeline.
 
     Each trajectory directory requires its sibling score.json and
@@ -31,7 +31,7 @@ def load_robot_episode(directories, world, clip, source_run_id):
 
     The 18-component action contains left arm (7 rad), right arm (7 rad), neck
     (2 rad), then left/right gripper opening (0 closed, 1 open). Invalid action
-    components are NaN; unmasked solver predictions remain separate diagnostics.
+    components retain predictions with false masks; gaps have NaN until export.
     """
     if not directories:
         raise ValueError("Supply at least one completed robot trajectory directory")
@@ -50,7 +50,7 @@ def load_robot_episode(directories, world, clip, source_run_id):
     metadata = {"regions": [], "sources": [], "interval_convention": "half-open [start, stop)",
                 "action_units": ["radians"] * 16 + ["normalized opening"] * 2,
                 "validity": "Per-component observed tracking, joint limits and discrete self-collision checks; "
-                            "invalid actions are NaN. Solver predictions are diagnostic, not executable commands.",
+                            "invalid components are masked. Solver predictions are diagnostic, not executable commands.",
                 "limitations": "No hardware, dynamics, scene collision or continuous collision certification."}
     geometry, common = None, None
     times = world["timestamp_s"]
@@ -59,13 +59,19 @@ def load_robot_episode(directories, world, clip, source_run_id):
     # Source presentation times need not be uniform after 30 FPS preparation.
     source_edges = np.r_[world["source_timestamp_s"], clip["selection"]["resolved_interval_s"][1]]
     frame_map = clip["frames"]["mapping"]
-    for directory in map(Path, directories):
+    evaluations = evaluation_directories or [Path(d).parent for d in directories]
+    if len(evaluations) != len(directories):
+        raise ValueError("Provide one evaluation directory per trajectory")
+    ee = np.full((count, 2, 8), np.nan)
+    for directory, evaluation in zip(map(Path, directories), map(Path, evaluations)):
         report = read_json(directory / "retargeting_report.json")
-        score = read_json(directory.parent / "score.json")
+        score = read_json(evaluation / "score.json")
         with np.load(directory / "trajectory_retargeted.npz", allow_pickle=False) as saved:
             arrays = dict(saved)
-        with np.load(directory.parent / "benchmark_frame_metrics.npz", allow_pickle=False) as saved:
+        with np.load(evaluation / "benchmark_frame_metrics.npz", allow_pickle=False) as saved:
             metrics = dict(saved)
+        if not {'tcp_pose_base', 'gripper_opening', 'frame_max_speed_rad_s', 'frame_acceleration_rad_s2'} <= metrics.keys():
+            raise ValueError('Evaluation lacks TCP FK/action feasibility; rerun pipeline/evaluate_trajectory.py into a new output directory')
         if (report["status"] != "completed" or report.get("schema_version") != 7
                 or report["hand_order"] != ["left", "right"] or report["source_run_id"] != source_run_id
                 or score["status"] != "completed" or score["definition"]["source_run_id"] != source_run_id):
@@ -107,6 +113,7 @@ def load_robot_episode(directories, world, clip, source_run_id):
         settings = score["definition"]["settings"]
         tracking = (metrics["observed"] & (metrics["position_error_m"] <= settings["position_tolerance_m"])
                     & (metrics["orientation_error_rad"] <= np.deg2rad(settings["orientation_tolerance_degrees"])))
+        component_valid = joint_component_validity(metrics, score, names)
         episodes = {(e["region"]["start"], e["region"]["stop"]): e for e in report["episodes"]}
         source = {"directory": str(directory.resolve()), "benchmark_selection": report.get("benchmark_selection")}
         metadata["sources"].append(source)
@@ -126,14 +133,27 @@ def load_robot_episode(directories, world, clip, source_run_id):
             observed[sl], ik_success[sl] = metrics["observed"][sl], arrays["ik_success"][sl]
             feasible[sl, 0], collision_free[sl, 0] = metrics["joint_feasible"][sl], metrics["collision_free"][sl]
             position_error[sl], orientation_error[sl] = metrics["position_error_m"][sl], metrics["orientation_error_rad"][sl]
-            hand_valid = tracking[sl] & solved[sl] & feasible[sl] & collision_free[sl]
-            opening = arrays["gripper_action"][sl]
-            hand_valid &= np.isfinite(opening) & (opening >= 0) & (opening <= 1)
+            hand_valid = tracking[sl] & ik_success[sl] & solved[sl] & collision_free[sl]
+            opening = metrics['gripper_opening'][sl]
+            if not np.allclose(opening, arrays['gripper_action'][sl], atol=1e-8, rtol=0, equal_nan=True):
+                raise ValueError('Gripper actions disagree with evaluated joint solutions')
+            gripper_valid = hand_valid & np.isfinite(opening) & (opening >= 0) & (opening <= 1)
             valid = np.concatenate([np.repeat(hand_valid[:, :1], 7, axis=1),
                                     np.repeat(hand_valid[:, 1:], 7, axis=1),
-                                    np.repeat(hand_valid.any(axis=1, keepdims=True), 2, axis=1), hand_valid], axis=1)
+                                    np.repeat(hand_valid.any(axis=1, keepdims=True), 2, axis=1), gripper_valid], axis=1)
+            valid &= component_valid[sl]
+            tcp = metrics.get("tcp_pose_base")
+            if tcp is None or tcp.shape != (count, 2, 7):
+                raise ValueError("Evaluation lacks TCP FK; rerun pipeline/evaluate_trajectory.py into a new output directory")
+            finite_tcp = np.isfinite(tcp[sl]).all(axis=-1)
+            if np.any(finite_tcp & ~np.isclose(np.linalg.norm(tcp[sl, :, 3:], axis=-1), 1., atol=1e-6)):
+                raise ValueError('Evaluated TCP quaternions must be normalized xyzw')
+            if np.any(hand_valid & ~finite_tcp):
+                raise ValueError('Valid joint solutions require finite evaluated TCP poses')
+            ee[sl] = np.concatenate([tcp[sl], opening[..., None]], axis=-1)
             action_valid[sl] = valid
-            action[sl] = np.where(valid, np.c_[q[sl, :16], opening], np.nan)
+            # Finite predictions remain available but never become unmasked targets.
+            action[sl] = np.c_[q[sl, :16], opening]
             episode = episodes.get((start, stop))
             transform = None
             if episode is not None:
@@ -158,11 +178,13 @@ def load_robot_episode(directories, world, clip, source_run_id):
                 "outcome": "unsolved" if episode is None else "evaluated",
                 "solved_frames": int(solved[sl].sum()), "joint_feasible_frames": int(feasible[sl].sum()),
                 "collision_free_frames": int(collision_free[sl].sum()),
+                "constraint_valid_frames": int((solved[sl, 0] & collision_free[sl, 0]
+                                                 & component_valid[sl].all(axis=1)).sum()),
                 "valid_action_components": action_valid[sl].sum(axis=0).tolist(),
                 "pose_acceptance": episode, "source_index": len(metadata["sources"]) - 1})
     metadata.update(contract=common, rotation_aligned_from_world=geometry["rotation_aligned_from_world"].tolist(),
                     action_names=common["joint_names"][:16] + ["left_gripper_opening", "right_gripper_opening"])
-    features = {"action": action, "observation.robot.action_valid": action_valid,
+    features = {"action": action.astype(np.float32), "action.ee": ee.astype(np.float32), "observation.robot.action_valid": action_valid,
                 "observation.robot.joint_solution_rad": q, "observation.robot.region_id": region_ids,
                 "observation.robot.solved": solved, "observation.robot.observed_hand": observed,
                 "observation.robot.ik_success": ik_success, "observation.robot.joint_feasible": feasible,
@@ -172,3 +194,33 @@ def load_robot_episode(directories, world, clip, source_run_id):
     features.update({f"observation.hands.{k}": geometry[k].reshape(count, -1) for k in ALIGNED_FIELDS})
     features.update({f"observation.{k}": geometry[k].reshape(count, -1) for k in CAMERA_FIELDS})
     return features, metadata
+
+
+def joint_component_validity(metrics, score, action_joint_names):
+    """Position/velocity/acceleration checks per independent control, including mimics.
+
+    Temporal derivatives are the evaluator's ordered within-region differences.
+    Locked joints with hard violations invalidate the complete configuration.
+    """
+    limits = score['limits']
+    names = limits['joint_names']
+    q = metrics['joint_positions_rad']
+    speed = metrics['frame_max_speed_rad_s']
+    acceleration = metrics['frame_acceleration_rad_s2']
+    tolerance = score['definition']['settings'].get('joint_position_tolerance_rad', 0.)
+    valid = (np.isfinite(q) & np.isfinite(speed) & np.isfinite(acceleration)
+             & (q >= np.array(limits['position_lower_rad']) - tolerance)
+             & (q <= np.array(limits['position_upper_rad']) + tolerance)
+             & (speed <= np.array(limits['velocity_limit_rad_s']))
+             & (np.abs(acceleration) <= np.array(limits['acceleration_limit_rad_s2'])))
+    result = valid[:, [names.index(name) for name in action_joint_names]].copy()
+    controlled = set(action_joint_names)
+    for hand, side in enumerate(('left', 'right')):
+        fingers = [j for j, name in enumerate(names) if name.startswith(side + '_ezgripper_')]
+        if fingers:
+            result[:, 16 + hand] &= valid[:, fingers].all(axis=1)
+            controlled.update(names[j] for j in fingers)
+    locked = [j for j, name in enumerate(names) if name not in controlled]
+    if locked:
+        result &= valid[:, locked].all(axis=1, keepdims=True)
+    return result

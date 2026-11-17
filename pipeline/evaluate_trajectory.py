@@ -12,9 +12,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--trajectory-directory', type=Path, required=True)
     parser.add_argument('--mapping-directory', type=Path, required=True)
+    parser.add_argument('--output-directory', type=Path, help='New evaluation destination, useful for preserved solves')
     parser.add_argument('--config', type=Path, default=root / 'configs/defaults/evaluation.json')
     args = parser.parse_args()
-    output = args.trajectory_directory.parent
+    output = args.output_directory or args.trajectory_directory.parent
+    output.mkdir(parents=True, exist_ok=True)
     if any((output / name).exists() for name in ('score.json', 'benchmark_frame_metrics.npz')):
         parser.error('Evaluation already exists; preserve it or evaluate a new run directory')
     settings = read_json(args.config)

@@ -37,11 +37,11 @@ def make_robot_regions(tmp_path, world=None, source_run_id="same-video", clip=No
                   'source_run_id': source_run_id, 'joint_names': names, 'robot_settings': robot,
                   'settings': settings, 'gripper_mapping_settings': {'mapping_mode': 'wrist_roll'},
                   'regions': [{'start': start, 'stop': stop}],
-                  'episodes': [{'candidate_id': 0, 'region': {'start': start, 'stop': stop}}]}
+                  'episodes': [{'candidate_id': 0, 'region': {'start': start, 'stop': stop, 'accepted': True}}]}
         score = {'status': 'completed', 'definition': {'source_run_id': source_run_id, 'frame_count': count,
                  'robot_settings': robot, 'mapping_settings': report['gripper_mapping_settings'],
                  'settings': {'position_tolerance_m': .01, 'orientation_tolerance_degrees': 4}},
-                 'limits': {'joint_names': names}}
+                 'limits': {'joint_names': names, 'position_lower_rad': [-3.] * 18, 'position_upper_rad': [3.] * 18, 'velocity_limit_rad_s': [5.] * 18, 'acceleration_limit_rad_s2': [10.] * 18}}
         arrays = {**world, 'joint_solution_rad': q, 'gripper_action': np.full((count, 2), .75),
                   'episode_id': episode_ids, 'ik_success': observed, 'retarget_valid': observed,
                   'transform_base_from_aligned': transform[None], 'transform_base_from_world': transform[None],
@@ -56,6 +56,9 @@ def make_robot_regions(tmp_path, world=None, source_run_id="same-video", clip=No
                        for k in CAMERA_FIELDS})
         metrics = {'timestamp_s': times, 'source_timestamp_s': world['source_timestamp_s'],
                    'observed': observed, 'joint_positions_rad': q,
+                   'frame_max_speed_rad_s': np.zeros_like(q), 'frame_acceleration_rad_s2': np.zeros_like(q),
+                   'gripper_opening': np.full((count, 2), .75),
+                   'tcp_pose_base': np.tile([0, 0, 0, 0, 0, 0, 1.], (count, 2, 1)),
                    'position_error_m': np.zeros((count, 2)), 'orientation_error_rad': np.zeros((count, 2)),
                    'joint_feasible': np.ones(count, bool), 'collision_free': np.ones(count, bool),
                    'evaluated': episode_ids >= 0}
@@ -81,9 +84,9 @@ def test_full_timeline_gaps_hand_validity_and_changed_bases(robot_regions):
     np.testing.assert_array_equal(arrays['observation.robot.region_id'][:, 0], [0, 0, -1, -1, 1, 1])
     assert np.isnan(arrays['action'][2:4]).all()
     assert not arrays['observation.robot.solved'][2:4].any()
-    assert np.isnan(arrays['action'][1, :7]).all()  # missing left observation
+    assert not arrays['observation.robot.action_valid'][1, :7].any()  # missing left observation
     assert np.isfinite(arrays['action'][1, 7:16]).all()
-    assert np.isnan(arrays['action'][5]).all()  # collision keeps a diagnostic prediction
+    assert not arrays['observation.robot.action_valid'][5].any()  # collision keeps a diagnostic prediction
     assert np.isfinite(arrays['observation.robot.joint_solution_rad'][5]).all()
     np.testing.assert_allclose(arrays['action'][0, -2:], [.75, .75])
     assert metadata['regions'][0]['episode_frame_interval'] == [0, 2]
@@ -92,6 +95,35 @@ def test_full_timeline_gaps_hand_validity_and_changed_bases(robot_regions):
     assert metadata['regions'][1]['source_time_interval_s'] == [2 + 4 / 30, 2.2]
     assert metadata['regions'][0]['transform_base_from_aligned'][0][3] == 0
     assert metadata['regions'][1]['transform_base_from_aligned'][0][3] == 3
+    assert [r['constraint_valid_frames'] for r in metadata['regions']] == [2, 1]
+
+
+@pytest.mark.parametrize('failure', ['position', 'velocity', 'acceleration', 'nonfinite', 'unsolved'])
+def test_export_constraint_count_excludes_joint_failures(robot_regions, failure):
+    paths, world, clip = robot_regions
+    path = paths[0].parent / 'benchmark_frame_metrics.npz'
+    with np.load(path) as saved:
+        metrics = dict(saved)
+    if failure == 'position':
+        metrics['joint_positions_rad'][0, 0] = 4.
+    elif failure == 'velocity':
+        metrics['frame_max_speed_rad_s'][0, 0] = 6.
+    elif failure == 'acceleration':
+        metrics['frame_acceleration_rad_s2'][0, 0] = -11.
+    elif failure == 'nonfinite':
+        metrics['frame_max_speed_rad_s'][0, 0] = np.nan
+    np.savez(path, **metrics)
+    if failure in ('position', 'unsolved'):
+        path = paths[0] / 'trajectory_retargeted.npz'
+        with np.load(path) as saved:
+            arrays = dict(saved)
+        if failure == 'position':
+            arrays['joint_solution_rad'][0, 0] = 4.
+        else:
+            arrays['episode_id'][0] = -1
+        np.savez(path, **arrays)
+    _, metadata = load_robot_episode(paths, world, clip, 'same-video')
+    assert metadata['regions'][0]['constraint_valid_frames'] == 1
 
 
 def test_overlap_and_foreign_source_are_rejected(robot_regions):
@@ -117,3 +149,16 @@ def test_stale_evaluation_and_transform_direction_fail(robot_regions, failure):
     np.savez(path, **data)
     with pytest.raises(ValueError, match={'timestamps': 'timeline', 'joints': 'different joint predictions', 'transform': 'composition'}[failure]):
         load_robot_episode(paths, world, clip, 'same-video')
+
+
+def test_out_of_range_opening_does_not_invalidate_arm_joints(robot_regions):
+    paths, world, clip = robot_regions
+    for path in (paths[0]/'trajectory_retargeted.npz', paths[0].parent/'benchmark_frame_metrics.npz'):
+        with np.load(path) as saved:
+            data = dict(saved)
+        key = 'gripper_action' if 'gripper_action' in data else 'gripper_opening'
+        data[key][0, 0] = 1.2
+        np.savez(path, **data)
+    arrays, _ = load_robot_episode(paths, world, clip, 'same-video')
+    valid = arrays['observation.robot.action_valid'][0]
+    assert valid[:16].all() and not valid[16] and valid[17]
