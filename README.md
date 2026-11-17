@@ -30,13 +30,17 @@ pipeline/run.sh \
 Both dataset roots support compatible appends. Use a new run directory for each
 attempt. Video must be a full MP4 suitable for pinhole processing; preparation
 uses 30 FPS without lens correction. The human export precedes robot processing,
-so it remains available even if retargeting fails. A robot region must pass the
-existing geometric checks and have at least 85% fully valid action frames by
-default. Invalid frames inside accepted regions stay in temporal order. Rejected
+so it remains available even if retargeting fails. A robot region must have at
+least 85% finite solved frames without self-collision
+or joint position/velocity/acceleration violations by default. Tracking and
+hand-observation failures remain in action masks and do not reject a region.
+Invalid frames inside exported regions stay in temporal order. Rejected
 regions and their ratios remain in `region_export.json`; no robot dataset is
-created when no region qualifies.
+created when no region qualifies. For test datasets, `--include-rejected-regions`
+exports every region, labels the dataset as test data and logs each failed gate
+and override without changing validity masks.
 
-The runner annotates newly accepted robot episodes and stops its owned local VLM
+The runner annotates newly exported robot episodes and stops its owned local VLM
 server afterward. Pass `--api-base URL --model ID` for an existing server, or
 `--skip-annotation` to defer annotation. `--dataset-root` remains an alias for
 `--robot-dataset-root`. See `pipeline/run.sh --help` for saved-stage reuse and

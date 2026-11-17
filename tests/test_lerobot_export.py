@@ -157,7 +157,7 @@ def test_structured_human_robot_regions_and_rgb(tmp_path,runs):
         'language_persistent','language_events','timestamp','frame_index','episode_index','index','task_index'}
 
 
-def test_threshold_geometric_rejection_and_training(tmp_path,runs):
+def test_constraint_threshold_preserves_tracking_masks_and_training(tmp_path,runs):
     human,robot,result=export_pair(tmp_path,runs[0],threshold=.91)
     assert result['accepted_regions']==1
     _,_,lower=export_pair(tmp_path,runs[0],threshold=.5,suffix='-lower')
@@ -170,9 +170,32 @@ def test_threshold_geometric_rejection_and_training(tmp_path,runs):
     report=read_json(path)
     for episode in report['episodes']: episode['region']['accepted']=False
     write_json(path,report,overwrite=True)
-    output=append_robot_regions(human,0,[runs[0][1]],tmp_path/'rejected',task='Move',diagnostic_path=tmp_path/'reject.json',min_episode_valid_ratio=0)
-    assert output['accepted_regions']==0 and not (tmp_path/'rejected').exists()
-    assert all(r['rejection_reason']=='geometric_feasibility' for r in read_json(tmp_path/'reject.json')['regions'])
+    path=runs[0][1]/'trajectory_retargeted.npz'
+    with np.load(path) as saved: arrays=dict(saved)
+    arrays['ik_success'][:10]=False
+    np.savez(path,**arrays)
+    output=append_robot_regions(human,0,[runs[0][1]],tmp_path/'tracking-failures',task='Move',
+                               diagnostic_path=tmp_path/'tracking.json')
+    assert output['accepted_regions']==2
+    regions=read_json(tmp_path/'tracking.json')['regions']
+    assert regions[0]['exported'] and regions[0]['valid_ratio']==.9
+    assert regions[0]['action_valid_ratio']==0
+    assert not regions[0]['pose_acceptance']['region']['accepted']
+    assert regions[1]['rejection_reason']=='constraint_valid_ratio'
+    data=read_episode(tmp_path/'tracking-failures',0)
+    assert not data['quality.action_valid'].any()
+    training=ActionTrainingDataset(tmp_path/'tracking-failures',target='joint')[0]
+    assert not training['action_valid'].any() and (training['action']==0).all()
+    output=append_robot_regions(human,0,[runs[0][1]],tmp_path/'test-all',task='Move',
+                               diagnostic_path=tmp_path/'test-all.json',include_rejected_regions=True)
+    assert output['accepted_regions']==2 and output['rejected_regions']==1
+    assert output['exported_regions']==3 and output['overridden_regions']==1
+    overridden=read_json(tmp_path/'test-all.json')['regions'][1]
+    assert overridden['exported'] and overridden['export_override'] and not overridden['acceptance_passed']
+    assert overridden['valid_ratio']==.5 and overridden['rejection_reason']=='constraint_valid_ratio'
+    assert read_card(tmp_path/'test-all')['test_dataset']
+    data=read_episode(tmp_path/'test-all',1)
+    assert not data['quality.action_valid'][5:].any()
 
 
 def test_append_rollback_source_pin_and_standalone_human(tmp_path,runs,monkeypatch):

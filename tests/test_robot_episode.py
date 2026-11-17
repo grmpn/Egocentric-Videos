@@ -95,6 +95,35 @@ def test_full_timeline_gaps_hand_validity_and_changed_bases(robot_regions):
     assert metadata['regions'][1]['source_time_interval_s'] == [2 + 4 / 30, 2.2]
     assert metadata['regions'][0]['transform_base_from_aligned'][0][3] == 0
     assert metadata['regions'][1]['transform_base_from_aligned'][0][3] == 3
+    assert [r['constraint_valid_frames'] for r in metadata['regions']] == [2, 1]
+
+
+@pytest.mark.parametrize('failure', ['position', 'velocity', 'acceleration', 'nonfinite', 'unsolved'])
+def test_export_constraint_count_excludes_joint_failures(robot_regions, failure):
+    paths, world, clip = robot_regions
+    path = paths[0].parent / 'benchmark_frame_metrics.npz'
+    with np.load(path) as saved:
+        metrics = dict(saved)
+    if failure == 'position':
+        metrics['joint_positions_rad'][0, 0] = 4.
+    elif failure == 'velocity':
+        metrics['frame_max_speed_rad_s'][0, 0] = 6.
+    elif failure == 'acceleration':
+        metrics['frame_acceleration_rad_s2'][0, 0] = -11.
+    elif failure == 'nonfinite':
+        metrics['frame_max_speed_rad_s'][0, 0] = np.nan
+    np.savez(path, **metrics)
+    if failure in ('position', 'unsolved'):
+        path = paths[0] / 'trajectory_retargeted.npz'
+        with np.load(path) as saved:
+            arrays = dict(saved)
+        if failure == 'position':
+            arrays['joint_solution_rad'][0, 0] = 4.
+        else:
+            arrays['episode_id'][0] = -1
+        np.savez(path, **arrays)
+    _, metadata = load_robot_episode(paths, world, clip, 'same-video')
+    assert metadata['regions'][0]['constraint_valid_frames'] == 1
 
 
 def test_overlap_and_foreign_source_are_rejected(robot_regions):

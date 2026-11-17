@@ -61,7 +61,13 @@ def write_card(root, card):
                  'Dataset identity and immutable episode revisions above pin source links. Append only; exporting '
                  'a regenerated source into a new dataset creates a new identity. Source hashes prevent duplicate append.\n')
     else:
-        text += ('One contiguous accepted fixed-base region per episode. Local timestamps restart at zero. '
+        if card.get('test_dataset'):
+            text += ('Test dataset: includes regions that failed the export gate under an explicit override. '
+                     'Consult processing diagnostics for gate results; action masks remain unchanged.\n\n')
+        text += ('One contiguous exported fixed-base region per episode. Local timestamps restart at zero. '
+                 'Without the test override, region export requires the configured fraction (default 85%) of frames to have finite solved '
+                 'configurations, no self-collision and no joint position/velocity/acceleration violations. '
+                 'Tracking and hand-observation failures remain in action masks but do not reject a region. '
                  'source_episode_index/source_frame_index refer to the pinned human dataset prepared timeline; '
                  'the source revisions above include data and synchronized RGB. No absolute source paths are needed.\n\n'
                  'action: left arm seven radians, right arm seven radians, neck two radians, then left/right '
@@ -250,7 +256,7 @@ def append_human_episode(alignment_directory, root, *, task, repo_id='local/egoc
 
 def append_robot_regions(human_root, source_episode_index, trajectory_directories, root, *, task,
                          diagnostic_path, evaluation_directories=None, min_episode_valid_ratio=.85,
-                         repo_id='local/egocentric-robot'):
+                         repo_id='local/egocentric-robot', include_rejected_regions=False):
     if not np.isfinite(min_episode_valid_ratio) or not 0 <= min_episode_valid_ratio <= 1:
         raise ValueError('min_episode_valid_ratio must be between 0 and 1')
     if not trajectory_directories:
@@ -292,12 +298,13 @@ def append_robot_regions(human_root, source_episode_index, trajectory_directorie
     for region in diagnostics['regions']:
         start, stop = region['episode_frame_interval']
         valid = arrays['observation.robot.action_valid'][start:stop]
-        ratio = float(valid.all(axis=1).mean())
-        accepted_geometry = bool(region['pose_acceptance'] and region['pose_acceptance']['region'].get('accepted', False))
-        accepted = accepted_geometry and ratio >= min_episode_valid_ratio
-        region.update(valid_ratio=ratio, exported=accepted,
-                      rejection_reason=None if accepted else 'geometric_feasibility' if not accepted_geometry else 'action_valid_ratio')
-        if not accepted:
+        ratio = region['constraint_valid_frames'] / (stop - start)
+        accepted = ratio >= min_episode_valid_ratio
+        region.update(valid_ratio=ratio, action_valid_ratio=float(valid.all(axis=1).mean()),
+                      acceptance_passed=accepted, exported=accepted or include_rejected_regions,
+                      export_override=bool(not accepted and include_rejected_regions),
+                      rejection_reason=None if accepted else 'constraint_valid_ratio')
+        if not region['exported']:
             continue
         action = np.nan_to_num(arrays['action'][start:stop], nan=0., posinf=0., neginf=0.)
         ee = arrays['action.ee'][start:stop].copy()
@@ -312,7 +319,10 @@ def append_robot_regions(human_root, source_episode_index, trajectory_directorie
                   'source_episode_index': np.full((stop - start, 1), source_episode_index, np.int64),
                   'source_frame_index': np.arange(start, stop, dtype=np.int64)[:, None]}
         episodes.append((start, stop, values))
-    diagnostics.update(min_episode_valid_ratio=min_episode_valid_ratio, source_episode_index=source_episode_index,
+    diagnostics.update(min_episode_valid_ratio=min_episode_valid_ratio,
+                       include_rejected_regions=include_rejected_regions,
+                       valid_ratio_basis='finite_solved_configuration_and_self_collision_free_and_joint_limits',
+                       source_episode_index=source_episode_index,
                        source_revision=revision, episode_indices=[])
     if episodes:
         with staged_dataset(root) as stage:
@@ -332,9 +342,14 @@ def append_robot_regions(human_root, source_episode_index, trajectory_directorie
                         if ep == source_episode_index and any(a <= frame < b for a, b, _ in episodes):
                             raise ValueError('This source region already exists in the robot dataset')
             card['sources'][source_episode_index] = revision
+            if include_rejected_regions:
+                card['test_dataset'] = True
             features = episode_features(clip, episodes[0][2], language=True, action_names=diagnostics['action_names'])
             diagnostics['episode_indices'] = _write_episodes(stage, episodes, (human_root, source_episode_index), clip, features, card, task)
     write_json(diagnostic_path, diagnostics)
     return {'dataset_root': str(root.resolve()), 'episode_indices': diagnostics['episode_indices'],
             'source_episode_index': source_episode_index, 'source_revision': revision,
-            'accepted_regions': len(episodes), 'rejected_regions': len(diagnostics['regions']) - len(episodes)}
+            'accepted_regions': sum(r['acceptance_passed'] for r in diagnostics['regions']),
+            'rejected_regions': sum(not r['acceptance_passed'] for r in diagnostics['regions']),
+            'exported_regions': len(episodes),
+            'overridden_regions': sum(r['export_override'] for r in diagnostics['regions'])}

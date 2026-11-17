@@ -178,6 +178,8 @@ def load_robot_episode(directories, world, clip, source_run_id, evaluation_direc
                 "outcome": "unsolved" if episode is None else "evaluated",
                 "solved_frames": int(solved[sl].sum()), "joint_feasible_frames": int(feasible[sl].sum()),
                 "collision_free_frames": int(collision_free[sl].sum()),
+                "constraint_valid_frames": int((solved[sl, 0] & collision_free[sl, 0]
+                                                 & component_valid[sl].all(axis=1)).sum()),
                 "valid_action_components": action_valid[sl].sum(axis=0).tolist(),
                 "pose_acceptance": episode, "source_index": len(metadata["sources"]) - 1})
     metadata.update(contract=common, rotation_aligned_from_world=geometry["rotation_aligned_from_world"].tolist(),

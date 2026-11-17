@@ -8,7 +8,9 @@ Usage: pipeline/run.sh --video INPUT.mp4 --human-dataset-root HUMAN --robot-data
 
 Or start from HUMAN alone with --source-episode-index N instead of --video.
 Licensed models may be supplied with --mano-left FILE --mano-right FILE.
---min-episode-valid-ratio defaults to 0.85; --skip-annotation skips VLM execution.
+--min-episode-valid-ratio defaults to 0.85 for collision-free frames within joint limits.
+--include-rejected-regions exports failed regions as test data with logged overrides.
+--skip-annotation skips VLM execution.
 
 Runs the pinned local VLM after export, then stops it. To use an existing server,
 provide both --api-base URL and --model ID instead.
@@ -20,10 +22,12 @@ EOF
 video= dataset= human_dataset= source_episode= run= task= manifest= alignment= mapping= trajectory= api_base= model=
 min_valid_ratio=0.85
 skip_annotation=false
+robot_export_options=()
 mano_left=$root/external/HaWoR/_DATA/data_left/mano_left/MANO_LEFT.pkl
 mano_right=$root/external/HaWoR/_DATA/data/mano/MANO_RIGHT.pkl
 while (($#)); do
     if [[ $1 == --skip-annotation ]]; then skip_annotation=true; shift; continue; fi
+    if [[ $1 == --include-rejected-regions ]]; then robot_export_options+=(--include-rejected-regions); shift; continue; fi
     if [[ $1 != --help && $1 != -h && $# -lt 2 ]]; then
         printf 'Missing value for %s\n' "$1" >&2; exit 2
     fi
@@ -177,7 +181,7 @@ stage evaluation "$PIPELINE_PYTHON" pipeline/evaluate_trajectory.py --trajectory
 stage robot_export "$DATASET_PYTHON" pipeline/export_dataset.py robot --human-dataset-root "$human_dataset" \
     --source-episode-index "$source_episode" --trajectory-directory "$trajectory" --evaluation-directory "$run/evaluation" \
     --dataset-root "$dataset" --task "$task" --min-episode-valid-ratio "$min_valid_ratio" \
-    --diagnostics "$run/region_export.json" --result "$run/dataset_export.json"
+    --diagnostics "$run/region_export.json" --result "$run/dataset_export.json" "${robot_export_options[@]}"
 episodes_text=$($DATASET_PYTHON -c 'import json,sys; print(" ".join(map(str,json.load(open(sys.argv[1]))["episode_indices"])))' "$run/dataset_export.json")
 if [[ -z $episodes_text || $skip_annotation == true ]]; then
     printf 'Export complete. Robot episode indices: [%s]. Diagnostics: %s/region_export.json\n' "$episodes_text" "$run"

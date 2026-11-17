@@ -15,14 +15,18 @@ and a task. It uses explicit interpreters, stops on stage failure and writes
 2. Export the complete human episode immediately, recording `human_export.json`.
 3. Segment candidate regions, map grippers, fit each fixed base and joint trajectory.
 4. Evaluate all regions into `evaluation/`, including TCP FK and joint-motion limits.
-5. Export accepted robot regions, recording `dataset_export.json` and all acceptance
-   decisions in `region_export.json`.
+5. Export qualifying robot regions (or all regions with the explicit test override),
+   recording `dataset_export.json` and all decisions in `region_export.json`.
 6. Annotate exactly the returned robot episode indices, recording `annotations.json`.
 
-The runner retains frozen default solver/mapping settings. Geometric region
-acceptance remains mandatory; `--min-episode-valid-ratio` adds the independent
-fully-valid-frame threshold (default 0.85). If all regions fail, the human dataset
-and rejection report remain and the runner skips VLM startup. `--skip-annotation`
+The runner retains frozen default solver/mapping settings.
+`--min-episode-valid-ratio` requires finite solved, self-collision-free frames
+within all joint position/velocity/acceleration limits (default 0.85). Geometric
+and tracking acceptance remain diagnostics and training masks, not export gates.
+`--include-rejected-regions` explicitly includes failing regions for test data,
+preserving gate results and masks and recording overrides. If no regions are
+exported, the human dataset and rejection report remain and the runner skips VLM
+startup. `--skip-annotation`
 explicitly defers language annotation when episodes do qualify.
 
 ## Reuse and failure recovery

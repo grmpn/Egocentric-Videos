@@ -20,7 +20,10 @@ def main():
     robot.add_argument('--source-episode-index', type=int, required=True)
     robot.add_argument('--trajectory-directory', type=Path, action='append', required=True)
     robot.add_argument('--evaluation-directory', type=Path, action='append')
-    robot.add_argument('--min-episode-valid-ratio', type=float, default=.85)
+    robot.add_argument('--min-episode-valid-ratio', type=float, default=.85,
+                       help='Minimum fraction of finite solved, collision-free frames within all joint limits')
+    robot.add_argument('--include-rejected-regions', action='store_true',
+                       help='Test dataset only: export failed regions and record gate failures and overrides')
     robot.add_argument('--diagnostics', type=Path, required=True, help='Processing-run report, outside the dataset')
     robot.add_argument('--repo-id', default='local/egocentric-robot')
     restore = commands.add_parser('restore-human', help='Start new retargeting from a standalone human episode')
@@ -40,7 +43,8 @@ def main():
     elif args.mode == 'robot':
         result = append_robot_regions(args.human_dataset_root, args.source_episode_index, args.trajectory_directory,
             args.dataset_root, task=args.task, repo_id=args.repo_id, diagnostic_path=args.diagnostics,
-            evaluation_directories=args.evaluation_directory, min_episode_valid_ratio=args.min_episode_valid_ratio)
+            evaluation_directories=args.evaluation_directory, min_episode_valid_ratio=args.min_episode_valid_ratio,
+            include_rejected_regions=args.include_rejected_regions)
     else:
         result = materialize_human_alignment(args.human_dataset_root, args.source_episode_index,
                                             args.output_directory, args.mano_models)

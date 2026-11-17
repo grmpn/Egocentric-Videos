@@ -1,6 +1,7 @@
 # Human reconstruction and robot demonstration datasets
 
-Implemented under the [export-refresh plan](../plans/lerobot-export-refresh.md).
+Implemented under the [export-refresh plan](../plans/lerobot-export-refresh.md),
+with the approved [iPhone export amendment](../plans/iphone-contract3-export.md).
 Project contract **3.0** uses LeRobot **v3.1**, pinned to
 `9a6bb61043bac8c14353fcb6ea513b7473c118e3`. The upstream creator still reports
 storage floor v3.0; the exporter sets its metadata object's version to v3.1.
@@ -79,11 +80,21 @@ existing [10 rad/s² acceleration proxy](../decisions/ik-benchmark-limits.md) re
 EE pose validity requires all seven arm masks; opening uses its gripper mask;
 neck controls do not affect arm FK in the robot base frame.
 
-Export requires the existing geometric region acceptance and, independently,
-`action_valid.all(axis=1).mean() >= min_episode_valid_ratio`, default **0.85**.
-No frame is removed to raise the ratio. Run-directory `region_export.json` records
-all regions, ratios and rejection reasons, including when none qualifies. A
-completed solve is not automatically an accepted demonstration.
+Export requires at least `min_episode_valid_ratio` (default **0.85**) of all
+region frames to have finite solved configurations, no self-collision and no
+joint position/velocity/acceleration violations, including coupled fingers and
+locked joints. Tracking, hand observation and geometric acceptance do not enter
+this gate; their action masks remain unchanged. No frames are removed to raise
+the ratio. This policy was explicitly revised on 2026-11-17; the original
+November 12 validation used geometric acceptance plus fully valid action frames.
+
+Run-directory `region_export.json` records `valid_ratio` and its constraint-only
+basis, separate `action_valid_ratio`, original geometric acceptance,
+`acceptance_passed`, `exported` and any `export_override`. The explicit
+`--include-rejected-regions` option exports below-threshold regions as test data,
+retaining failure reasons and masks; the dataset README labels this override.
+Result counts distinguish accepted/rejected gates from exported/overridden
+regions. Ordinary exports still reject below-threshold regions.
 
 Finite invalid predictions are retained with false masks. Unavailable joints use
 zero and unavailable TCPs use zero translation/identity quaternion; unavailable
