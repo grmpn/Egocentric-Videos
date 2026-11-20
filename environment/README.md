@@ -300,7 +300,10 @@ The desktop lacks system G++ 11; matching Ubuntu `11.5.0-1ubuntu1~24.04.1`
 `g++-11`, `libstdc++-11-dev`, and `libgcc-11-dev` packages were downloaded and
 extracted under `data/tools/gcc11` without modifying system packages.
 Set `CC` and `CXX` to that tree's `usr/bin/g++-11`; its `usr/lib/x86_64-linux-gnu`
-links to the existing system runtime libraries. Build validation is still ongoing.
+links to the existing system runtime libraries. The local GCC 11 library directory
+also needs `collect2`, `lto-wrapper`, and `liblto_plugin.so` from the matching system
+GCC 11 directory; link these files when using the extracted G++ package. The
+extension build and package compatibility check succeeded on 2026-11-20.
 
 ## Dataset environment
 

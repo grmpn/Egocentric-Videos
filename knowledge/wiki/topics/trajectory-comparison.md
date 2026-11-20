@@ -3,6 +3,9 @@
 Implementation in progress under the [approved iPhone plan](../plans/iphone-trajectory-comparison.md).
 No three-method performance result has been established yet. Source setup and
 focused numeric checks are recorded in the [November log](../logs/2026-11.jsonl).
+Shared hands and initial gravity completed; six representative RGB/hand overlays
+were reviewed on 2026-11-20. Dependency compilation and GPU checks passed, and
+sequential camera inference has started.
 
 ## Workflow and boundaries
 
@@ -72,7 +75,7 @@ The sum is sample-count-dependent disagreement, not travelled distance; none of
 these quantities establishes accuracy without ground truth.
 
 The report includes 3D/XY paths, XYZ time series, disagreement curves, CSV/JSON
-tables and raw/aligned arrays. Stage wall times include imports, loading and
+tables, raw/aligned arrays and representative RGB/hand overlays. Stage wall times include imports, loading and
 export; recorded substage times identify inference and loading where separable.
 Shared native detection/hand times include their loading. Assembled method totals
 add shared hands/gravity, each backend and scale fit, plus the same Metric3D cost

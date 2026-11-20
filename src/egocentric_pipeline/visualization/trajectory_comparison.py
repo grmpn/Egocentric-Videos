@@ -3,6 +3,45 @@
 import numpy as np
 
 
+def plot_shared_hands(output, hands, focal_px):
+    """Inspect the shared metric hand geometry on six source RGB frames."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    paths = sorted((output / "input/rgb/extracted_images").glob("*.jpg"))
+    indices = np.linspace(0, len(paths) - 1, 6, dtype=int)
+    fig, axes = plt.subplots(2, 3, figsize=(16, 7))
+    for ax, index in zip(axes.flat, indices):
+        rgb = np.asarray(Image.open(paths[index]))
+        height, width = rgb.shape[:2]
+        ax.imshow(rgb)
+        labels = []
+        for hand, (name, color) in enumerate((("Left", "#00FFFF"), ("Right", "#FF55FF"))):
+            valid = hands["valid"][index, hand]
+            labels.append(f"{name}: {'observed' if valid else 'missing'}")
+            if not valid:
+                continue
+            joints = hands["joints_camera_m"][index, hand]
+            vertices = hands["vertices_camera_m"][index, hand]
+            for points, size, alpha in ((vertices, .5, .25), (joints, 7, 1)):
+                front = points[:, 2] > 0
+                uv = focal_px * points[front, :2] / points[front, 2:] + [width / 2, height / 2]
+                ax.scatter(*uv.T, s=size, color=color, alpha=alpha)
+            if np.all(joints[:, 2] > 0):
+                uv = focal_px * joints[:, :2] / joints[:, 2:] + [width / 2, height / 2]
+                for start in (1, 4, 7, 10, 13):
+                    chain = [0, start, start + 1, start + 2]
+                    ax.plot(*uv[chain].T, color=color, lw=.8)
+        ax.set(xlim=(0, width), ylim=(height, 0), title=f"Frame {index} · {' / '.join(labels)}")
+        ax.axis("off")
+    fig.suptitle("Shared camera-space hands • cyan left / magenta right • missing estimates omitted")
+    fig.tight_layout()
+    fig.savefig(output / "hand_overlays.png", dpi=180)
+    plt.close(fig)
+
+
 def plot_comparison(output, trajectories, times, curves, runtime):
     import matplotlib
     matplotlib.use("Agg")

@@ -113,7 +113,7 @@ def evaluate(settings, output, report):
     import csv
     import time
     from egocentric_pipeline.run_metadata import read_json, write_json
-    from egocentric_pipeline.visualization.trajectory_comparison import plot_comparison
+    from egocentric_pipeline.visualization.trajectory_comparison import plot_comparison, plot_shared_hands
 
     started = time.perf_counter()
     inputs, gravity, scales = [read_json(output / name) for name in ("input.json", "gravity.json", "scales.json")]
@@ -156,5 +156,6 @@ def evaluate(settings, output, report):
     with (output / "runtime.csv").open("x") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(runtime[0])); writer.writeheader(); writer.writerows(runtime)
     plot_comparison(output, trajectories, np.asarray(inputs["timestamp_s"]), curves, runtime)
+    plot_shared_hands(output, hand, settings["focal_px"])
     report.update(numeric_evaluation_s=numeric_s, rendering_s=time.perf_counter() - started - numeric_s,
                   pair_channel_comparisons=len(records))
