@@ -1,0 +1,5 @@
+# Add to .venv-pipeline for LingBot-Map; use native PyTorch SDPA attention.
+# Upstream b9dd1b1de535e6d36e777fb42b8433c781bfd783, installed source via PYTHONPATH.
+einops==0.8.0
+huggingface-hub==0.28.1
+safetensors==0.5.3

@@ -1,14 +1,15 @@
 # iPhone trajectory comparison: LingBot-Map, AMB3R-VO and HaWoR SLAM
 
-Draft · revision 1 · 2026-11-19 · Awaiting explicit approval.
-Scope discussion: `20261119-trajectory-comparison-001` in the
+Approved · revision 1 with resolution allowance · 2026-11-19.
+Approval: `20261119-trajectory-comparison-003` in the
 [November log](../logs/2026-11.jsonl).
 
 ## Objective and deliverable
 
 Compare camera and left/right wrist trajectories from the three methods on the
 full iPhone demonstration: 1,286 frames at 30 FPS, using the
-960×540 working video. Deliver a reproducible comparison command, aligned
+960×540 working video initially. Lower resolution is authorized if runtime or
+memory requires it; keep compared inputs consistent and record the reason. Deliver a reproducible comparison command, aligned
 trajectories, pairwise disagreement tables, graphs and runtime measurements to
 inform Milestone 3 reconstruction quality. The user selected pairwise disagreement;
 this experiment cannot establish accuracy without ground truth.

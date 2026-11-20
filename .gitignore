@@ -3,6 +3,9 @@
 
 # External HaWoR checkout contents
 /external/HaWoR/
+/external/lingbot-map/
+/external/amb3r/
+/.venv-amb3r/
 
 # Immutable local inputs, derived clips, and run evidence (never committed)
 # Ignore the directories themselves so dependency-local rules cannot unignore files.

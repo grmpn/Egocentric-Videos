@@ -266,6 +266,42 @@ Use `CUDA_PATH=/usr/local/cuda-12.9` when needed for CuPy compilation. Clear leg
 threading. The shell runner sets these isolation/thread controls. CUDA is the
 frozen solver default; no automatic CPU fallback hides a GPU failure.
 
+## Trajectory comparison
+
+The [comparison workflow](../knowledge/wiki/topics/trajectory-comparison.md) adds
+three small packages to `.venv-pipeline` for LingBot's native PyTorch SDPA path:
+
+```bash
+uv pip install --python .venv-pipeline/bin/python -r environment/mapping-requirements.txt
+```
+
+Clone the official repositories into ignored `external/lingbot-map` and
+`external/amb3r`, then check out the revisions in
+`configs/experiments/trajectory_comparison.json`. Model checkpoint locations and
+source/provenance limitations are recorded in the linked workflow.
+
+AMB3R requires a separate Python 3.10 / Torch 2.5.0 CUDA 11.8 environment:
+
+```bash
+uv venv --python .conda/envs/hawor/bin/python .venv-amb3r
+uv pip install --python .venv-amb3r/bin/python torch==2.5.0 torchvision==0.20.0 \
+  --index-url https://download.pytorch.org/whl/cu118
+uv pip install --python .venv-amb3r/bin/python -r environment/amb3r-requirements.txt
+uv pip install --python .venv-amb3r/bin/python pip==26.2.1 setuptools==80.10.2 \
+  wheel==0.47.0 ninja==1.13.2 packaging torch-scatter==2.1.2 \
+  -f https://data.pyg.org/whl/torch-2.5.0+cu118.html
+```
+
+Build PyTorch3D `V0.7.8` (`75ebeeaea0908c5527e7b1e305fbc7681382db47`) and
+FlashAttention `2.7.3` with `uv pip install --no-build-isolation` in that environment.
+For the installed CUDA 11.7 toolkit, use a complete GCC/G++ 11 installation,
+`CUDA_HOME=/usr/local/cuda-11.7`, `TORCH_CUDA_ARCH_LIST=8.6+PTX`, and `MAX_JOBS=4`.
+The desktop lacks system G++ 11; matching Ubuntu `11.5.0-1ubuntu1~24.04.1`
+`g++-11`, `libstdc++-11-dev`, and `libgcc-11-dev` packages were downloaded and
+extracted under `data/tools/gcc11` without modifying system packages.
+Set `CC` and `CXX` to that tree's `usr/bin/g++-11`; its `usr/lib/x86_64-linux-gnu`
+links to the existing system runtime libraries. Build validation is still ongoing.
+
 ## Dataset environment
 
 Use a separate Python 3.12 environment for the official LeRobot writer/reader
