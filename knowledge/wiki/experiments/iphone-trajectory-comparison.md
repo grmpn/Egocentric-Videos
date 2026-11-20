@@ -101,6 +101,38 @@ AMB3R checkpoint identity with the quota-limited official Drive file remains
 unverified; the downloaded mirror matches its published checksum and official
 file size, as documented in the workflow topic.
 
+## Hand dimensions from the metric outputs
+
+Follow-up measurement on 2026-11-20 used each method's saved world-space joints
+and the shared mesh, transformed by that method's aligned camera pose. Only valid
+observations were included: **862 left-hand and 934 right-hand frames per method**.
+Values below are means in centimetres.
+
+| Method | Left hand length | Left knuckle width | Right hand length | Right knuckle width |
+| --- | ---: | ---: | ---: | ---: |
+| HaWoR | 19.05 | 7.27 | 19.04 | 7.31 |
+| LingBot-Map | 19.05 | 7.27 | 19.04 | 7.31 |
+| AMB3R-VO | 19.05 | 7.27 | 19.04 | 7.31 |
+
+Length sums the wrist → middle MCP → PIP → DIP → fingertip segments (MANO joints
+0, 4, 5, 6 and SMPL-X's MANO fingertip vertex 443), approximating extended skeletal
+hand length despite finger flexion. Width is index-MCP to pinky-MCP distance
+(joints 1 and 7), excluding skin margins. These are model dimensions, not measured
+anatomical dimensions. Mean wrist-to-middle-MCP palm lengths are 10.00 cm left
+and 10.03 cm right. Across-frame hand-length standard deviations are 0.54 cm left
+and 0.43 cm right; this reflects estimation/articulation variation, not changing
+physical hand size.
+
+All three share one metric hand estimate and apply rigid camera transforms, so
+matching dimensions are expected and **cannot independently validate camera
+scale**. Masks and timestamps match; all valid measurements are finite and
+positive. Maximum pairwise dimension difference is 3.76×10⁻⁸ m, within the
+1×10⁻⁶ m verification tolerance. No inference was repeated.
+
+[Definitions, summary statistics and verification](../../../outputs/trajectory-comparison/iphone-20261119/hand-size-summary.json)
+and [per-frame measurements](../../../outputs/trajectory-comparison/iphone-20261119/hand-size-per-frame.csv)
+retain the calculation evidence.
+
 ## Review artifacts and acceptance
 
 - [3D and XY camera/wrist paths](../../../outputs/trajectory-comparison/iphone-20261119/trajectories.png)
