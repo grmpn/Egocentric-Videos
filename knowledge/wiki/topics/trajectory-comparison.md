@@ -1,11 +1,9 @@
 # Controlled camera and wrist comparison
 
-Implementation in progress under the [approved iPhone plan](../plans/iphone-trajectory-comparison.md).
-No three-method performance result has been established yet. Source setup and
-focused numeric checks are recorded in the [November log](../logs/2026-11.jsonl).
-Shared hands and initial gravity completed; six representative RGB/hand overlays
-were reviewed on 2026-11-20. Dependency compilation and GPU checks passed, and
-sequential camera inference has started.
+The [approved iPhone plan](../plans/iphone-trajectory-comparison.md) was fulfilled
+on 2026-11-20. All three full-video runs, pairwise metrics, graphs and timing
+measurements passed the defined contract checks. See the
+[results and acceptance evidence](../experiments/iphone-trajectory-comparison.md).
 
 ## Workflow and boundaries
 
@@ -75,18 +73,25 @@ The sum is sample-count-dependent disagreement, not travelled distance; none of
 these quantities establishes accuracy without ground truth.
 
 The report includes 3D/XY paths, XYZ time series, disagreement curves, CSV/JSON
-tables, raw/aligned arrays and representative RGB/hand overlays. Stage wall times include imports, loading and
-export; recorded substage times identify inference and loading where separable.
+tables, raw/aligned arrays and representative RGB/hand overlays. Stage wall times
+include imports, loading and export; table columns separate loading, inference
+and other backend work.
 Shared native detection/hand times include their loading. Assembled method totals
-add shared hands/gravity, each backend and scale fit, plus the same Metric3D cost
-for HaWoR and LingBot. Preparation validation, downloads, plotting and aggregate
-evaluation are excluded explicitly. These are single-run measurements.
+add shared hands/gravity, each backend, scale fitting and alignment/export, plus
+the same Metric3D cost for HaWoR and LingBot. Preparation validation, downloads,
+shared scale-input I/O/preparation, pairwise scoring and plotting are excluded
+explicitly. These are single-run measurements. Shared hand timing overlapped CPU
+dependency compilation; camera backend timings did not.
 
 ## Checkpoint provenance
 
 LingBot code is pinned to `b9dd1b1de535e6d36e777fb42b8433c781bfd783`; its official
 [weights repository](https://huggingface.co/robbyant/lingbot-map) was inspected at
 `e8984048a940fbdfa19909f8cc0c0ad834c1ee5a`.
+The downloaded checkpoint used in this run has SHA-256
+`ee665103348e07e6b826d529b8e61de8f413d5432a4f2e84970d6c8fd2e1cd72`;
+[local verification](../../../outputs/trajectory-comparison/iphone-20261119/lingbot-weight-verification.json)
+records its size and digest.
 AMB3R code is pinned to `92c4081f910f98e683503092b85301861519175e`.
 Its [official checkpoint](https://drive.google.com/file/d/14x0WW2rUE_he2hUEouP6ywSRnlJDeLel/view)
 hit Google's public download quota; the Drive connector also rejected its
@@ -97,6 +102,7 @@ matches that byte size and its published SHA-256:
 A safe weights-only load succeeded. Direct hash comparison with the official
 file remains unavailable; do not describe mirror identity as verified.
 
-Current focused evidence: [11 passing checks](../../../outputs/trajectory-comparison/iphone-20261119/scale-tests.log)
-including production scale recovery in the HaWoR environment. These tests do
-not establish successful full-video execution or model accuracy.
+Focused evidence: [12 passing checks](../../../outputs/trajectory-comparison/iphone-20261119/final-tests.log),
+including native scale recovery and the virtual-environment launcher regression.
+Full-video numeric and visual acceptance is recorded in the linked experiment;
+none of these checks establishes model accuracy without ground truth.

@@ -55,7 +55,11 @@ def main():
     os.environ["PATH"] = str(ROOT / ".conda/envs/hawor/bin") + os.pathsep + os.environ["PATH"]
     settings = read_json(args.config)
     for key in list(settings):
-        if key.endswith(("_root", "_python", "_checkpoint")) or key in ("video", "source_video"):
+        if key.endswith("_python"):
+            # Resolving a venv's symlink selects its base interpreter and loses
+            # the venv packages. Preserve the configured executable path.
+            settings[key] = str((ROOT / settings[key]).absolute())
+        elif key.endswith(("_root", "_checkpoint")) or key in ("video", "source_video"):
             settings[key] = str((ROOT / settings[key]).resolve())
     output = args.output.resolve()
     prepare(settings, output)

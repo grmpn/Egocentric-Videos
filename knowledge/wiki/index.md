@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [iPhone trajectory comparison](plans/iphone-trajectory-comparison.md) — approved: shared perception, initial-pose alignment, pairwise camera/wrist disagreement and runtime for LingBot-Map, AMB3R-VO and HaWoR SLAM.
+- [iPhone trajectory comparison](plans/iphone-trajectory-comparison.md) — fulfilled: full-video shared perception, aligned camera/wrist disagreement, graphs and runtime for all three methods.
 - [iPhone contract 3.0 export](plans/iphone-contract3-export.md) — fulfilled all-region iPhone test export, collision/joint-limit-only acceptance and logged override.
 
 - [LeRobot export refresh](plans/lerobot-export-refresh.md) — revision 1 fulfilled: independent human reconstruction and region-based robot training datasets, updated shell workflow, mask-aware training and verified standalone reuse.
@@ -37,7 +37,8 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [Trajectory comparison](topics/trajectory-comparison.md) — controlled shared perception, camera/wrist geometry, pairwise metrics, timing and checkpoint provenance; execution in progress.
+- [Trajectory comparison](topics/trajectory-comparison.md) — controlled shared perception, camera/wrist geometry, pairwise metrics, timing and checkpoint provenance.
+- [iPhone comparison results](experiments/iphone-trajectory-comparison.md) — full-video LingBot-Map / AMB3R-VO / HaWoR disagreement, runtime, plots, scale uncertainty and acceptance evidence.
 - [Integrated pipeline](topics/integrated-pipeline.md) — two-dataset shell workflow, stage outputs, reuse, failure recovery and preserved cleanup evidence.
 
 - [IK benchmark iPhone comparison](experiments/ik-benchmark-iphone.md) — accepted-roll tuning, held-out SDF/full-IK comparisons, independent audits and preserved historical evidence.

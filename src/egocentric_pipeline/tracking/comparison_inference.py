@@ -278,8 +278,10 @@ def scale(settings, output, report):
     from egocentric_pipeline.evaluation.trajectory_comparison import depth_to_droid_grid
 
     inputs = read_json(output / "input.json")
-    raw = {name: np.load(output / f"{name}_raw.npz") for name in ("hawor", "lingbot", "amb3r")}
-    metric = np.load(output / "metric_depth.npz")
+    # NPZ indexing rereads an entire member. Materialize depth arrays once,
+    # rather than reading every full sequence again for each selected frame.
+    raw = {name: dict(np.load(output / f"{name}_raw.npz")) for name in ("hawor", "lingbot", "amb3r")}
+    metric = dict(np.load(output / "metric_depth.npz"))
     indices = metric["frame_index"]
     for name, arrays in raw.items():
         if not np.array_equal(arrays["keyframe_index"], indices):

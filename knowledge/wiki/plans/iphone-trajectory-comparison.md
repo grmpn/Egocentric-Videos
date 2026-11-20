@@ -1,6 +1,7 @@
 # iPhone trajectory comparison: LingBot-Map, AMB3R-VO and HaWoR SLAM
 
-Approved · revision 1 with resolution allowance · 2026-11-19.
+Fulfilled 2026-11-20 · revision 1 with resolution allowance, approved 2026-11-19.
+See [acceptance evidence](../experiments/iphone-trajectory-comparison.md).
 Approval: `20261119-trajectory-comparison-003` in the
 [November log](../logs/2026-11.jsonl).
 

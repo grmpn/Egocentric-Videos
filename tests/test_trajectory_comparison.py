@@ -111,6 +111,29 @@ def test_depth_mapping_crops_instead_of_stretching_droid_border():
     np.testing.assert_array_equal(depth_to_droid_grid(depth, (h, w)), depth[:rh - rh % 8, :rw - rw % 8])
 
 
+def test_cli_preserves_configured_venv_interpreter_on_resume(tmp_path):
+    import json
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    # Virtual environments use symlinks to a base Python. Following that symlink
+    # would lose the environment's packages when the stage subprocess is launched.
+    executable = tmp_path / "venv/bin/python"
+    executable.parent.mkdir(parents=True)
+    executable.symlink_to(sys.executable)
+    settings = {"mapping_python": str(executable)}
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps(settings))
+    output = tmp_path / "run"
+    output.mkdir()
+    (output / "settings.json").write_text(json.dumps(settings))
+    (output / "input.json").write_text("{}")
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run([sys.executable, str(root / "scripts/compare_trajectories.py"),
+                    "--config", str(config), "--output", str(output), "--stage", "prepare"], check=True)
+
+
 def test_production_shared_scale_recovers_known_units(tmp_path, monkeypatch):
     pytest.importorskip("torchmin", reason="Native scale fit runs in the HaWoR environment")
     import json

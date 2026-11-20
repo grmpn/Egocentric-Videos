@@ -38,7 +38,7 @@ def plot_shared_hands(output, hands, focal_px):
         ax.axis("off")
     fig.suptitle("Shared camera-space hands • cyan left / magenta right • missing estimates omitted")
     fig.tight_layout()
-    fig.savefig(output / "hand_overlays.png", dpi=180)
+    fig.savefig(output / "hand_overlays.png", dpi=180, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -73,7 +73,9 @@ def plot_comparison(output, trajectories, times, curves, runtime):
         xy.set(xlabel="X (m)", ylabel="Y (m)", aspect="equal")
         xyz.legend(fontsize=8); xy.grid(alpha=.25)
     fig.suptitle("Same initial camera pose • Z up • pairwise comparison, no ground truth")
-    fig.tight_layout(); fig.savefig(output / "trajectories.png", dpi=180); plt.close(fig)
+    # 3D axis labels can extend beyond their reported tight bounding boxes.
+    fig.tight_layout(rect=(.025, .025, .94, .95))
+    fig.savefig(output / "trajectories.png", dpi=180); plt.close(fig)
     fig, axes = plt.subplots(3, 3, figsize=(15, 10), sharex=True)
     for channel in range(3):
         for axis in range(3):
@@ -81,7 +83,7 @@ def plot_comparison(output, trajectories, times, curves, runtime):
                 axes[channel, axis].plot(times, path(item, channel)[:, axis], label=name, color=colors[name], lw=1)
             axes[channel, axis].set(ylabel=f"{channels[channel]} {'XYZ'[axis]} (m)", xlabel="Time (s)")
             axes[channel, axis].grid(alpha=.25)
-    axes[0, 0].legend(); fig.tight_layout(); fig.savefig(output / "coordinates.png", dpi=180); plt.close(fig)
+    axes[0, 0].legend(); fig.tight_layout(); fig.savefig(output / "coordinates.png", dpi=180, bbox_inches="tight"); plt.close(fig)
     fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
     for row, channel in enumerate(("camera", "left_wrist", "right_wrist")):
         for key, distance in curves.items():
@@ -91,13 +93,14 @@ def plot_comparison(output, trajectories, times, curves, runtime):
         axes[row].set(ylabel=f"{channel}\ndisagreement (m)")
         axes[row].grid(alpha=.25); axes[row].legend()
     axes[-1].set_xlabel("Time (s)")
-    fig.tight_layout(); fig.savefig(output / "disagreement.png", dpi=180); plt.close(fig)
+    fig.tight_layout(); fig.savefig(output / "disagreement.png", dpi=180, bbox_inches="tight"); plt.close(fig)
     fig, ax = plt.subplots(figsize=(9, 5))
     bottom = np.zeros(len(runtime))
     for key, label in [("shared_hands_gravity_s", "Shared hands + gravity"), ("metric3d_s", "Shared metric depth"),
-                       ("backend_stage_s", "Backend stage"), ("scale_fit_s", "Scale fit")]:
+                       ("backend_stage_s", "Backend stage"), ("scale_fit_s", "Scale fit"),
+                       ("alignment_export_s", "Alignment + export")]:
         values = [r[key] for r in runtime]
         ax.bar([r["method"] for r in runtime], values, bottom=bottom, label=label)
         bottom += values
     ax.set(ylabel="Seconds", title="Single-run assembled processing times")
-    ax.legend(); fig.tight_layout(); fig.savefig(output / "runtime.png", dpi=180); plt.close(fig)
+    ax.legend(); fig.tight_layout(); fig.savefig(output / "runtime.png", dpi=180, bbox_inches="tight"); plt.close(fig)

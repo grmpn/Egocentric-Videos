@@ -118,8 +118,9 @@ def evaluate(settings, output, report):
     started = time.perf_counter()
     inputs, gravity, scales = [read_json(output / name) for name in ("input.json", "gravity.json", "scales.json")]
     hand = np.load(output / "hands.npz")
-    trajectories = {}
+    trajectories, alignment_times = {}, {}
     for name in ("hawor", "lingbot", "amb3r"):
+        alignment_started = time.perf_counter()
         raw = np.load(output / f"{name}_raw.npz")
         if not np.array_equal(raw["frame_index"], inputs["frame_index"]):
             raise ValueError(f"{name} frame indices do not match the input")
@@ -128,6 +129,7 @@ def evaluate(settings, output, report):
         np.savez(output / f"{name}_aligned.npz", **trajectories[name],
                  frame_index=inputs["frame_index"], timestamp_s=inputs["timestamp_s"],
                  source_timestamp_s=inputs["source_timestamp_s"])
+        alignment_times[name] = time.perf_counter() - alignment_started
     records, curves = pairwise_disagreement(trajectories, inputs["timestamp_s"])
     with (output / "disagreement.csv").open("x") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(records[0]))
@@ -143,13 +145,17 @@ def evaluate(settings, output, report):
         depth_s = timings["metric_depth"]["wall_time_s"] if name != "amb3r" else 0
         backend_s = timings[name]["wall_time_s"]
         scale_s = scales[name]["fit_time_s"]
-        total = shared_s + depth_s + backend_s + scale_s
-        runtime.append({"method": name, "backend_stage_s": backend_s, "shared_hands_gravity_s": shared_s,
-                        "metric3d_s": depth_s, "scale_fit_s": scale_s, "assembled_total_s": total,
+        alignment_s = alignment_times[name]
+        total = shared_s + depth_s + backend_s + scale_s + alignment_s
+        runtime.append({"method": name, "backend_stage_s": backend_s,
+                        "loading_s": timings[name]["loading_s"], "inference_s": timings[name]["inference_s"],
+                        "backend_other_s": backend_s - timings[name]["loading_s"] - timings[name]["inference_s"],
+                        "shared_hands_gravity_s": shared_s, "metric3d_s": depth_s,
+                        "scale_fit_s": scale_s, "alignment_export_s": alignment_s, "assembled_total_s": total,
                         "backend_effective_fps": len(inputs["frame_index"]) / backend_s,
                         "assembled_effective_fps": len(inputs["frame_index"]) / total})
     write_json(output / "comparison.json", {"disagreement": records, "runtime": runtime, "scales": scales,
-               "timing_scope": "Single runs; assembled stage totals; downloads, input verification, plots and this evaluation excluded.",
+               "timing_scope": "Single runs; assembled stage totals plus scale fitting and alignment/export. Downloads, input verification, shared scale-input I/O/preparation, pairwise scoring and plots excluded. Backend other time includes imports/preprocessing/export.",
                "shared_work": "Hands and initial-frame gravity once; Metric3D once, charged to HaWoR and LingBot only.",
                "limitations": ["Pairwise disagreement is not ground-truth accuracy.", "Metric depth and focal length are model/prior estimates.",
                                "Initial-frame leveling does not correct later gravity drift.", "Native model input sizes/preprocessing differ; no precision or quality tuning sweep."]})
