@@ -3,8 +3,8 @@
 Initial source inspection and subsequent setup validation on 2026-11-24 for the
 [approved benchmark plan](../plans/taco-hand-trajectory-benchmark.md).
 The source review below predates implementation; the verified setup section
-records later evidence. No TACO method inference or accuracy measurement is yet
-accepted. [Implemented contracts and commands](../topics/hand-trajectory-benchmark.md)
+records later evidence. The first HaWoR trial is now verified; the complete
+five-clip comparison remains pending. [Implemented contracts and commands](../topics/hand-trajectory-benchmark.md)
 own the reusable workflow.
 
 ## Available data and reference geometry
@@ -160,3 +160,15 @@ Its GT-derived shape/camera fields still need replacement by documented estimate
 inputs before a faithful TACO run is possible. HandFlow environment and mirrored
 left-hand execution remain to be validated. Next: complete native adapters and
 prerequisites, then run timed, uncached trials without changing the frozen clips.
+
+The user subsequently requested finishing HaWoR and HandFlow before assessing
+StableHand recreation. Official release-history inspection found no runnable
+earlier paper-version release: the
+[May snapshot](https://github.com/huajian-zeng/stablehand/tree/6d38cc3cf31bc467b39da94970a3deba9e73a314)
+contains only README/teaser assets; the
+[first September code release](https://github.com/huajian-zeng/stablehand/blob/a18c3d6e263a7622ad7f8a7803db95d9a2361563/docs/enhanced_version.md)
+already uses the enhanced pipeline. The official model history has one commit,
+`b523aa8c9875197ec7c5bf90025757ea1fc3de33`, and no earlier branch/tag. Saved API
+evidence is in `outputs/taco-benchmark/setup-20261124/stablehand-*-history-*.json`
+and `stablehand-model-{commits,refs}.json`. This finding does not exclude private
+author code; the user has no separate preprocessing source available.

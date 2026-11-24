@@ -42,7 +42,8 @@ def inspect_engine(hawor_root):
             "assets": {relative: artifact_record(hawor_root / relative) for relative in WEIGHTS + MANO}}
 
 
-def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resource_monitor=None):
+def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resource_monitor=None,
+              python_executable=None):
     """Return native artifacts and execution evidence, including failed processes.
 
     RAM is sampled summed RSS of the process tree (shared pages may be counted
@@ -59,7 +60,7 @@ def run_hawor(prepared, native_root, hawor_root, sample_interval_s=0.5, *, resou
     native_directory = native_root / "rgb"
     log_path = native_root / "console.log"
     focal = prepared.metadata.hawor_camera["focal_length_px"]
-    command = [sys.executable, "demo.py", "--video_path", str(staged),
+    command = [str(python_executable or sys.executable), "demo.py", "--video_path", str(staged),
                "--img_focal", str(focal), "--vis_mode", "none"]
     environment = os.environ.copy()
     environment["PYTHONUNBUFFERED"] = "1"

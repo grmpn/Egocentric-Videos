@@ -4,6 +4,11 @@ Approved · revision 1 · 2026-11-24.
 Approval: user instruction to implement the approved plan, event
 `20261124-taco-implementation-001` in the [November log](../logs/2026-11.jsonl).
 
+Execution order clarified by the user on 2026-11-24: finish all HaWoR and HandFlow
+trials and their comparison first, then assess whether recreating StableHand's
+missing preprocessing is viable. Experimental StableHand recreation remains
+subject to scope review; this clarification does not authorize it.
+
 ## Objective and deliverable
 
 Benchmark base HaWoR, StableHand and HandFlow with reusable evaluation. Deliver

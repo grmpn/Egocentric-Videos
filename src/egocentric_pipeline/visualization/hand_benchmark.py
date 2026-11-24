@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 
-def reference_overlays(clips, output_root):
+def reference_overlays(clips, output_root, *, prediction_method=None):
     """Project released GT joints into first/middle/last RGB frames of every clip."""
     import cv2
     import matplotlib
@@ -19,6 +19,8 @@ def reference_overlays(clips, output_root):
     for row, clip in enumerate(clips):
         seq = clip["clip"]["sequence_id"]
         data = load_trajectory(output_root / "reference" / seq / "reference.npz")
+        prediction = None if prediction_method is None else load_trajectory(
+            output_root / prediction_method / seq / "prediction.npz")
         capture = cv2.VideoCapture(clip["video"])
         try:
             for column, frame in enumerate((0, len(data["timestamp_s"]) // 2, len(data["timestamp_s"]) - 1)):
@@ -28,25 +30,32 @@ def reference_overlays(clips, output_root):
                     raise ValueError(f"Cannot decode {seq} frame {frame}")
                 ax = axes[row, column]
                 ax.imshow(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
-                for hand, color in enumerate(("cyan", "magenta")):
-                    if not data["hand_valid"][frame, hand]:
+                for source, colors, style in ((data, ("cyan", "magenta"), "-"),
+                                               (prediction, ("yellow", "orange"), "--")):
+                    if source is None:
                         continue
-                    xyz = data["joints_camera_m"][frame, hand]
-                    projected = xyz @ np.asarray(clip["intrinsics"]).T
-                    xy = projected[:, :2] / projected[:, 2, None]
-                    xy[xyz[:, 2] <= 0] = np.nan
-                    for finger in range(5):
-                        chain = [0, *range(1 + 4 * finger, 5 + 4 * finger)]
-                        ax.plot(*xy[chain].T, color=color, linewidth=1.2, marker=".", markersize=3)
+                    for hand, color in enumerate(colors):
+                        if not source["hand_valid"][frame, hand]:
+                            continue
+                        xyz = source["joints_camera_m"][frame, hand]
+                        projected = xyz @ np.asarray(clip["intrinsics"]).T
+                        xy = projected[:, :2] / projected[:, 2, None]
+                        xy[xyz[:, 2] <= 0] = np.nan
+                        for finger in range(5):
+                            chain = [0, *range(1 + 4 * finger, 5 + 4 * finger)]
+                            ax.plot(*xy[chain].T, color=color, linestyle=style, linewidth=1.2, marker=".", markersize=3)
                 ax.set_xlim(0, rgb.shape[1])
                 ax.set_ylim(rgb.shape[0], 0)
                 ax.set_title(f"{seq} · frame {frame} · {data['timestamp_s'][frame]:.2f} s")
                 ax.axis("off")
         finally:
             capture.release()
-    fig.suptitle("TACO reference projection · left cyan / right magenta · released fitted MANO poses")
+    title = "TACO reference projection · left cyan / right magenta · released fitted MANO poses"
+    if prediction_method:
+        title += f"\n{prediction_method} prediction · left yellow / right orange · dashed"
+    fig.suptitle(title)
     fig.tight_layout()
-    destination = output_root / "reference-overlays.png"
+    destination = output_root / ("reference-overlays.png" if prediction_method is None else f"{prediction_method}-overlays.png")
     fig.savefig(destination, dpi=140)
     plt.close(fig)
     return destination

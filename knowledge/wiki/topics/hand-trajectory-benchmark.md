@@ -2,8 +2,8 @@
 
 The [approved TACO plan](../plans/taco-hand-trajectory-benchmark.md) owns scope and
 metric definitions. The benchmark currently has selective TACO ingestion,
-reference preparation, metrics, tables and scientific plots. Native method runs
-are still being connected; no method accuracy or speed results are accepted.
+reference preparation, metrics, tables and scientific plots. Complete native
+HaWoR is connected and its first trial is verified; HandFlow setup is in progress.
 The [preflight evidence](../experiments/taco-benchmark-preflight.md) records data
 verification and outstanding release prerequisites.
 
@@ -20,6 +20,7 @@ Run from the repository root:
 .conda/envs/hawor/bin/python scripts/benchmark_hands.py --stage download --output outputs/taco-benchmark/setup-20261124
 .conda/envs/hawor/bin/python scripts/benchmark_hands.py --stage prepare --output outputs/taco-benchmark/taco-five-20261124
 MPLCONFIGDIR=/tmp/taco-matplotlib .venv-pipeline/bin/python scripts/benchmark_hands.py --stage inspect --output outputs/taco-benchmark/taco-five-20261124
+MPLCONFIGDIR=/tmp/taco-matplotlib .venv-pipeline/bin/python scripts/benchmark_hands.py --stage run --method hawor --sequence 20231024_029 --output outputs/taco-benchmark/taco-five-20261124
 MPLCONFIGDIR=/tmp/taco-matplotlib .venv-pipeline/bin/python scripts/benchmark_hands.py --stage evaluate --output outputs/taco-benchmark/taco-five-20261124
 ```
 
@@ -29,6 +30,17 @@ TACO source and existing licensed MANO files, rejects synchronization mismatches
 and refuses to replace reference outputs. Inspection projects released joints on
 first/middle/last RGB frames. Evaluation can be rerun; it replaces only derived
 scores/plots and explicitly accounts for absent methods.
+
+Run each trial in a fresh process and sequence them on the single GPU. A method
+directory must not already exist. `inspect --method hawor --sequence <id>` overlays
+predicted and reference camera-relative joints for a completed trial. HaWoR uses
+its unchanged demo in the maintained Conda environment, then converts its final
+world result (including infilling) into physical 21-joint geometry. GeoCalib loads
+separately in the pipeline environment for every trial. No GT poses enter inference.
+The unchanged native demo does not expose an inference seed; the configuration's
+seed controls clip selection. Native component timings use stdout markers, include
+loading overhead in adjacent stages, and combine SLAM with metric scaling. End-to-end
+time also includes the maintained runner's input/asset validation and export.
 
 ## Method boundary
 
