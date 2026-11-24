@@ -1,11 +1,11 @@
 # Project status
 
 - Current milestone: **3 — Retarget hands and trajectories in simulation**.
-- Stage: **Validating** — camera/hand trajectory comparison fulfilled; broader simulation acceptance remains open.
-- Active plan: [iPhone trajectory comparison, revision 1](plans/iphone-trajectory-comparison.md) fulfilled 2026-11-20. [iPhone export revision 2](plans/iphone-contract3-export.md) remains fulfilled.
+- Stage: **Planning** — requested TACO ground-truth benchmark; broader simulation acceptance remains open.
+- Active plan: [TACO hand-trajectory benchmark, draft revision 1](plans/taco-hand-trajectory-benchmark.md), awaiting explicit approval. Prior iPhone comparison and export plans remain fulfilled.
 - Milestone deliverable: repeatable simulation demonstration, exported robot trajectories and limit-check evidence; not yet accepted.
 - Completed outcome: all three 1,286-frame camera runs, shared hands/gravity/depth, pairwise metrics and graphs verified; [comparison acceptance](experiments/iphone-trajectory-comparison.md). Prior [all-region export](topics/lerobot-pipeline.md#iphone-test-export--2026-11-17) remains delivered.
-- Current work: comparison result review, including [shared hand dimensions](experiments/iphone-trajectory-comparison.md#hand-dimensions-from-the-metric-outputs); no backend adoption or robot/export change.
-- Blockers or decisions: no ground truth; per-frame metric-scale variation limits interpretation. AMB3R mirror matches its published checksum and official size, but original-file hash comparison is unavailable. Existing simulation/export limitations remain.
-- Next action: review comparison results and the remaining Milestone 3 simulation acceptance; scope any backend adoption separately.
-- Last verification: **2026-11-20** — shared hand dimensions agree across all methods on every valid frame, event `20261120-hand-size-001`; prior 12 tests, full saved-array audit and visual inspection passed, event `20261120-trajectory-comparison-008` in the [execution evidence](logs/2026-11.jsonl).
+- Current work: scope five **150-frame** TACO clips, all requested accuracy/resource metrics, per-method component FPS and wrist plots; [source/feasibility review](experiments/taco-benchmark-preflight.md).
+- Blockers or decisions: plan approval pending; StableHand's released preprocessing is incomplete and its evaluation inputs need a GT-leakage audit. TACO geometry/gravity, HandFlow bimanual adaptation and camera-motion sufficiency remain unverified. Existing simulation limitations remain.
+- Next action: approve or revise the benchmark plan, then validate data and method preprocessing before timed runs.
+- Last verification: **2026-11-24** — static official-source review and RTX 4090 visibility; no TACO inference or accuracy results. Event `20261124-taco-planning-001` in the [execution evidence](logs/2026-11.jsonl). Prior [iPhone comparison acceptance](experiments/iphone-trajectory-comparison.md) remains unchanged.
