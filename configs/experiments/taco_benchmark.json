@@ -5,6 +5,7 @@
   "frame_count": 150,
   "fps": 30.0,
   "methods": ["hawor", "stablehand", "handflow"],
+  "comparison_methods": ["hawor", "handflow"],
   "gt_up_world": [0.0, 0.0, 1.0],
   "selection": "Seed 42 shuffle of the official ego-available test sequences; first five distinct actions with at least 150 camera records. All synchronized RGB/hand lengths verified and selection frozen before inference on 2026-11-24; no method predictions used.",
   "plot_sequence_id": "20231024_029",
@@ -24,5 +25,6 @@
   "seed": 42,
   "hawor_revision": "66c7d4108d58a716deccd192cb7645170cdc7bd7",
   "stablehand_revision": "78bc0d34bf6abb20dde6963af9242913773037a7",
-  "handflow_revision": "d0f429b6355058fcd4366fbde18ccbfd7c871628"
+  "handflow_revision": "d0f429b6355058fcd4366fbde18ccbfd7c871628",
+  "handflow_weights_revision": "3ca50e4afececc8a7bc361b74954c77307bd0a5f"
 }

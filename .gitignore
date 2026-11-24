@@ -9,6 +9,8 @@
 /external/StableHand/
 /external/TACO-Instructions/
 /.venv-amb3r/
+/.venv-handflow/
+/.venv-vipe/
 
 # Immutable local inputs, derived clips, and run evidence (never committed)
 # Ignore the directories themselves so dependency-local rules cannot unignore files.

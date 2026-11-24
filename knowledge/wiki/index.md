@@ -38,7 +38,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [Hand-trajectory benchmark](topics/hand-trajectory-benchmark.md) — reusable TACO preparation, scoring contract, comparison tables and scientific plots; native trials pending.
+- [Hand-trajectory benchmark](topics/hand-trajectory-benchmark.md) — reusable TACO preparation, scoring contract, comparison tables and scientific plots; five HaWoR trials verified, HandFlow execution underway.
 - [TACO benchmark preflight](experiments/taco-benchmark-preflight.md) — official sources, verified five-clip reference geometry/camera motion and unresolved method preprocessing.
 - [Trajectory comparison](topics/trajectory-comparison.md) — controlled shared perception, camera/wrist geometry, pairwise metrics, timing and checkpoint provenance.
 - [iPhone comparison results](experiments/iphone-trajectory-comparison.md) — full-video LingBot-Map / AMB3R-VO / HaWoR disagreement, runtime, plots, scale uncertainty and acceptance evidence.

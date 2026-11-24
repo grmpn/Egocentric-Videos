@@ -78,6 +78,9 @@ def evaluate_benchmark(output_root, settings):
     """Score saved predictions; keep absent/failed trials explicit, including common support."""
     output_root = Path(output_root)
     methods = list(settings["methods"])
+    comparison_methods = settings.get("comparison_methods", methods)
+    if not comparison_methods or not set(comparison_methods).issubset(methods):
+        raise ValueError("Common-support comparison must name configured methods")
     trials, hand_rows, component_rows, plot_curves = [], [], [], {}
     for clip in settings["clips"]:
         seq = clip["sequence_id"]
@@ -90,10 +93,10 @@ def evaluate_benchmark(output_root, settings):
             runs[method] = run
             if run["status"] == "completed":
                 predictions[method] = load_trajectory(directory / "prediction.npz")
-        # A missing configured method provides no common support. Never silently
-        # relabel a comparison of two available methods as the three-method set.
+        # A missing comparison method provides no common support. The comparison
+        # set is explicit, including the interim two-method report requested here.
         common = {name: np.ones_like(reference["hand_valid"]) for name in ("world", "local")}
-        for method in methods:
+        for method in comparison_methods:
             support = metric_support(predictions[method], reference) if method in predictions else {
                 name: np.zeros_like(reference["hand_valid"]) for name in common}
             common = {name: common[name] & support[name] for name in common}
@@ -120,6 +123,12 @@ def evaluate_benchmark(output_root, settings):
                     **{key: stage.get(key) for key in ("name", "wall_time_s", "effective_fps", "processed_frames", "frame_unit", "status", "timing_note")}})
             trials.append(trial)
     summary = aggregate_trials(trials, methods, len(settings["clips"]))
+    setup_attempts = []
+    for path in sorted((output_root / "setup-attempts").glob("*/run.json")):
+        attempt = read_json(path)
+        setup_attempts.append({"directory": str(path.parent),
+            **{key: attempt.get(key) for key in ("method", "sequence_id", "status", "performance")},
+            "failure": attempt.get("native_inference", {}).get("failure", attempt.get("failure"))})
     component_summary = []
     for method in methods:
         names = sorted({row["name"] for row in component_rows if row["method"] == method})
@@ -127,9 +136,10 @@ def evaluate_benchmark(output_root, settings):
             values = [row["effective_fps"] for row in component_rows
                       if row["method"] == method and row["name"] == name and row["status"] == "completed"]
             component_summary.append({"method": method, "component": name, **average(values)})
-    report = {"aggregation": "Mean of available hand metrics, then equal-weight clip mean; count and population SD retained. Missing is null.",
-              "common_support_methods": methods, "trials": trials, "summary": summary,
-              "component_summary": component_summary}
+    report = {"settings": settings,
+              "aggregation": "Mean of available hand metrics, then equal-weight clip mean; count and population SD retained. Missing is null.",
+              "common_support_methods": comparison_methods, "trials": trials, "summary": summary,
+              "component_summary": component_summary, "setup_attempts": setup_attempts}
     write_json(output_root / "evaluation.json", report, overwrite=True)
     write_csv(output_root / "per-hand.csv", hand_rows, ["method", "sequence_id", "support", "hand", "metric", "value", "samples", "unit", "reduction", "low_motion_pairs"])
     write_csv(output_root / "components.csv", component_rows, ["method", "sequence_id", "name", "wall_time_s", "effective_fps", "processed_frames", "frame_unit", "status", "timing_note"])
@@ -147,7 +157,8 @@ def evaluate_benchmark(output_root, settings):
     lines = ["# TACO hand-trajectory benchmark", "", f"{len(settings['clips'])} clips. Values are mean ± population SD [number of clips]; incomplete counts are explicit.",
              "Geometry averages hands within each clip first. Peak VRAM is sampled whole-device use, including its recorded idle baseline.", ""]
     for support in ("method", "common"):
-        lines.extend([f"## {support.title()} valid support", "", "| Method | Completed | " + " | ".join(LABELS.values()) + " |",
+        title = "Method valid support" if support == "method" else "Common valid support: " + ", ".join(comparison_methods)
+        lines.extend([f"## {title}", "", "| Method | Completed | " + " | ".join(LABELS.values()) + " |",
                       "| --- | --- | " + " | ".join("---" for _ in LABELS) + " |"])
         for method, values in summary.items():
             cells = []
@@ -165,6 +176,16 @@ def evaluate_benchmark(output_root, settings):
     lines.extend(["", "## Trial accounting", "", "| Method | Clip | Status | Failure |", "| --- | --- | --- | --- |"])
     for row in trials:
         lines.append(f"| {row['method']} | {row['sequence_id']} | {row['status']} | {str(row['failure'] or '').replace('|', '/')} |")
+    if setup_attempts:
+        lines.extend(["", "## Preserved setup attempts", "",
+            "Setup failures are excluded from completed-trial means. Their full logs, timing and resource samples remain available; successful retries start from RGB again.", "",
+            "| Method | Clip | Status | Seconds | Peak VRAM (GiB) | Failure | Evidence |",
+            "| --- | --- | --- | --- | --- | --- | --- |"])
+        for row in setup_attempts:
+            performance = row["performance"] or {}
+            lines.append(f"| {row['method']} | {row['sequence_id']} | {row['status']} | "
+                f"{performance.get('wall_time_s')} | {performance.get('peak_vram_gib')} | "
+                f"{str(row['failure'] or '').replace('|', '/')} | {row['directory']} |")
     (output_root / "comparison.md").write_text("\n".join(lines) + "\n")
     seq = settings["plot_sequence_id"]
     reference = level_world(load_trajectory(output_root / "reference" / seq / "reference.npz"))

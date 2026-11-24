@@ -178,7 +178,8 @@ def test_source_gaps_and_timestamp_mismatch_are_not_interpolated():
     assert initial_yaw_translation(points, points, gt["timestamp_s"], gt["hand_valid"], 1) is None
 
 
-def test_report_cli_preserves_missing_trials_and_equal_clip_averages(tmp_path):
+@pytest.mark.parametrize("comparison_methods", [None, ["baseline"]])
+def test_report_cli_preserves_missing_trials_and_equal_clip_averages(tmp_path, comparison_methods):
     import json
     from pathlib import Path
     import subprocess
@@ -186,8 +187,15 @@ def test_report_cli_preserves_missing_trials_and_equal_clip_averages(tmp_path):
 
     settings = {**SETTINGS, "methods": ["baseline", "missing"], "clips": [
         {"sequence_id": "one"}, {"sequence_id": "two"}], "plot_sequence_id": "one", "source_root": "."}
+    if comparison_methods is not None:
+        settings["comparison_methods"] = comparison_methods
     config = tmp_path / "settings.json"
     config.write_text(json.dumps(settings))
+    failed_setup = tmp_path / "setup-attempts" / "baseline-one-missing-dependency"
+    failed_setup.mkdir(parents=True)
+    (failed_setup / "run.json").write_text(json.dumps({"method": "baseline", "sequence_id": "one",
+        "status": "failed", "performance": {"wall_time_s": 111, "peak_vram_gib": 8.7},
+        "native_inference": {"failure": {"type": "ModuleNotFoundError", "message": "missing dependency"}}}))
     for seq, shift in (("one", .01), ("two", .03)):
         gt, pred = trajectory(), trajectory()
         pred["joints_camera_m"] += shift
@@ -208,9 +216,15 @@ def test_report_cli_preserves_missing_trials_and_equal_clip_averages(tmp_path):
                     "--output", str(tmp_path), "--stage", "evaluate"], check=True, capture_output=True, text=True)
     report = json.loads((tmp_path / "evaluation.json").read_text())
     assert len(report["trials"]) == 4
+    assert len(report["setup_attempts"]) == 1
+    assert report["setup_attempts"][0]["failure"]["type"] == "ModuleNotFoundError"
     summary = report["summary"]
     assert summary["baseline"]["method"]["gt_camera_wrist_error"]["mean"] == pytest.approx(np.sqrt(3) * 20)
-    assert summary["baseline"]["common"]["gt_camera_wrist_error"]["count"] == 0
+    common = summary["baseline"]["common"]["gt_camera_wrist_error"]
+    assert common["count"] == (0 if comparison_methods is None else 2)
+    if comparison_methods is not None:
+        assert common["mean"] == summary["baseline"]["method"]["gt_camera_wrist_error"]["mean"]
+    assert report["common_support_methods"] == (comparison_methods or settings["methods"])
     assert summary["baseline"]["performance"]["end_to_end_fps"]["mean"] == 10
     assert summary["baseline"]["completed_run_throughput_fps"] == 7.5
     assert summary["baseline"]["worst_peak_vram_gib"] == 12
@@ -218,3 +232,39 @@ def test_report_cli_preserves_missing_trials_and_equal_clip_averages(tmp_path):
     assert summary["missing"]["method"]["completeness"]["mean"] is None
     assert (tmp_path / "wrist-trajectories.pdf").is_file()
     assert (tmp_path / "component-averages.csv").read_text().splitlines()[1] == "baseline,detection,75.0,0.0,2"
+
+
+def test_left_hand_inverse_mirror_matches_pixel_and_root_frame_geometry():
+    from egocentric_pipeline.tracking.handflow_runner import undo_left_mirror
+
+    rng = np.random.default_rng(18)
+    points = rng.normal(size=(4, 21, 3)) * .1 + [0, 0, 1.]
+    rotation = Rotation.random(4, random_state=rng).as_matrix()
+    left, left_rotation = undo_left_mirror(points, rotation)
+    width, focal, cx, cy = 1920, 1376.75, 967.68, 526.81
+    mirrored_pixels = points[..., :2] / points[..., 2:] * focal + [width - 1 - cx, cy]
+    original_pixels = left[..., :2] / left[..., 2:] * focal + [cx, cy]
+    np.testing.assert_allclose(original_pixels[..., 0], width - 1 - mirrored_pixels[..., 0])
+    np.testing.assert_allclose(original_pixels[..., 1], mirrored_pixels[..., 1])
+    np.testing.assert_allclose(np.linalg.det(left_rotation), 1)
+    # A mirrored canonical rest point must transform to the mirrored posed point.
+    reflection = np.diag([-1., 1., 1.])
+    posed = np.einsum('tij,tkj->tki', rotation, points)
+    left_posed = np.einsum('tij,tkj->tki', left_rotation, points @ reflection)
+    np.testing.assert_allclose(left_posed, posed @ reflection)
+    restored, restored_rotation = undo_left_mirror(left, left_rotation)
+    np.testing.assert_allclose(restored, points)
+    np.testing.assert_allclose(restored_rotation, rotation)
+
+
+def test_component_speed_charges_both_hand_passes_before_averaging_clips():
+    from egocentric_pipeline.tracking.handflow_runner import combine_hand_stages
+
+    stages = [{"name": side + "_detection", "wall_time_s": duration, "processed_frames": 150,
+               "frame_unit": "RGB frames", "status": "completed"} for side, duration in (("left", 2), ("right", 3))]
+    report = combine_hand_stages(stages, 150)
+    assert len(report) == 1
+    assert report[0]["wall_time_s"] == 5
+    assert report[0]["effective_fps"] == 30
+    assert report[0]["processed_frames"] == 300
+    assert stages[0]["wall_time_s"] == 2

@@ -157,9 +157,12 @@ Native HaWoR, StableHand, HandFlow and HandFlow's HaMeR/ViPE submodules are chec
 out at the configured revisions. StableHand's Hugging Face Space was inspected
 and provides static example media, not the missing new-video preprocessing.
 Its GT-derived shape/camera fields still need replacement by documented estimated
-inputs before a faithful TACO run is possible. HandFlow environment and mirrored
-left-hand execution remain to be validated. Next: complete native adapters and
-prerequisites, then run timed, uncached trials without changing the frozen clips.
+inputs before a faithful TACO run is possible. Subsequent execution verified all
+five HaWoR trials and the first complete HandFlow trial, including mirrored
+left-hand conversion. HandFlow's missing `lmdb` and detector `dill` dependencies
+were resolved; the failed setup attempt remains preserved. Current workflow and
+trial accounting are maintained in the [benchmark topic](../topics/hand-trajectory-benchmark.md)
+and [status](../status.md).
 
 The user subsequently requested finishing HaWoR and HandFlow before assessing
 StableHand recreation. Official release-history inspection found no runnable

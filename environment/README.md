@@ -305,6 +305,51 @@ also needs `collect2`, `lto-wrapper`, and `liblto_plugin.so` from the matching s
 GCC 11 directory; link these files when using the extracted G++ package. The
 extension build and package compatibility check succeeded on 2026-11-20.
 
+## TACO hand benchmark environments
+
+HaWoR uses its maintained Conda environment; gravity and scoring use
+`.venv-pipeline`. HandFlow V1 requires Torch 2.7 / CUDA 12.8 and therefore has an
+isolated environment. ViPE uses its pinned upstream lock and a separate native
+extension environment. Native imports, ViPE CUDA geometry and model loading pass;
+the first complete HandFlow bimanual trial passed on 2026-11-24. See local logs in
+`outputs/taco-benchmark/setup-20261124/` and the
+[benchmark topic](../knowledge/wiki/topics/hand-trajectory-benchmark.md).
+
+```bash
+UV_CACHE_DIR="$PWD/data/cache/uv" uv venv --python .conda/envs/hawor/bin/python .venv-handflow
+UV_CACHE_DIR="$PWD/data/cache/uv" uv pip install --python .venv-handflow/bin/python pip==25.1.1 setuptools==70.2.0 wheel==0.45.1 numpy==1.26.4 scipy==1.15.3
+UV_CACHE_DIR="$PWD/data/cache/uv" uv pip install --python .venv-handflow/bin/python --torch-backend cu128 --no-build-isolation-package chumpy -r environment/handflow-requirements.txt
+UV_CACHE_DIR="$PWD/data/cache/uv" uv venv --python .conda/envs/hawor/bin/python .venv-vipe
+UV_CACHE_DIR="$PWD/data/cache/uv" uv pip install --python .venv-vipe/bin/python --torch-backend cu128 -r external/HandFlow/third_party/vipe/envs/requirements.txt
+CUDA_HOME=/usr/local/cuda-12.9 TORCH_CUDA_ARCH_LIST=8.9 MAX_JOBS=4 UV_CACHE_DIR="$PWD/data/cache/uv" uv pip install --python .venv-vipe/bin/python --no-deps --no-build-isolation -e external/HandFlow/third_party/vipe
+```
+
+The main environment uses HaMeR from HandFlow's pinned submodule without its
+unused training/detector dependencies. The official `manopth` source is pinned
+because no PyPI package exists under that name. `torchdiffeq` is required by
+released solver imports although omitted from HandFlow's requirements; `lmdb`
+is also imported by its shared crop utilities. `dill` is required to deserialize
+the released WiLoR checkpoint; automatic installation is disabled during trials. Chumpy
+needs the explicit build bootstrap above. Rendering dependencies requiring
+PyTorch3D are unnecessary for the numerical inference entry point.
+
+Check out `external/HandFlow` at the revision in
+`configs/experiments/taco_benchmark.json` with its recursive submodules. Prepare
+these assets before timed inference, under `data/models/handflow/`:
+
+| Relative path | Source |
+| --- | --- |
+| `handflow_denoiser.pt`, `normalization_stats.npz` | [Official HandFlow weights](https://huggingface.co/mxxu00/HandFlow/tree/3ca50e4afececc8a7bc361b74954c77307bd0a5f) |
+| `_DATA/hamer_ckpts/checkpoints/hamer.ckpt`, `_DATA/hamer_ckpts/model_config.yaml`, `_DATA/data/mano_mean_params.npz` | Extract these members from [the official HaMeR demo archive](https://www.cs.utexas.edu/~pavlakos/hamer/data/hamer_demo_data.tar.gz); unused ViTPose weights are unnecessary |
+| `mano/MANO_LEFT.pkl`, `mano/MANO_RIGHT.pkl` and `_DATA/data/mano/MANO_LEFT.pkl`, `_DATA/data/mano/MANO_RIGHT.pkl` | Link the existing licensed HaWoR MANO assets; never commit them |
+| `torch/hub/droid_slam/droid.pth` | Link the existing official DROID checkpoint used by HaWoR |
+| `torch/hub/checkpoints/metric_depth_vit_small_800k.pth` | [Official Metric3D-small weights](https://huggingface.co/JUGGHM/Metric3D/tree/80d2d1410afb4b23cd9d18c6be9144483d4b70b6) |
+
+The adapter sets these paths and uses HaWoR's existing WiLoR detector checkpoint.
+It permits trusted legacy checkpoint loading with Torch 2.7 and retains the native
+configuration. All preprocessing, model loading, camera estimation, both hand
+passes and fresh GeoCalib inference are charged to each trial.
+
 ## Dataset environment
 
 Use a separate Python 3.12 environment for the official LeRobot writer/reader

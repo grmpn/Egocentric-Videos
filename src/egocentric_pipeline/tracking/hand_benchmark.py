@@ -96,7 +96,7 @@ def run_method(method, sequence_id, output_root, settings, root, *, started=None
     from egocentric_pipeline.geometry.gravity_estimation import predict_up
     from egocentric_pipeline.video.video_preparation import load_prepared_clip
 
-    if method != "hawor":
+    if method not in ("hawor", "handflow"):
         raise ValueError(f"Native runner is not implemented yet: {method}")
     if sequence_id not in {clip["sequence_id"] for clip in settings["clips"]}:
         raise ValueError("Sequence is not part of the frozen benchmark")
@@ -105,8 +105,9 @@ def run_method(method, sequence_id, output_root, settings, root, *, started=None
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic() if started is None else started
     report = {"method": method, "sequence_id": sequence_id, "status": "running", "started_at": utc_now(),
+              "benchmark_settings": settings,
               "components": [], "frame_count": settings["frame_count"],
-              "randomness": "Unchanged HaWoR demo does not expose or set an inference seed; config seed is used for dataset selection.",
+              "randomness": "Unchanged HaWoR demo does not expose or set an inference seed; config seed is used for dataset selection." if method == "hawor" else {"torch_numpy_seed": settings["seed"]},
               "timing_scope": "Fresh CLI process through exported prediction, including RGB decoding, model loading, native subprocess, RGB gravity, geometry conversion and monitoring. Downloads, reference preparation, scoring and rendering excluded."}
     write_json(output / "run.json", report)
     monitor = ResourceMonitor(settings["resource_sample_interval_s"])
@@ -116,7 +117,12 @@ def run_method(method, sequence_id, output_root, settings, root, *, started=None
             prepared = load_prepared_clip(output_root / "prepared" / sequence_id / "clip_metadata.json")
             if prepared.metadata.prepared["frame_count"] != settings["frame_count"]:
                 raise ValueError("Prepared clip has an unexpected frame count")
-        data = hawor_prediction(prepared, output, root, report, monitor)
+        if method == "hawor":
+            data = hawor_prediction(prepared, output, root, report, monitor)
+        else:
+            from egocentric_pipeline.tracking.handflow_runner import handflow_prediction
+            clip = next(clip for clip in settings["clips"] if clip["sequence_id"] == sequence_id)
+            data = handflow_prediction(prepared, output, root, settings, clip, report)
         gravity_settings = read_json(root / "configs/defaults/gravity_alignment.json")
         diagnostics = {}
         with component(report, "rgb_gravity", settings["frame_count"], frame_unit="GeoCalib frames") as stage:

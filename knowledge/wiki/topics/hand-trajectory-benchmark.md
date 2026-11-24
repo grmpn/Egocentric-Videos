@@ -3,7 +3,8 @@
 The [approved TACO plan](../plans/taco-hand-trajectory-benchmark.md) owns scope and
 metric definitions. The benchmark currently has selective TACO ingestion,
 reference preparation, metrics, tables and scientific plots. Complete native
-HaWoR is connected and its first trial is verified; HandFlow setup is in progress.
+HaWoR is connected and all five trials are verified; HandFlow's first complete
+bimanual trial and visual conversion checks pass, with four trials remaining.
 The [preflight evidence](../experiments/taco-benchmark-preflight.md) records data
 verification and outstanding release prerequisites.
 
@@ -42,6 +43,20 @@ seed controls clip selection. Native component timings use stdout markers, inclu
 loading overhead in adjacent stages, and combine SLAM with metric scaling. End-to-end
 time also includes the maintained runner's input/asset validation and export.
 
+HandFlow uses the same command with `--method handflow`. The adapter calls the
+released numerical functions in `.venv-handflow`, with native moving-camera ViPE
+in `.venv-vipe`. It supplies TACO intrinsics and runs one shared camera track.
+The released checkpoint is right-hand trained: left RGB and principal point are
+mirrored for a second right-model pass, then camera X and the canonical root X
+are reflected back. Root conjugation preserves proper rotations. Both detection,
+feature and trajectory passes count toward runtime; component FPS divides 150 by
+their **summed** time. The denoiser uses evaluation mode, matching its evaluation
+helper (the released demo omits that call). Native window/ODE settings and
+preprocessing are retained; rendering is excluded. Final finite predictions on
+frames without a direct detection are labeled infilled, with raw detector masks
+and confidences retained. Setup and model sources are in
+[the environment guide](../../../environment/README.md#taco-hand-benchmark-environments).
+
 ## Method boundary
 
 Each method/sequence directory will contain `prediction.npz`, native artifacts,
@@ -77,9 +92,19 @@ per-hand, per-clip, average and component results. `comparison.md` displays coun
 alongside means. `curves-method.npz` and `curves-common.npz` preserve frame/pair
 values. The chosen clip's PNG/PDF plot uses equal metre axes and gaps.
 
-Common support means the intersection of **all configured methods**. A missing
-method makes common-support geometry unavailable; its name is never silently
-dropped. Coverage always uses GT denominators, regardless of scoring support.
+If setup fails, preserve the entire failed trial directory under
+`setup-attempts/<method>-<sequence>-<reason>/` before retrying from RGB. The
+evaluator includes those `run.json` files in a separate setup-attempt table, with
+errors, elapsed time and peak memory. They do not contribute accuracy or
+completed-trial speed averages. Do not move algorithmic failures there merely to
+improve reported success or tune on GT.
+
+Common support means the intersection of **all explicitly named comparison
+methods** (defaults to all configured methods). At the user's request, the interim
+comparison names HaWoR and HandFlow; StableHand remains in trial accounting as
+unrun. The report labels the comparison set. A missing comparison method makes
+common-support geometry unavailable; names are never dropped based on results.
+Coverage always uses GT denominators, regardless of scoring support.
 Completed-run throughput and worst peak accompany per-clip averages; failed runs
 remain in trial accounting. Means with fewer clips are labeled by their counts.
 
