@@ -1,0 +1,28 @@
+{
+  "dataset_revision": "fa8ed8b4cf5d46949b90ef852128811a2854066a",
+  "taco_source_revision": "fd3b5a6b39565ca6935a91d35d5e91dde03c5142",
+  "source_root": "data/source/taco-v1",
+  "frame_count": 150,
+  "fps": 30.0,
+  "methods": ["hawor", "stablehand", "handflow"],
+  "gt_up_world": [0.0, 0.0, 1.0],
+  "selection": "Seed 42 shuffle of the official ego-available test sequences; first five distinct actions with at least 150 camera records. All synchronized RGB/hand lengths verified and selection frozen before inference on 2026-11-24; no method predictions used.",
+  "plot_sequence_id": "20231024_029",
+  "clips": [
+    {"triplet": "(cut, spoon, plate)", "sequence_id": "20231024_029", "split": "test_4", "start_frame": 0},
+    {"triplet": "(put out, spoon, pan)", "sequence_id": "20231020_060", "split": "test_4", "start_frame": 0},
+    {"triplet": "(dust, roller, plate)", "sequence_id": "20231019_120", "split": "test_1", "start_frame": 0},
+    {"triplet": "(put in, spoon, pan)", "sequence_id": "20231013_015", "split": "test_4", "start_frame": 0},
+    {"triplet": "(hit, hammer, toy)", "sequence_id": "20231102_054", "split": "test_3", "start_frame": 0}
+  ],
+  "initial_alignment_s": 1.0,
+  "rpe_intervals_s": [0.5, 2.0, 4.0],
+  "scale_interval_s": 1.0,
+  "scale_min_gt_displacement_m": 0.01,
+  "timestamp_tolerance_s": 0.0001,
+  "resource_sample_interval_s": 0.1,
+  "seed": 42,
+  "hawor_revision": "66c7d4108d58a716deccd192cb7645170cdc7bd7",
+  "stablehand_revision": "78bc0d34bf6abb20dde6963af9242913773037a7",
+  "handflow_revision": "d0f429b6355058fcd4366fbde18ccbfd7c871628"
+}

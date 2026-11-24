@@ -1,10 +1,11 @@
 # TACO benchmark: source and feasibility review
 
-Static inspection on 2026-11-24 for the
-[draft benchmark plan](../plans/taco-hand-trajectory-benchmark.md).
-No TACO inference, dataset download, benchmark implementation or accuracy
-measurement has been performed. These are source findings and implementation
-prerequisites, not acceptance evidence for the proposed benchmark.
+Initial source inspection and subsequent setup validation on 2026-11-24 for the
+[approved benchmark plan](../plans/taco-hand-trajectory-benchmark.md).
+The source review below predates implementation; the verified setup section
+records later evidence. No TACO method inference or accuracy measurement is yet
+accepted. [Implemented contracts and commands](../topics/hand-trajectory-benchmark.md)
+own the reusable workflow.
 
 ## Available data and reference geometry
 
@@ -111,5 +112,51 @@ locations inspected. The local GPU is an RTX 4090 with 24,564 MiB reported memor
 the authorized outside-sandbox retry succeeded. This verifies hardware visibility,
 not model compatibility or available peak memory during a future run.
 
-Next action: approve or revise the short plan, then validate TACO reference
-geometry and method preprocessing before the timed runs.
+## Verified setup — 2026-11-24
+
+User approval is recorded in event `20261124-taco-implementation-001`. The official
+dataset revision is `fa8ed8b4cf5d46949b90ef852128811a2854066a`; TACO loader revision
+is `fd3b5a6b39565ca6935a91d35d5e91dde03c5142`. Selective archive reads downloaded
+35 source files (approximately 130 MB), preserving original directory names.
+Network range reads stalled inside the sandbox and were interrupted; the
+authorized outside-sandbox retry succeeded.
+
+All five native RGB lengths equal both hand-record counts and camera-pose counts.
+The first 150 frames of each were prepared at 30 Hz, with exact frame indices and
+timestamps checked before inference. Both hands have 150 finite reference samples.
+Selection was a seed-42 shuffle of ego-available official test sequences, keeping
+the first five distinct actions with at least 150 camera records.
+
+| Sequence | Action | Source frames | Max camera displacement from start | Max rotation from start |
+| --- | --- | --- | --- | --- |
+| 20231024_029 | cut | 176 | 70.8 mm | 13.23° |
+| 20231020_060 | put out | 170 | 55.1 mm | 12.79° |
+| 20231019_120 | dust | 179 | 35.0 mm | 6.32° |
+| 20231013_015 | put in | 189 | 24.9 mm | 8.15° |
+| 20231102_054 | hit | 192 | 24.9 mm | 3.77° |
+
+The source RGB is 1920×1080. TACO's own wrist-centered MANO layer reconstructs
+the reference, with millimetres converted to metres and `hand_trans` added. The
+released world-to-camera arrays are inverted for the shared contract. Projected
+21-joint overlays were inspected at frames 0, 75 and 149 in every clip: identity,
+finger order and projection agree with visible hands, subject to fitted-GT error
+and occlusion. This checks conventions, not independent annotation accuracy.
+World +Z is taken as up from the released axis illustrations and is consistent
+with camera/hand heights and the tabletop scene; no gravity sensor calibration
+has been independently verified. All five low-motion clips are retained.
+
+Local evidence (untracked):
+
+- [Download report](../../../outputs/taco-benchmark/setup-20261124/download.json)
+- [Preparation log](../../../outputs/taco-benchmark/setup-20261124/reference-preparation.log)
+- [Prepared clip/reference metadata](../../../outputs/taco-benchmark/taco-five-20261124/clips.json)
+- [GT/RGB overlay contact sheet](../../../outputs/taco-benchmark/taco-five-20261124/reference-overlays.png)
+- [Metric and report test log](../../../outputs/taco-benchmark/setup-20261124/metric-tests.log)
+
+Native HaWoR, StableHand, HandFlow and HandFlow's HaMeR/ViPE submodules are checked
+out at the configured revisions. StableHand's Hugging Face Space was inspected
+and provides static example media, not the missing new-video preprocessing.
+Its GT-derived shape/camera fields still need replacement by documented estimated
+inputs before a faithful TACO run is possible. HandFlow environment and mirrored
+left-hand execution remain to be validated. Next: complete native adapters and
+prerequisites, then run timed, uncached trials without changing the frozen clips.

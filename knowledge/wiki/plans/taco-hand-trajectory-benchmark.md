@@ -1,6 +1,8 @@
 # TACO hand-trajectory benchmark
 
-Draft · revision 1 · 2026-11-24 · awaiting explicit approval.
+Approved · revision 1 · 2026-11-24.
+Approval: user instruction to implement the approved plan, event
+`20261124-taco-implementation-001` in the [November log](../logs/2026-11.jsonl).
 
 ## Objective and deliverable
 

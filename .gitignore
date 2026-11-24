@@ -5,6 +5,9 @@
 /external/HaWoR/
 /external/lingbot-map/
 /external/amb3r/
+/external/HandFlow/
+/external/StableHand/
+/external/TACO-Instructions/
 /.venv-amb3r/
 
 # Immutable local inputs, derived clips, and run evidence (never committed)

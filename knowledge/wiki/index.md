@@ -13,7 +13,7 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Plans
 
-- [TACO hand-trajectory benchmark](plans/taco-hand-trajectory-benchmark.md) — draft: five 150-frame clips, full HaWoR/StableHand/HandFlow accuracy, coverage, timing and memory comparison.
+- [TACO hand-trajectory benchmark](plans/taco-hand-trajectory-benchmark.md) — approved: five 150-frame clips, full HaWoR/StableHand/HandFlow accuracy, coverage, timing and memory comparison.
 - [iPhone trajectory comparison](plans/iphone-trajectory-comparison.md) — fulfilled: full-video shared perception, aligned camera/wrist disagreement, graphs and runtime for all three methods.
 - [iPhone contract 3.0 export](plans/iphone-contract3-export.md) — fulfilled all-region iPhone test export, collision/joint-limit-only acceptance and logged override.
 
@@ -38,7 +38,8 @@ The [roadmap](../raw/Project-Milestones-and-Timeline.md) defines long-term scope
 
 ## Topics and evidence
 
-- [TACO benchmark preflight](experiments/taco-benchmark-preflight.md) — official data/geometry sources, 150-frame metric support and unresolved method preprocessing; static inspection only.
+- [Hand-trajectory benchmark](topics/hand-trajectory-benchmark.md) — reusable TACO preparation, scoring contract, comparison tables and scientific plots; native trials pending.
+- [TACO benchmark preflight](experiments/taco-benchmark-preflight.md) — official sources, verified five-clip reference geometry/camera motion and unresolved method preprocessing.
 - [Trajectory comparison](topics/trajectory-comparison.md) — controlled shared perception, camera/wrist geometry, pairwise metrics, timing and checkpoint provenance.
 - [iPhone comparison results](experiments/iphone-trajectory-comparison.md) — full-video LingBot-Map / AMB3R-VO / HaWoR disagreement, runtime, plots, scale uncertainty and acceptance evidence.
 - [Integrated pipeline](topics/integrated-pipeline.md) — two-dataset shell workflow, stage outputs, reuse, failure recovery and preserved cleanup evidence.
